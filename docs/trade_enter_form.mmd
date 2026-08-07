@@ -1,0 +1,33 @@
+flowchart TD
+  start([Start]) --> step1{Time 14:00-21:00 UTC+7?}
+
+  step1 -->|Yes| blocked["No trade entry during this time"]
+  blocked --> endBlocked([Exit])
+
+  step1 -->|No| step2{Direction?}
+
+  step2 -->|Buy| step3a{Buy order type?}
+  step2 -->|Sell| step3b{Sell order type?}
+
+  step3a -->|Extreme| buyExtremeDanger["Buy order at Extreme is dangerous"]
+  buyExtremeDanger --> endBuyExtreme([Exit])
+
+  step3a -->|Trend following| step4a{All 3 Buy TF checks Yes?}
+
+  step4a -->|Yes| buyTfSafe["Buy order at Trend following is safe"]
+  buyTfSafe --> endBuyTfSafe([Exit])
+  step4a -->|No| buyTfDanger["Trend following Buy order is dangerous"]
+  buyTfDanger --> endBuyTfDanger([Exit])
+
+  step3b -->|Extreme| step4b{All 3 Extreme Sell checks Yes?}
+  step3b -->|Trend following| step4c{All 3 Sell TF checks Yes?}
+
+  step4b -->|Yes| sellExSafe["Sell order at Extreme is safe"]
+  sellExSafe --> endSellExSafe([Exit])
+  step4b -->|No| sellExDanger["Extreme Sell order is dangerous"]
+  sellExDanger --> endSellExDanger([Exit])
+
+  step4c -->|Yes| sellTfSafe["Sell order at Trend following is safe"]
+  sellTfSafe --> endSellTfSafe([Exit])
+  step4c -->|No| sellTfDanger["Trend following Sell order is dangerous"]
+  sellTfDanger --> endSellTfDanger([Exit])
