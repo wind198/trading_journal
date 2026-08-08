@@ -22,7 +22,10 @@ import type { ReactNode } from 'react'
 const TABS = [
   { href: '/journal', label: 'Trades' },
   { href: '/discipline', label: 'Discipline' },
+  { href: '/quotes', label: 'Quotes' },
 ] as const
+
+const TAB_ORDER = TABS.map((t) => t.href)
 
 export function AppShell({
   children,
@@ -34,6 +37,8 @@ export function AppShell({
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const showDateToolbar =
+    pathname === '/journal' || pathname === '/discipline'
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -42,10 +47,16 @@ export function AppShell({
 
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
-      if (pathname === '/journal') router.push('/discipline')
+      const idx = TAB_ORDER.indexOf(pathname as (typeof TAB_ORDER)[number])
+      if (idx >= 0 && idx < TAB_ORDER.length - 1) {
+        router.push(TAB_ORDER[idx + 1])
+      }
     },
     onSwipedRight: () => {
-      if (pathname === '/discipline') router.push('/journal')
+      const idx = TAB_ORDER.indexOf(pathname as (typeof TAB_ORDER)[number])
+      if (idx > 0) {
+        router.push(TAB_ORDER[idx - 1])
+      }
     },
     trackTouch: true,
     trackMouse: false,
@@ -90,10 +101,12 @@ export function AppShell({
           </DropdownMenu>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <DateRangePicker />
-          {pathname === '/journal' && <TradesFilterControl />}
-        </div>
+        {showDateToolbar && (
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangePicker />
+            {pathname === '/journal' && <TradesFilterControl />}
+          </div>
+        )}
 
         <nav className="flex border-b border-border" aria-label="Primary">
           {TABS.map((tab) => {

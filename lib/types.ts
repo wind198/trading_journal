@@ -50,3 +50,16 @@ export type DateRange = {
   to: string
   preset: DateRangePreset
 }
+
+export type Quote = {
+  id: string
+  user_id: string
+  headline: string
+  description: string
+  created_at: string
+}
+
+export type QuoteFormData = {
+  headline: string
+  description: string
+}

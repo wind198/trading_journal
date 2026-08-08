@@ -14,6 +14,8 @@ import {
   Zap,
 } from 'lucide-react'
 import { BuyOrSell, OrderType, TradeFormData } from '@/lib/types'
+import { getTradeAdvice } from '@/lib/trade-advice'
+import { cn } from '@/lib/utils'
 
 type StepId =
   | 'blocked'
@@ -267,14 +269,17 @@ export function JournalForm({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-background text-foreground touch-pan-y"
+      className={cn(
+        'journal-form fixed inset-0 z-50 flex flex-col bg-background text-foreground touch-pan-y',
+        `journal-form--${step}`
+      )}
       {...swipeHandlers}
     >
-      <div className="relative flex h-full flex-col px-5 pb-8 pt-safe">
+      <div className="journal-form__inner relative flex h-full flex-col px-0 pb-8 pt-safe md:px-5">
         <button
           type="button"
           aria-label="Close"
-          className="absolute right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm"
+          className="journal-form__close absolute right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm"
           onClick={onClose}
         >
           <X />
@@ -284,7 +289,7 @@ export function JournalForm({
           <button
             type="button"
             aria-label="Back"
-            className="absolute left-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm"
+            className="journal-form__back absolute left-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm"
             onClick={goBack}
           >
             <ArrowLeft />
@@ -295,14 +300,14 @@ export function JournalForm({
           <button
             type="button"
             aria-label="Next"
-            className="absolute right-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm"
+            className="journal-form__next absolute right-4 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm"
             onClick={goNext}
           >
             <ArrowRight />
           </button>
         )}
 
-        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-10">
+        <div className="journal-form__body flex flex-1 flex-col items-center justify-center gap-6 px-4 md:px-6 sm:px-4">
           {step === 'blocked' && (
             <TerminalScreen
               title="No trade entry during this time"
@@ -312,10 +317,14 @@ export function JournalForm({
           )}
 
           {step === 'direction' && (
-            <>
-              <h1 className="text-center text-2xl font-semibold">Direction</h1>
-              <p className="text-center text-muted-foreground">EURUSD</p>
-              <div className="grid w-full max-w-sm gap-4">
+            <div className="journal-form__step journal-form__step--direction contents">
+              <h1 className="journal-form__title text-center text-2xl font-semibold">
+                Direction
+              </h1>
+              <p className="journal-form__subtitle text-center text-muted-foreground">
+                EURUSD
+              </p>
+              <div className="journal-form__choices grid w-full max-w-sm gap-4">
                 <ChoiceButton
                   icon={<TrendingUp />}
                   label="Buy"
@@ -331,13 +340,15 @@ export function JournalForm({
                   onClick={() => selectDirection('SELL')}
                 />
               </div>
-            </>
+            </div>
           )}
 
           {step === 'buyType' && (
-            <>
-              <h1 className="text-center text-2xl font-semibold">Buy order type</h1>
-              <div className="grid w-full max-w-sm gap-4">
+            <div className="journal-form__step journal-form__step--buy-type contents">
+              <h1 className="journal-form__title text-center text-2xl font-semibold">
+                Buy order type
+              </h1>
+              <div className="journal-form__choices grid w-full max-w-sm gap-4">
                 <ChoiceButton
                   icon={<Zap />}
                   label={ORDER_TYPE_COPY.EXTREME.label}
@@ -353,13 +364,15 @@ export function JournalForm({
                   onClick={() => selectBuyType('TREND_FOLLOWING')}
                 />
               </div>
-            </>
+            </div>
           )}
 
           {step === 'sellType' && (
-            <>
-              <h1 className="text-center text-2xl font-semibold">Sell order type</h1>
-              <div className="grid w-full max-w-sm gap-4">
+            <div className="journal-form__step journal-form__step--sell-type contents">
+              <h1 className="journal-form__title text-center text-2xl font-semibold">
+                Sell order type
+              </h1>
+              <div className="journal-form__choices grid w-full max-w-sm gap-4">
                 <ChoiceButton
                   icon={<Zap />}
                   label={ORDER_TYPE_COPY.EXTREME.label}
@@ -375,18 +388,18 @@ export function JournalForm({
                   onClick={() => selectSellType('TREND_FOLLOWING')}
                 />
               </div>
-            </>
+            </div>
           )}
 
           {step === 'questions' && (
-            <>
-              <p className="text-sm text-muted-foreground">
+            <div className="journal-form__step journal-form__step--questions contents">
+              <p className="journal-form__meta text-sm text-muted-foreground">
                 Question {questionIndex + 1} / {questions.length}
               </p>
-              <h1 className="text-center text-xl font-semibold leading-snug">
+              <h1 className="journal-form__title journal-form__title--question text-center text-xl font-semibold leading-snug">
                 {questions[questionIndex]}
               </h1>
-              <div className="grid w-full max-w-sm grid-cols-2 gap-4">
+              <div className="journal-form__choices journal-form__choices--binary grid w-full max-w-sm grid-cols-2 gap-4">
                 <ChoiceButton
                   label="Yes"
                   active={answers[questionIndex] === true}
@@ -400,7 +413,7 @@ export function JournalForm({
                   onClick={() => void answerQuestion(false)}
                 />
               </div>
-            </>
+            </div>
           )}
 
           {step === 'verdict' && verdict && (
@@ -416,6 +429,11 @@ export function JournalForm({
               tone={verdict === 'safe' ? 'safe' : 'danger'}
               buyOrSell={buyOrSell}
               orderType={orderType}
+              advice={
+                verdict === 'safe' && buyOrSell && orderType
+                  ? getTradeAdvice(buyOrSell, orderType)
+                  : []
+              }
               checklist={
                 questions.length > 0
                   ? questions.map((q, i) => ({
@@ -454,7 +472,7 @@ function ChoiceButton({
       ? 'border-success/40 bg-success/5 text-success'
       : tone === 'sell'
         ? 'border-destructive/40 bg-destructive/5 text-destructive'
-        : 'border-border bg-card text-foreground'
+        : 'border-0 bg-transparent md:border-border md:bg-card md:text-foreground'
 
   const selected =
     tone === 'buy'
@@ -467,19 +485,23 @@ function ChoiceButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-16 w-full flex-col items-center justify-center gap-1.5 rounded-2xl border px-4 py-4 text-center transition active:scale-[0.98] ${
+      className={cn(
+        'journal-form__choice flex min-h-16 w-full flex-col items-center justify-center gap-1.5 rounded-2xl border px-4 py-4 text-center transition active:scale-[0.98]',
+        tone && `journal-form__choice--${tone}`,
+        active && 'journal-form__choice--active',
         active ? selected : idle
-      }`}
+      )}
     >
-      <span className="flex items-center gap-2 text-lg font-medium">
+      <span className="journal-form__choice-label flex items-center gap-2 text-lg font-medium">
         {icon}
         {label}
       </span>
       {description && (
         <span
-          className={`text-sm font-normal leading-snug ${
+          className={cn(
+            'journal-form__choice-desc text-sm font-normal leading-snug',
             active || tone ? 'opacity-80' : 'text-muted-foreground'
-          }`}
+          )}
         >
           {description}
         </span>
@@ -494,6 +516,7 @@ function TerminalScreen({
   tone = 'neutral',
   buyOrSell,
   orderType,
+  advice = [],
   checklist = [],
   onClose,
   disabled,
@@ -503,6 +526,7 @@ function TerminalScreen({
   tone?: 'neutral' | 'safe' | 'danger'
   buyOrSell?: BuyOrSell | null
   orderType?: OrderType | null
+  advice?: readonly string[]
   checklist?: { question: string; answer: boolean | null }[]
   onClose: () => void
   disabled?: boolean
@@ -518,62 +542,87 @@ function TerminalScreen({
         : null
 
   return (
-    <div className="flex w-full max-w-md flex-col items-center gap-5 overflow-y-auto py-4 text-center">
-      <h1 className={`text-2xl font-semibold ${color}`}>{title}</h1>
-      {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
+    <div
+      className={cn(
+        'journal-form__terminal flex w-full max-w-md flex-col items-center gap-5 overflow-y-auto py-4 text-center',
+        `journal-form__terminal--${tone}`
+      )}
+    >
+      <h1 className={cn('journal-form__terminal-title text-2xl font-semibold', color)}>
+        {title}
+      </h1>
+      {detail && (
+        <p className="journal-form__terminal-detail text-sm text-muted-foreground">
+          {detail}
+        </p>
+      )}
 
-      <div className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-sm">
-        <p className="mb-3 text-xs font-medium uppercase tracking-[0.06em] text-neutral">
+      <div className="journal-form__panel w-full rounded-xl border-0 md:border md:border-border md:bg-card md:p-4 md:text-left md:shadow-sm">
+        <p className="journal-form__section-label mb-3 text-xs font-medium uppercase tracking-[0.06em] text-neutral">
           Summary
         </p>
-        <ul className="space-y-2 text-sm">
+        <ul className="journal-form__summary space-y-2 text-sm">
           {buyOrSell && (
-            <li className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Direction</span>
+            <li className="journal-form__summary-row flex items-center justify-between gap-3">
+              <span className="journal-form__summary-key text-muted-foreground">
+                Direction
+              </span>
               <span
-                className={
+                className={cn(
+                  'journal-form__summary-value font-medium',
                   buyOrSell === 'BUY'
-                    ? 'font-medium text-success'
-                    : 'font-medium text-destructive'
-                }
+                    ? 'journal-form__summary-value--buy text-success'
+                    : 'journal-form__summary-value--sell text-destructive'
+                )}
               >
                 {buyOrSell}
               </span>
             </li>
           )}
           {orderTypeLabel && (
-            <li className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Order type</span>
-              <span className="font-medium text-foreground">{orderTypeLabel}</span>
+            <li className="journal-form__summary-row flex items-center justify-between gap-3">
+              <span className="journal-form__summary-key text-muted-foreground">
+                Order type
+              </span>
+              <span className="journal-form__summary-value font-medium text-foreground">
+                {orderTypeLabel}
+              </span>
             </li>
           )}
         </ul>
 
         {checklist.length > 0 && (
           <>
-            <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-[0.06em] text-neutral">
+            <p className="journal-form__section-label mb-2 mt-4 text-xs font-medium uppercase tracking-[0.06em] text-neutral">
               Checklist
             </p>
-            <ul className="space-y-3">
+            <ul className="journal-form__checklist space-y-3">
               {checklist.map((item, i) => {
                 const yes = item.answer === true
                 return (
-                  <li key={i} className="flex items-start gap-3">
+                  <li
+                    key={i}
+                    className="journal-form__checklist-item flex items-start gap-3"
+                  >
                     <span
-                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full ${
+                      className={cn(
+                        'journal-form__check-icon mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full',
                         yes
-                          ? 'bg-success/15 text-success'
-                          : 'bg-destructive/15 text-destructive'
-                      }`}
+                          ? 'journal-form__check-icon--yes bg-success/15 text-success'
+                          : 'journal-form__check-icon--no bg-destructive/15 text-destructive'
+                      )}
                     >
                       {yes ? <Check className="size-3" /> : <X className="size-3" />}
                     </span>
-                    <span className="text-sm leading-snug text-foreground">
+                    <span className="journal-form__check-text text-sm leading-snug text-foreground">
                       {item.question}
                       <span
-                        className={`ml-1.5 font-medium ${
-                          yes ? 'text-success' : 'text-destructive'
-                        }`}
+                        className={cn(
+                          'journal-form__check-answer ml-1.5 font-medium',
+                          yes
+                            ? 'journal-form__check-answer--yes text-success'
+                            : 'journal-form__check-answer--no text-destructive'
+                        )}
                       >
                         {yes ? 'Yes' : 'No'}
                       </span>
@@ -584,9 +633,32 @@ function TerminalScreen({
             </ul>
           </>
         )}
+
+        {advice.length > 0 && (
+          <>
+            <p className="journal-form__section-label mb-2 mt-4 text-xs font-medium uppercase tracking-[0.06em] text-neutral">
+              Advice
+            </p>
+            <ul className="journal-form__advice list-disc space-y-2 pl-4">
+              {advice.map((line) => (
+                <li
+                  key={line}
+                  className="journal-form__advice-item text-sm leading-snug text-foreground"
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
 
-      <Button size="lg" className="w-full" onClick={onClose} disabled={disabled}>
+      <Button
+        size="lg"
+        className="journal-form__done w-full"
+        onClick={onClose}
+        disabled={disabled}
+      >
         Done
       </Button>
     </div>
