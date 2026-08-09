@@ -3,12 +3,13 @@
 import { Quote } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { ChevronDown, Trash2 } from 'lucide-react'
+import { ChevronDown, Pencil, Trash2 } from 'lucide-react'
 
 interface QuoteCardProps {
   quote: Quote
   expanded: boolean
   onToggle: () => void
+  onEdit: (quote: Quote) => void
   onDelete: (quote: Quote) => void
 }
 
@@ -16,6 +17,7 @@ export function QuoteCard({
   quote,
   expanded,
   onToggle,
+  onEdit,
   onDelete,
 }: QuoteCardProps) {
   return (
@@ -43,19 +45,34 @@ export function QuoteCard({
           </span>
         </button>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Delete quote"
-          className="quote-card__delete mr-1.5 mt-1.5 shrink-0 text-destructive opacity-100 hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(quote)
-          }}
-        >
-          <Trash2 className="quote-card__delete-icon size-4" />
-        </Button>
+        <div className="quote-card__actions mr-1.5 mt-1.5 flex shrink-0 items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Edit quote"
+            className="quote-card__edit text-muted-foreground opacity-100 hover:bg-muted hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit(quote)
+            }}
+          >
+            <Pencil className="quote-card__edit-icon size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Delete quote"
+            className="quote-card__delete text-destructive opacity-100 hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(quote)
+            }}
+          >
+            <Trash2 className="quote-card__delete-icon size-4" />
+          </Button>
+        </div>
       </div>
 
       {expanded && (

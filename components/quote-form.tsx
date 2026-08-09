@@ -1,26 +1,44 @@
 'use client'
 
-import { useState } from 'react'
-import { QuoteFormData } from '@/lib/types'
+import { useEffect, useState } from 'react'
+import { Quote, QuoteFormData } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus } from 'lucide-react'
+import { Pencil, Plus } from 'lucide-react'
 
 type QuoteFormProps = {
+  editingQuote?: Quote | null
+  onCancelEdit?: () => void
   onSubmit: (data: QuoteFormData) => Promise<void>
   isSaving?: boolean
 }
 
-export function QuoteForm({ onSubmit, isSaving = false }: QuoteFormProps) {
+export function QuoteForm({
+  editingQuote = null,
+  onCancelEdit,
+  onSubmit,
+  isSaving = false,
+}: QuoteFormProps) {
   const [open, setOpen] = useState(false)
   const [headline, setHeadline] = useState('')
   const [description, setDescription] = useState('')
+
+  const isEditing = Boolean(editingQuote)
+
+  useEffect(() => {
+    if (editingQuote) {
+      setHeadline(editingQuote.headline)
+      setDescription(editingQuote.description)
+      setOpen(true)
+    }
+  }, [editingQuote])
 
   const reset = () => {
     setHeadline('')
     setDescription('')
     setOpen(false)
+    onCancelEdit?.()
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,8 +113,17 @@ export function QuoteForm({ onSubmit, isSaving = false }: QuoteFormProps) {
           Cancel
         </Button>
         <Button type="submit" className="flex-1 gap-2" disabled={isSaving}>
-          <Plus className="size-4" />
-          Add quote
+          {isEditing ? (
+            <>
+              <Pencil className="size-4" />
+              Save quote
+            </>
+          ) : (
+            <>
+              <Plus className="size-4" />
+              Add quote
+            </>
+          )}
         </Button>
       </div>
     </form>

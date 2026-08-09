@@ -15,6 +15,7 @@ export function QuotesScreen() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null)
 
   const loadQuotes = async (uid: string) => {
     const { data, error } = await supabase
@@ -48,11 +49,32 @@ export function QuotesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase])
 
-  const handleAdd = async (data: QuoteFormData) => {
+  const handleSubmit = async (data: QuoteFormData) => {
     if (!userId) return
 
     setIsSaving(true)
     try {
+      if (editingQuote) {
+        const { data: updated, error } = await supabase
+          .from('quotes')
+          .update({
+            headline: data.headline,
+            description: data.description,
+          })
+          .eq('id', editingQuote.id)
+          .eq('user_id', userId)
+          .select('*')
+          .single()
+
+        if (error) throw error
+        setQuotes((prev) =>
+          prev.map((q) => (q.id === editingQuote.id ? (updated as Quote) : q))
+        )
+        setEditingQuote(null)
+        toast.success('Quote updated')
+        return
+      }
+
       const { data: created, error } = await supabase
         .from('quotes')
         .insert([
@@ -70,7 +92,7 @@ export function QuotesScreen() {
       toast.success('Quote added')
     } catch (error) {
       console.error('[quotes] save error:', error)
-      toast.error('Error saving quote')
+      toast.error(editingQuote ? 'Error updating quote' : 'Error saving quote')
       throw error
     } finally {
       setIsSaving(false)
@@ -89,6 +111,7 @@ export function QuotesScreen() {
         .eq('user_id', userId)
       if (error) throw error
       setQuotes((prev) => prev.filter((q) => q.id !== quote.id))
+      if (editingQuote?.id === quote.id) setEditingQuote(null)
       setExpanded((prev) => {
         if (!(quote.id in prev)) return prev
         const next = { ...prev }
@@ -108,10 +131,10 @@ export function QuotesScreen() {
     <div className="quotes-screen flex flex-col gap-6">
       <section className="quotes-screen__form-section">
         <QuoteForm
+          editingQuote={editingQuote}
           isSaving={isSaving}
-          onSubmit={async (data) => {
-            await handleAdd(data)
-          }}
+          onCancelEdit={() => setEditingQuote(null)}
+          onSubmit={handleSubmit}
         />
       </section>
 
@@ -143,6 +166,10 @@ export function QuotesScreen() {
                     [quote.id]: !prev[quote.id],
                   }))
                 }
+                onEdit={(q) => {
+                  setEditingQuote(q)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
                 onDelete={(q) => void handleDelete(q)}
               />
             ))}

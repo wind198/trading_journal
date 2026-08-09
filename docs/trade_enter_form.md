@@ -1,56 +1,69 @@
 # Trade entry checklist
 
-Multi-step gate before opening a trade on **EURUSD** (forex). Time window uses **Vietnam (UTC+7)**.
+Multi-step gate before opening a trade on **EURUSD** (forex). Calendar day and session window use **Vietnam (UTC+7)**.
 
 See flow diagram: [trade_enter_form.mmd](./trade_enter_form.mmd)
 
 ---
 
-## Step 1 — Session window
+## Step 1 — Daily trade limit
 
-If local time is between **14:00 and 21:00 (UTC+7)**:
+Count existing journal trades for **today (UTC+7)**.
 
-- Show: `No trade entry during this time`
+If count is **≥ 3**:
+
+- Show: `Maximum 3 trades per day reached`
 - Exit
 
 Otherwise → Step 2
 
 ---
 
-## Step 2 — Direction
+## Step 2 — Session window
+
+If local time is between **14:00 and 21:00 (UTC+7)**:
+
+- Show: `No trade entry during this time`
+- Exit
+
+Otherwise → Step 3
+
+---
+
+## Step 3 — Direction
 
 Show two buttons: **Buy** and **Sell**
 
 | Choice | Next |
 |--------|------|
-| Buy | Step 3a |
-| Sell | Step 3b |
+| Buy | Step 4a |
+| Sell | Step 4b |
 
 ---
 
-## Step 3a — Buy order type
+## Step 4a — Buy order type
 
 Show order types (each: icon + label): **Extreme**, **Trend following**
 
 | Choice | Next |
 |--------|------|
 | Extreme | Show `Buy order at Extreme is dangerous` → Exit |
-| Trend following | Step 4a |
+| Trend following | Step 5a |
 
 ---
 
-## Step 3b — Sell order type
+## Step 4b — Sell order type
 
 Show order types: **Extreme**, **Trend following**
 
 | Choice | Next |
 |--------|------|
-| Extreme | Step 4b |
-| Trend following | Step 4c |
+| Extreme | Step 5b |
+| Trend following | Step 5c |
 
 ---
 
-## Step 4a — Trend following Buy
+## Step 5a — Trend following Buy
 
 Answer all three (Yes / No):
 0. Is higher level time frame showing a strong trend?
@@ -65,7 +78,7 @@ Answer all three (Yes / No):
 
 ---
 
-## Step 4b — Extreme Sell
+## Step 5b — Extreme Sell
 
 Answer all three (Yes / No):
 
@@ -80,7 +93,7 @@ Answer all three (Yes / No):
 
 ---
 
-## Step 4c — Trend following Sell
+## Step 5c — Trend following Sell
 
 Answer all three (Yes / No):
 0. Is higher level time frame showing a strong trend?
@@ -102,7 +115,7 @@ Applies to **EURUSD**.
 
 Counter-trend (correction) entry into an extended market. Expect a correction wave long enough to trade. Do **not** wait for a full reverse trend — enter early to capture the correction.
 
-Exists for both Buy and Sell. **Buy Extreme is considered too dangerous** and is blocked in this checklist (Step 3a → exit). Only **Sell Extreme** continues to the question gate (Step 4b).
+Exists for both Buy and Sell. **Buy Extreme is considered too dangerous** and is blocked in this checklist (Step 4a → exit). Only **Sell Extreme** continues to the question gate (Step 5b).
 
 ### Trend following
 

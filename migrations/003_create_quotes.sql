@@ -22,6 +22,11 @@ CREATE POLICY "Users can create their own quotes"
   ON quotes FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can update their own quotes"
+  ON quotes FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Users can delete their own quotes"
   ON quotes FOR DELETE
   USING (auth.uid() = user_id);
