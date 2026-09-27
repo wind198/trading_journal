@@ -15,14 +15,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { LogOut, MoreVertical } from 'lucide-react'
+import { LayoutGrid, LogOut, MoreVertical } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { ReactNode } from 'react'
 
 const TABS = [
   { href: '/journal', label: 'Trades' },
-  { href: '/discipline', label: 'Discipline' },
-  { href: '/quotes', label: 'Quotes' },
+  { href: '/journal/discipline', label: 'Discipline' },
+  { href: '/journal/quotes', label: 'Quotes' },
 ] as const
 
 const TAB_ORDER = TABS.map((t) => t.href)
@@ -38,7 +38,7 @@ export function AppShell({
   const router = useRouter()
   const supabase = createClient()
   const showDateToolbar =
-    pathname === '/journal' || pathname === '/discipline'
+    pathname === '/journal' || pathname === '/journal/discipline'
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -93,6 +93,10 @@ export function AppShell({
                   <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuItem onClick={() => router.push('/trading-dashboard')}>
+                <LayoutGrid />
+                Trading dashboard
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void handleLogout()}>
                 <LogOut />
                 Sign out

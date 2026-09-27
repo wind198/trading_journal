@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { DateRangeProvider } from '@/components/date-range-provider'
 import { TradesFilterProvider } from '@/components/trades-filter-provider'
@@ -9,9 +9,11 @@ import { AppShell } from '@/components/app-shell'
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = useMemo(() => createClient(), [])
   const [email, setEmail] = useState<string | undefined>()
   const [ready, setReady] = useState(false)
+  const isDashboard = pathname === '/trading-dashboard'
 
   useEffect(() => {
     const boot = async () => {
@@ -39,7 +41,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <DateRangeProvider>
       <TradesFilterProvider>
-        <AppShell userEmail={email}>{children}</AppShell>
+        {isDashboard ? children : <AppShell userEmail={email}>{children}</AppShell>}
       </TradesFilterProvider>
     </DateRangeProvider>
   )

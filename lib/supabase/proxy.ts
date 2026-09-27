@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const PUBLIC_PATHS = new Set(['/', '/login', '/auth/callback'])
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -26,7 +28,33 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getClaims()
+  const { data } = await supabase.auth.getClaims()
+  const { pathname } = request.nextUrl
+
+  if (pathname.startsWith('/api/')) return supabaseResponse
+
+  const hasSession = Boolean(data?.claims)
+  const isPublic = PUBLIC_PATHS.has(pathname)
+
+  if (!hasSession && !isPublic) return redirectWithSessionCookies(request, supabaseResponse, '/login')
+  if (hasSession && pathname === '/login') {
+    return redirectWithSessionCookies(request, supabaseResponse, '/journal')
+  }
 
   return supabaseResponse
+}
+
+function redirectWithSessionCookies(
+  request: NextRequest,
+  supabaseResponse: NextResponse,
+  pathname: string
+) {
+  const url = request.nextUrl.clone()
+  url.pathname = pathname
+  url.search = ''
+  const redirectResponse = NextResponse.redirect(url)
+  supabaseResponse.cookies.getAll().forEach((cookie) => {
+    redirectResponse.cookies.set(cookie)
+  })
+  return redirectResponse
 }
