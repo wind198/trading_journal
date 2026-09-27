@@ -69,7 +69,7 @@ function Dashboard() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-3 sm:gap-3 sm:px-4">
         <h1 className="min-w-0 truncate text-base font-semibold sm:text-lg">Trading dashboard</h1>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
@@ -84,8 +84,8 @@ function Dashboard() {
       <div
         className={
           expanded
-            ? 'min-h-0 flex-1 p-2'
-            : 'grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto p-2 md:grid-cols-2 md:grid-rows-2 md:overflow-hidden'
+            ? 'flex min-h-0 flex-1 overflow-hidden p-2'
+            : 'grid min-h-0 flex-1 grid-cols-1 grid-rows-4 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2'
         }
       >
         {PANES.map((pane) => {
@@ -98,8 +98,8 @@ function Dashboard() {
               key={pane.id}
               className={
                 isExpanded
-                  ? 'relative flex h-full min-h-0 flex-col rounded-lg border border-border'
-                  : 'relative flex h-[70dvh] min-h-72 shrink-0 flex-col rounded-lg border border-border md:h-auto md:min-h-0'
+                  ? 'relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-border'
+                  : 'relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-border'
               }
             >
               <div
