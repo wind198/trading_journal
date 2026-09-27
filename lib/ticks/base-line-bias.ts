@@ -9,7 +9,7 @@ export interface BaseLineBiasConfig {
 export const DEFAULT_BASE_LINE_BIAS_CONFIG: BaseLineBiasConfig = {
   baseLineLength: 52,
   analysisLength: 75,
-  thresholdPercent: 80,
+  thresholdPercent: 85,
 }
 
 export interface BaseLineBiasPoint {
