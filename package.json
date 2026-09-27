@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:ticks": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test lib/ticks/ichimoku.test.ts lib/ticks/merge.test.ts lib/ticks/fetch.integration.test.ts"
+    "test:ticks": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test lib/ticks/ichimoku.test.ts lib/ticks/merge.test.ts lib/ticks/base-line-bias.test.ts lib/ticks/fetch.integration.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
