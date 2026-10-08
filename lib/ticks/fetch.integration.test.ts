@@ -98,7 +98,7 @@ test('reads one EURUSD candle page and an older page before that cursor', async 
     }
     assertOhlc(bars, timeframe)
     assert.ok(bars.length <= HISTORY_CANDLE_LIMIT, `${timeframe} returned ${bars.length}`)
-    if (timeframe !== '5m') continue
+    if (timeframe !== '3m') continue
 
     assert.equal(bars.length, HISTORY_CANDLE_LIMIT)
     const older = await fetchHistoricalCandles({
@@ -107,7 +107,7 @@ test('reads one EURUSD candle page and an older page before that cursor', async 
       before: bars[0].time,
       limit: HISTORY_CANDLE_LIMIT,
     })
-    assertOhlc(older, '5m before')
+    assertOhlc(older, '3m before')
     assert.ok(older.length <= HISTORY_CANDLE_LIMIT)
     assert.ok(older[older.length - 1].time < bars[0].time)
   }

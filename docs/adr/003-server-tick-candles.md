@@ -6,7 +6,7 @@ The dashboard needs EURUSD prices from the Supabase `ticks` table. Rows are bid/
 
 ## Decision
 
-Read the latest 256 rows per pane from the Supabase `candles` table (`5m`, `15m`, `1h`, `4h`) with `SUPABASE_SECRET_KEY`. `time` is `bucket_start` in Unix seconds.
+Read the latest 256 rows per pane from the Supabase `candles` table (`3m`, `15m`, `1h`, `4h`) with `SUPABASE_SECRET_KEY`. `time` is `bucket_start` in Unix seconds.
 
 ## Alternatives
 

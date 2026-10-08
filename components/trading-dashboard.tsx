@@ -47,7 +47,7 @@ const PANES = [
   { id: '4h', label: '4h' },
   { id: '1h', label: '1h' },
   { id: '15m', label: '15m' },
-  { id: '5m', label: '5m' },
+  { id: '3m', label: '3m' },
 ] as const
 
 type PaneId = (typeof PANES)[number]['id']
