@@ -12,6 +12,8 @@ const MAX_VISIBLE_BARS = 1000
 const LOAD_EDGE = 50
 const BB_LENGTH = 104
 const BB_MULT = 2
+const ABOVE_BAND = '#26a69a'
+const BELOW_BAND = '#ef5350'
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
@@ -43,10 +45,13 @@ type ChartHandle = {
   firstTime: number | null
 }
 
+type BandLevel = { upper: number; middle: number; lower: number }
+
 function bollinger(candles: LightweightCandle[]) {
   const upper: { time: Time; value: number }[] = []
   const middle: { time: Time; value: number }[] = []
   const lower: { time: Time; value: number }[] = []
+  const levels: (BandLevel | null)[] = Array.from({ length: candles.length }, () => null)
   for (let i = BB_LENGTH - 1; i < candles.length; i++) {
     let sum = 0
     for (let j = i - BB_LENGTH + 1; j <= i; j++) sum += candles[j].close
@@ -58,11 +63,48 @@ function bollinger(candles: LightweightCandle[]) {
     }
     const deviation = Math.sqrt(variance / BB_LENGTH)
     const time = candles[i].time as Time
-    middle.push({ time, value: mean })
-    upper.push({ time, value: mean + BB_MULT * deviation })
-    lower.push({ time, value: mean - BB_MULT * deviation })
+    const level = {
+      upper: mean + BB_MULT * deviation,
+      middle: mean,
+      lower: mean - BB_MULT * deviation,
+    }
+    levels[i] = level
+    middle.push({ time, value: level.middle })
+    upper.push({ time, value: level.upper })
+    lower.push({ time, value: level.lower })
   }
-  return { upper, middle, lower }
+  return { upper, middle, lower, levels }
+}
+
+function outsideColor(close: number, level: BandLevel | null): string | null {
+  if (!level) return null
+  if (close > level.upper) return ABOVE_BAND
+  if (close < level.lower) return BELOW_BAND
+  return null
+}
+
+function pricePoint(bar: LightweightCandle, level: BandLevel | null, chartType: ChartType) {
+  const time = bar.time as Time
+  const color = outsideColor(bar.close, level)
+  if (chartType === 'line') {
+    return color ? { time, value: bar.close, color } : { time, value: bar.close }
+  }
+  if (chartType === 'area') {
+    if (!color) return { time, value: bar.close }
+    const fill = color === ABOVE_BAND ? 'rgba(38, 166, 154, 0.35)' : 'rgba(239, 83, 80, 0.35)'
+    const fade = color === ABOVE_BAND ? 'rgba(38, 166, 154, 0.02)' : 'rgba(239, 83, 80, 0.02)'
+    return { time, value: bar.close, lineColor: color, topColor: fill, bottomColor: fade }
+  }
+  const candle = {
+    time,
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+  }
+  if (!color) return candle
+  if (chartType === 'bar') return { ...candle, color }
+  return { ...candle, color, borderColor: color, wickColor: color }
 }
 
 export function PriceChart({
@@ -197,19 +239,7 @@ export function PriceChart({
       previousFirst == null ? 0 : candles.filter((bar) => bar.time < previousFirst).length
 
     const bands = bollinger(candles)
-    if (chartType === 'line' || chartType === 'area') {
-      handle.price.setData(candles.map((bar) => ({ time: bar.time as Time, value: bar.close })))
-    } else {
-      handle.price.setData(
-        candles.map((bar) => ({
-          time: bar.time as Time,
-          open: bar.open,
-          high: bar.high,
-          low: bar.low,
-          close: bar.close,
-        })),
-      )
-    }
+    handle.price.setData(candles.map((bar, index) => pricePoint(bar, bands.levels[index], chartType)))
     handle.upper.setData(bands.upper)
     handle.middle.setData(bands.middle)
     handle.lower.setData(bands.lower)
