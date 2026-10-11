@@ -2,9 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { Time } from 'lightweight-charts'
-import type { CloudPoint, LinePoint } from '@/lib/ticks/ichimoku'
 import type { LightweightCandle } from '@/lib/ticks/candles'
-import { IchimokuCloud } from '@/components/ichimoku-cloud'
 
 export type ChartType = 'line' | 'area' | 'candlestick' | 'bar'
 
@@ -12,10 +10,11 @@ const PRICE_FORMAT = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 const VISIBLE_BARS = 256
 const MAX_VISIBLE_BARS = 1000
 const LOAD_EDGE = 50
+const BB_LENGTH = 104
+const BB_MULT = 2
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
-  attachPrimitive: (primitive: IchimokuCloud) => void
 }
 
 type LineSeries = {
@@ -37,26 +36,42 @@ type ChartHandle = {
     remove: () => void
   }
   price: PriceSeries
-  conversion: LineSeries
-  base: LineSeries
-  cloud: IchimokuCloud
+  upper: LineSeries
+  middle: LineSeries
+  lower: LineSeries
   fitted: boolean
   firstTime: number | null
 }
 
+function bollinger(candles: LightweightCandle[]) {
+  const upper: { time: Time; value: number }[] = []
+  const middle: { time: Time; value: number }[] = []
+  const lower: { time: Time; value: number }[] = []
+  for (let i = BB_LENGTH - 1; i < candles.length; i++) {
+    let sum = 0
+    for (let j = i - BB_LENGTH + 1; j <= i; j++) sum += candles[j].close
+    const mean = sum / BB_LENGTH
+    let variance = 0
+    for (let j = i - BB_LENGTH + 1; j <= i; j++) {
+      const delta = candles[j].close - mean
+      variance += delta * delta
+    }
+    const deviation = Math.sqrt(variance / BB_LENGTH)
+    const time = candles[i].time as Time
+    middle.push({ time, value: mean })
+    upper.push({ time, value: mean + BB_MULT * deviation })
+    lower.push({ time, value: mean - BB_MULT * deviation })
+  }
+  return { upper, middle, lower }
+}
+
 export function PriceChart({
   candles,
-  conversion,
-  base,
-  cloud,
   chartType,
   onLoadOlder,
   axesVisible,
 }: {
   candles: LightweightCandle[]
-  conversion: LinePoint[]
-  base: LinePoint[]
-  cloud: CloudPoint[]
   chartType: ChartType
   onLoadOlder?: () => void
   axesVisible: boolean
@@ -126,8 +141,9 @@ export function PriceChart({
         return
       }
 
-      const cloudPrimitive = new IchimokuCloud([])
-      price.attachPrimitive(cloudPrimitive)
+      // Ichimoku cloud, tenkan, and kijun are not plotted.
+      // const cloudPrimitive = new IchimokuCloud([])
+      // price.attachPrimitive(cloudPrimitive)
 
       let adjusting = false
       created.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -147,9 +163,9 @@ export function PriceChart({
       handleRef.current = {
         chart: created,
         price: price as unknown as PriceSeries,
-        conversion: line('#1565C0') as LineSeries,
-        base: line('#E65100') as LineSeries,
-        cloud: cloudPrimitive,
+        upper: line('#00897B') as LineSeries,
+        middle: line('#00695C') as LineSeries,
+        lower: line('#00897B') as LineSeries,
         fitted: false,
         firstTime: null,
       }
@@ -174,40 +190,29 @@ export function PriceChart({
     const handle = handleRef.current
     if (!handle || candles.length === 0) return
 
-    const lastTime = candles[candles.length - 1].time
-    const pad = cloud
-      .map((point) => point.time)
-      .filter((time) => time > lastTime)
-      .sort((a, b) => a - b)
-      .filter((time, index, all) => index === 0 || time !== all[index - 1])
-      .map((time) => ({ time: time as Time }))
-
     const scale = handle.chart.timeScale()
     const keep = handle.fitted ? scale.getVisibleLogicalRange() : null
     const previousFirst = handle.firstTime
     const prepended =
       previousFirst == null ? 0 : candles.filter((bar) => bar.time < previousFirst).length
 
-    handle.cloud.setCloud(cloud)
+    const bands = bollinger(candles)
     if (chartType === 'line' || chartType === 'area') {
-      handle.price.setData([
-        ...candles.map((bar) => ({ time: bar.time as Time, value: bar.close })),
-        ...pad,
-      ])
+      handle.price.setData(candles.map((bar) => ({ time: bar.time as Time, value: bar.close })))
     } else {
-      handle.price.setData([
-        ...candles.map((bar) => ({
+      handle.price.setData(
+        candles.map((bar) => ({
           time: bar.time as Time,
           open: bar.open,
           high: bar.high,
           low: bar.low,
           close: bar.close,
         })),
-        ...pad,
-      ])
+      )
     }
-    handle.conversion.setData(conversion.map((point) => ({ time: point.time as Time, value: point.value })))
-    handle.base.setData(base.map((point) => ({ time: point.time as Time, value: point.value })))
+    handle.upper.setData(bands.upper)
+    handle.middle.setData(bands.middle)
+    handle.lower.setData(bands.lower)
     handle.firstTime = candles[0].time
     if (keep) {
       scale.setVisibleLogicalRange({ from: keep.from + prepended, to: keep.to + prepended })
@@ -221,7 +226,7 @@ export function PriceChart({
         scale.setVisibleLogicalRange(range)
       })
     }
-  }, [base, candles, chartType, cloud, conversion, epoch])
+  }, [candles, chartType, epoch])
 
   return <div ref={ref} className="h-full min-h-0 w-full" />
 }

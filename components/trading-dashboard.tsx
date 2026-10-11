@@ -11,10 +11,8 @@ import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
 } from '@/lib/ticks/base-line-bias'
-import { ichimoku } from '@/lib/ticks/ichimoku'
 import { mergeCandles } from '@/lib/ticks/merge'
 import {
-  CANDLE_TIMEFRAMES,
   HISTORY_CANDLE_LIMIT,
   RECENT_CANDLE_LIMIT,
   type LightweightCandle,
@@ -207,10 +205,6 @@ function DashboardPane({
       loadingOlder.current = false
     })
   }
-  const indicator = useMemo(
-    () => ichimoku(candles, CANDLE_TIMEFRAMES[pane.id]),
-    [candles, pane.id],
-  )
   const bias = useMemo(() => {
     const points = calculateBaseLineBias(candles, DEFAULT_BASE_LINE_BIAS_CONFIG)
     return points.length > 0 ? points[points.length - 1].value : null
@@ -286,9 +280,6 @@ function DashboardPane({
         ) : (
           <PriceChart
             candles={candles}
-            conversion={indicator.conversion}
-            base={indicator.base}
-            cloud={indicator.cloud}
             chartType={chartType}
             onLoadOlder={loadOlder}
             axesVisible={axesVisible}
