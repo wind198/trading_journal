@@ -17,7 +17,7 @@ import {
   RECENT_CANDLE_LIMIT,
   type LightweightCandle,
 } from '@/lib/ticks/candles'
-import { ArrowDown, ArrowUp, Maximize2, Minimize2, Minus } from 'lucide-react'
+import { ArrowDown, ArrowUp, Expand, Maximize2, Minimize2, Minus, Shrink } from 'lucide-react'
 
 const SYMBOL = 'EURUSD'
 const SMALL_SCREEN_QUERY = '(min-width: 1280px)'
@@ -89,6 +89,7 @@ export function TradingDashboard() {
 
 function Dashboard() {
   const [expanded, setExpanded] = useState<PaneId | null>(null)
+  const [fullScreen, setFullScreen] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
   const router = useRouter()
@@ -99,18 +100,28 @@ function Dashboard() {
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-3 sm:gap-3 sm:px-4">
-        <h1 className="min-w-0 truncate text-base font-semibold sm:text-lg">Trading dashboard</h1>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <Button variant="ghost" asChild>
-            <Link href="/journal">Journal</Link>
-          </Button>
-          <Button variant="ghost" onClick={() => void signOut()}>
-            Sign out
-          </Button>
-        </div>
-      </header>
+    <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
+      {!fullScreen && (
+        <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-2 py-1.5 sm:gap-2 sm:px-3">
+          <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1>
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/journal">Journal</Link>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              Sign out
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Enter fullscreen"
+              onClick={() => setFullScreen(true)}
+            >
+              <Expand />
+            </Button>
+          </div>
+        </header>
+      )}
       <div
         className={
           expanded
@@ -139,6 +150,18 @@ function Dashboard() {
           )
         })}
       </div>
+      {fullScreen && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 bg-background/80 shadow-md backdrop-blur-sm"
+          aria-label="Exit fullscreen"
+          onClick={() => setFullScreen(false)}
+        >
+          <Shrink />
+          Exit
+        </Button>
+      )}
     </div>
   )
 }
