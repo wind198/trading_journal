@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { Time } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, SeriesType, Time } from 'lightweight-charts'
 import type { LightweightCandle } from '@/lib/ticks/candles'
+import type { TrendlinePoint } from '@/lib/chart-drawings'
+import { TrendlinePrimitive, type TrendlineDrawing } from '@/components/trendline-primitive'
 
 export type ChartType = 'line' | 'area' | 'candlestick' | 'bar'
 
@@ -17,6 +19,7 @@ const BELOW_BAND = '#ef5350'
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
+  attachPrimitive: (primitive: TrendlinePrimitive) => void
 }
 
 type LineSeries = {
@@ -26,21 +29,12 @@ type LineSeries = {
 type LogicalRange = { from: number; to: number }
 
 type ChartHandle = {
-  chart: {
-    applyOptions: (options: {
-      timeScale: { visible: boolean }
-      rightPriceScale: { visible: boolean }
-    }) => void
-    timeScale: () => {
-      getVisibleLogicalRange: () => LogicalRange | null
-      setVisibleLogicalRange: (range: LogicalRange) => void
-    }
-    remove: () => void
-  }
-  price: PriceSeries
+  chart: IChartApi
+  price: PriceSeries & ISeriesApi<SeriesType, Time>
   upper: LineSeries
   middle: LineSeries
   lower: LineSeries
+  trendlines: TrendlinePrimitive
   fitted: boolean
   firstTime: number | null
 }
@@ -107,31 +101,118 @@ function pricePoint(bar: LightweightCandle, level: BandLevel | null, chartType: 
   return { ...candle, color, borderColor: color, wickColor: color }
 }
 
+function asUnixSeconds(time: unknown): number | null {
+  return typeof time === 'number' && Number.isFinite(time) ? time : null
+}
+
+function dataPrice(data: unknown): number | null {
+  if (!data || typeof data !== 'object') return null
+  const row = data as { value?: unknown; close?: unknown }
+  if (typeof row.value === 'number' && Number.isFinite(row.value)) return row.value
+  if (typeof row.close === 'number' && Number.isFinite(row.close)) return row.close
+  return null
+}
+
+/** Prefer hovered series (e.g. BB band); else Y→price. */
+function resolveClickPrice(
+  handle: ChartHandle,
+  point: { x: number; y: number },
+  seriesData?: Map<unknown, unknown>,
+  hoveredSeries?: unknown,
+): number | null {
+  try {
+    if (seriesData instanceof Map && hoveredSeries != null && seriesData.has(hoveredSeries)) {
+      const snapped = dataPrice(seriesData.get(hoveredSeries))
+      if (snapped != null) return snapped
+    }
+    const fromY = handle.price.coordinateToPrice(point.y)
+    return fromY == null ? null : Number(fromY)
+  } catch {
+    return null
+  }
+}
+
+/** Resolve click → bar time + price (snap to hovered series when present, e.g. BB). */
+function clickToPoint(
+  handle: ChartHandle,
+  point: { x: number; y: number },
+  candles: readonly LightweightCandle[] | null | undefined,
+  eventTime?: unknown,
+  seriesData?: Map<unknown, unknown>,
+  hoveredSeries?: unknown,
+): TrendlinePoint | null {
+  try {
+    const bars = candles ?? []
+    let timeSec = asUnixSeconds(eventTime)
+    if (timeSec == null) {
+      timeSec = asUnixSeconds(handle.chart.timeScale().coordinateToTime(point.x))
+    }
+    if (timeSec == null && bars.length > 0) {
+      const logical = handle.chart.timeScale().coordinateToLogical(point.x)
+      if (logical != null && Number.isFinite(logical)) {
+        const index = Math.max(0, Math.min(bars.length - 1, Math.round(logical)))
+        timeSec = bars[index]?.time ?? null
+      }
+    }
+    if (timeSec == null) return null
+
+    const price = resolveClickPrice(handle, point, seriesData, hoveredSeries)
+    if (price == null) return null
+    return { time: timeSec, price }
+  } catch {
+    return null
+  }
+}
+
 export function PriceChart({
   candles,
   chartType,
   onLoadOlder,
   axesVisible,
+  drawings = [],
+  drawMode = false,
+  onTrendlineComplete,
+  onTrendlineDelete,
 }: {
   candles: LightweightCandle[]
   chartType: ChartType
   onLoadOlder?: () => void
   axesVisible: boolean
+  drawings?: readonly TrendlineDrawing[]
+  drawMode?: boolean
+  onTrendlineComplete?: (points: { p1: TrendlinePoint; p2: TrendlinePoint }) => void
+  onTrendlineDelete?: (id: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const handleRef = useRef<ChartHandle | null>(null)
+  const candlesRef = useRef<readonly LightweightCandle[]>(candles ?? [])
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
+  const drawModeRef = useRef(drawMode)
+  const draftRef = useRef<TrendlinePoint | null>(null)
+  const selectedIdRef = useRef<string | null>(null)
+  const onCompleteRef = useRef(onTrendlineComplete)
+  const onDeleteRef = useRef(onTrendlineDelete)
   const [epoch, setEpoch] = useState(0)
+  candlesRef.current = candles ?? []
   onLoadOlderRef.current = onLoadOlder
   axesVisibleRef.current = axesVisible
+  drawModeRef.current = drawMode
+  onCompleteRef.current = onTrendlineComplete
+  onDeleteRef.current = onTrendlineDelete
+
+  const selectLine = (id: string | null) => {
+    selectedIdRef.current = id
+    handleRef.current?.trendlines.setSelectedId(id)
+  }
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
 
     let cancelled = false
-    let createdChart: { remove: () => void } | null = null
+    let createdChart: IChartApi | null = null
+    let removePointerMove: (() => void) | null = null
 
     void import('lightweight-charts').then((lwc) => {
       if (cancelled || !ref.current) return
@@ -183,9 +264,8 @@ export function PriceChart({
         return
       }
 
-      // Ichimoku cloud, tenkan, and kijun are not plotted.
-      // const cloudPrimitive = new IchimokuCloud([])
-      // price.attachPrimitive(cloudPrimitive)
+      const trendlines = new TrendlinePrimitive([])
+      price.attachPrimitive(trendlines)
 
       let adjusting = false
       created.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -202,21 +282,103 @@ export function PriceChart({
         if (range.from < LOAD_EDGE) onLoadOlderRef.current?.()
       })
 
-      handleRef.current = {
+      const handle: ChartHandle = {
         chart: created,
-        price: price as unknown as PriceSeries,
+        price: price as unknown as PriceSeries & ISeriesApi<SeriesType, Time>,
         upper: line('#00897B') as LineSeries,
         middle: line('#00695C') as LineSeries,
         lower: line('#00897B') as LineSeries,
+        trendlines,
         fitted: false,
         firstTime: null,
       }
+      handleRef.current = handle
+
+      const pointFromEvent = (param: {
+        point?: { x: number; y: number }
+        time?: unknown
+        seriesData?: Map<unknown, unknown>
+        hoveredInfo?: { series?: unknown }
+        hoveredSeries?: unknown
+      }) => {
+        if (!param.point) return null
+        return clickToPoint(
+          handle,
+          param.point,
+          candlesRef.current,
+          param.time,
+          param.seriesData,
+          param.hoveredInfo?.series ?? param.hoveredSeries,
+        )
+      }
+
+      created.subscribeClick((param) => {
+        if (!param.point) return
+        if (drawModeRef.current) {
+          const point = pointFromEvent(param)
+          if (!point) return
+          const first = draftRef.current
+          if (!first) {
+            draftRef.current = point
+            handle.trendlines.setDraft({ p1: point })
+            return
+          }
+          draftRef.current = null
+          handle.trendlines.setDraft(null)
+          onCompleteRef.current?.({ p1: first, p2: point })
+          return
+        }
+        const hit = handle.trendlines.hitTest(param.point.x, param.point.y)
+        selectLine(hit?.externalId ?? null)
+      })
+
+      const updateDraftPreview = (param: {
+        point?: { x: number; y: number }
+        time?: unknown
+        seriesData?: Map<unknown, unknown>
+        hoveredInfo?: { series?: unknown }
+        hoveredSeries?: unknown
+      }) => {
+        if (!drawModeRef.current) return
+        const first = draftRef.current
+        if (!first) return
+        if (!param.point) {
+          handle.trendlines.setDraft({ p1: first })
+          return
+        }
+        const hover = pointFromEvent(param)
+        if (!hover) return
+        handle.trendlines.setDraft({ p1: first, p2: hover })
+      }
+
+      // Live preview: after p1, rubber-band to cursor/touch.
+      created.subscribeCrosshairMove(updateDraftPreview)
+
+      const chartEl = created.chartElement()
+      const onPointerMove = (event: PointerEvent) => {
+        if (!drawModeRef.current || !draftRef.current) return
+        const rect = chartEl.getBoundingClientRect()
+        updateDraftPreview({
+          point: { x: event.clientX - rect.left, y: event.clientY - rect.top },
+        })
+      }
+      chartEl.addEventListener('pointermove', onPointerMove)
+      removePointerMove = () => chartEl.removeEventListener('pointermove', onPointerMove)
+      if (cancelled) {
+        removePointerMove()
+        created.remove()
+        return
+      }
+
       setEpoch((value) => value + 1)
     })
 
     return () => {
       cancelled = true
+      removePointerMove?.()
       handleRef.current = null
+      draftRef.current = null
+      selectedIdRef.current = null
       createdChart?.remove()
     }
   }, [chartType])
@@ -227,6 +389,49 @@ export function PriceChart({
       rightPriceScale: { visible: axesVisible },
     })
   }, [axesVisible, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.trendlines.setLines(drawings)
+  }, [drawings, epoch])
+
+  useEffect(() => {
+    if (drawMode) {
+      selectLine(null)
+      return
+    }
+    draftRef.current = null
+    handleRef.current?.trendlines.setDraft(null)
+  }, [drawMode, epoch])
+
+  useEffect(() => {
+    if (!selectedIdRef.current) return
+    if (drawings.some((d) => d.id === selectedIdRef.current)) return
+    selectLine(null)
+  }, [drawings, epoch])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+      const id = selectedIdRef.current
+      if (!id || drawModeRef.current) return
+      event.preventDefault()
+      onDeleteRef.current?.(id)
+      selectLine(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [epoch])
 
   useEffect(() => {
     const handle = handleRef.current
@@ -258,5 +463,10 @@ export function PriceChart({
     }
   }, [candles, chartType, epoch])
 
-  return <div ref={ref} className="h-full min-h-0 w-full" />
+  return (
+    <div
+      ref={ref}
+      className={`h-full min-h-0 w-full${drawMode ? ' cursor-crosshair' : ''}`}
+    />
+  )
 }

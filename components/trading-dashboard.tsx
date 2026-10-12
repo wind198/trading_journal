@@ -4,9 +4,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { PriceChart, type ChartType } from '@/components/price-chart'
+import {
+  deleteChartDrawing,
+  insertTrendline,
+  loadChartDrawings,
+  type ChartDrawing,
+  type TrendlinePoint,
+} from '@/lib/chart-drawings'
 import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
@@ -17,7 +25,16 @@ import {
   RECENT_CANDLE_LIMIT,
   type LightweightCandle,
 } from '@/lib/ticks/candles'
-import { ArrowDown, ArrowUp, Expand, Maximize2, Minimize2, Minus, Shrink } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Expand,
+  Maximize2,
+  Minimize2,
+  Minus,
+  Shrink,
+  TrendingUp,
+} from 'lucide-react'
 
 const SYMBOL = 'EURUSD'
 const SMALL_SCREEN_QUERY = '(min-width: 1280px)'
@@ -232,6 +249,70 @@ function DashboardPane({
     const points = calculateBaseLineBias(candles, DEFAULT_BASE_LINE_BIAS_CONFIG)
     return points.length > 0 ? points[points.length - 1].value : null
   }, [candles])
+  const [drawMode, setDrawMode] = useState(false)
+  const [drawings, setDrawings] = useState<ChartDrawing[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadChartDrawings(SYMBOL, pane.id)
+      .then((rows) => {
+        if (!cancelled) setDrawings(rows)
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('Failed to load drawings')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [pane.id])
+
+  const trendlineDrawings = useMemo(
+    () => drawings.map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
+    [drawings],
+  )
+
+  const onTrendlineComplete = (points: { p1: TrendlinePoint; p2: TrendlinePoint }) => {
+    setDrawMode(false)
+    const tempId = `temp-${Date.now()}`
+    const optimistic: ChartDrawing = {
+      id: tempId,
+      symbol: SYMBOL,
+      timeframe: pane.id,
+      kind: 'trendline',
+      p1: points.p1,
+      p2: points.p2,
+    }
+    setDrawings((current) => [...current, optimistic])
+    void insertTrendline({
+      symbol: SYMBOL,
+      timeframe: pane.id,
+      p1: points.p1,
+      p2: points.p2,
+    })
+      .then((saved) => {
+        setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
+      })
+      .catch(() => {
+        setDrawings((current) => current.filter((d) => d.id !== tempId))
+        toast.error('Failed to save trendline')
+      })
+  }
+
+  const onTrendlineDelete = (id: string) => {
+    if (id.startsWith('temp-')) {
+      setDrawings((current) => current.filter((d) => d.id !== id))
+      return
+    }
+    let previous: ChartDrawing[] = []
+    setDrawings((current) => {
+      previous = current
+      return current.filter((d) => d.id !== id)
+    })
+    void deleteChartDrawing(id).catch(() => {
+      setDrawings(previous)
+      toast.error('Failed to delete trendline')
+    })
+  }
 
   return (
     <section
@@ -277,6 +358,16 @@ function DashboardPane({
               </Button>
             ))}
           <Button
+            variant={drawMode ? 'default' : 'ghost'}
+            size={compact ? 'icon-xs' : 'icon'}
+            className={compact && !drawMode ? 'bg-background/60' : undefined}
+            aria-label={drawMode ? 'Cancel trendline' : 'Draw trendline'}
+            aria-pressed={drawMode}
+            onClick={() => setDrawMode((value) => !value)}
+          >
+            <TrendingUp />
+          </Button>
+          <Button
             variant="ghost"
             size={compact ? 'icon-xs' : 'icon'}
             className={compact ? 'bg-background/60' : undefined}
@@ -306,6 +397,10 @@ function DashboardPane({
             chartType={chartType}
             onLoadOlder={loadOlder}
             axesVisible={axesVisible}
+            drawings={trendlineDrawings}
+            drawMode={drawMode}
+            onTrendlineComplete={onTrendlineComplete}
+            onTrendlineDelete={onTrendlineDelete}
           />
         )}
       </div>
