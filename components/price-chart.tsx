@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IChartApi, ISeriesApi, SeriesType, Time } from 'lightweight-charts'
 import type { LightweightCandle } from '@/lib/ticks/candles'
-import type { TrendlinePoint } from '@/lib/chart-drawings'
+import type { ChartDrawingKind, DrawingPoint } from '@/lib/chart-drawings'
+import { RectanglePrimitive, type RectangleDrawing } from '@/components/rectangle-primitive'
 import { TrendlinePrimitive, type TrendlineDrawing } from '@/components/trendline-primitive'
 
 export type ChartType = 'line' | 'area' | 'candlestick' | 'bar'
+export type DrawTool = ChartDrawingKind | null
 
 const PRICE_FORMAT = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 const VISIBLE_BARS = 256
@@ -19,7 +21,7 @@ const BELOW_BAND = '#ef5350'
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
-  attachPrimitive: (primitive: TrendlinePrimitive) => void
+  attachPrimitive: (primitive: TrendlinePrimitive | RectanglePrimitive) => void
 }
 
 type LineSeries = {
@@ -35,6 +37,7 @@ type ChartHandle = {
   middle: LineSeries
   lower: LineSeries
   trendlines: TrendlinePrimitive
+  rectangles: RectanglePrimitive
   fitted: boolean
   firstTime: number | null
 }
@@ -140,7 +143,7 @@ function clickToPoint(
   eventTime?: unknown,
   seriesData?: Map<unknown, unknown>,
   hoveredSeries?: unknown,
-): TrendlinePoint | null {
+): DrawingPoint | null {
   try {
     const bars = candles ?? []
     let timeSec = asUnixSeconds(eventTime)
@@ -169,41 +172,70 @@ export function PriceChart({
   chartType,
   onLoadOlder,
   axesVisible,
-  drawings = [],
-  drawMode = false,
-  onTrendlineComplete,
-  onTrendlineDelete,
+  trendlines = [],
+  rectangles = [],
+  drawTool = null,
+  onDrawingComplete,
+  onDrawingDelete,
 }: {
   candles: LightweightCandle[]
   chartType: ChartType
   onLoadOlder?: () => void
   axesVisible: boolean
-  drawings?: readonly TrendlineDrawing[]
-  drawMode?: boolean
-  onTrendlineComplete?: (points: { p1: TrendlinePoint; p2: TrendlinePoint }) => void
-  onTrendlineDelete?: (id: string) => void
+  trendlines?: readonly TrendlineDrawing[]
+  rectangles?: readonly RectangleDrawing[]
+  drawTool?: DrawTool
+  onDrawingComplete?: (input: {
+    kind: ChartDrawingKind
+    p1: DrawingPoint
+    p2: DrawingPoint
+  }) => void
+  onDrawingDelete?: (id: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const handleRef = useRef<ChartHandle | null>(null)
   const candlesRef = useRef<readonly LightweightCandle[]>(candles ?? [])
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
-  const drawModeRef = useRef(drawMode)
-  const draftRef = useRef<TrendlinePoint | null>(null)
+  const drawToolRef = useRef(drawTool)
+  const draftRef = useRef<DrawingPoint | null>(null)
   const selectedIdRef = useRef<string | null>(null)
-  const onCompleteRef = useRef(onTrendlineComplete)
-  const onDeleteRef = useRef(onTrendlineDelete)
+  const onCompleteRef = useRef(onDrawingComplete)
+  const onDeleteRef = useRef(onDrawingDelete)
   const [epoch, setEpoch] = useState(0)
   candlesRef.current = candles ?? []
   onLoadOlderRef.current = onLoadOlder
   axesVisibleRef.current = axesVisible
-  drawModeRef.current = drawMode
-  onCompleteRef.current = onTrendlineComplete
-  onDeleteRef.current = onTrendlineDelete
+  drawToolRef.current = drawTool
+  onCompleteRef.current = onDrawingComplete
+  onDeleteRef.current = onDrawingDelete
 
-  const selectLine = (id: string | null) => {
+  const selectDrawing = (id: string | null) => {
     selectedIdRef.current = id
-    handleRef.current?.trendlines.setSelectedId(id)
+    const handle = handleRef.current
+    if (!handle) return
+    handle.trendlines.setSelectedId(id)
+    handle.rectangles.setSelectedId(id)
+  }
+
+  const clearDrafts = () => {
+    draftRef.current = null
+    const handle = handleRef.current
+    handle?.trendlines.setDraft(null)
+    handle?.rectangles.setDraft(null)
+  }
+
+  const setActiveDraft = (draft: { p1: DrawingPoint; p2?: DrawingPoint } | null) => {
+    const tool = drawToolRef.current
+    const handle = handleRef.current
+    if (!handle || !tool) return
+    if (tool === 'trendline') {
+      handle.trendlines.setDraft(draft)
+      handle.rectangles.setDraft(null)
+    } else {
+      handle.rectangles.setDraft(draft)
+      handle.trendlines.setDraft(null)
+    }
   }
 
   useEffect(() => {
@@ -264,8 +296,10 @@ export function PriceChart({
         return
       }
 
-      const trendlines = new TrendlinePrimitive([])
-      price.attachPrimitive(trendlines)
+      const trendlinePrimitive = new TrendlinePrimitive([])
+      const rectanglePrimitive = new RectanglePrimitive([])
+      price.attachPrimitive(trendlinePrimitive)
+      price.attachPrimitive(rectanglePrimitive)
 
       let adjusting = false
       created.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -288,7 +322,8 @@ export function PriceChart({
         upper: line('#00897B') as LineSeries,
         middle: line('#00695C') as LineSeries,
         lower: line('#00897B') as LineSeries,
-        trendlines,
+        trendlines: trendlinePrimitive,
+        rectangles: rectanglePrimitive,
         fitted: false,
         firstTime: null,
       }
@@ -314,22 +349,29 @@ export function PriceChart({
 
       created.subscribeClick((param) => {
         if (!param.point) return
-        if (drawModeRef.current) {
+        const tool = drawToolRef.current
+        if (tool) {
           const point = pointFromEvent(param)
           if (!point) return
           const first = draftRef.current
           if (!first) {
             draftRef.current = point
-            handle.trendlines.setDraft({ p1: point })
+            setActiveDraft({ p1: point })
             return
           }
-          draftRef.current = null
-          handle.trendlines.setDraft(null)
-          onCompleteRef.current?.({ p1: first, p2: point })
+          clearDrafts()
+          onCompleteRef.current?.({ kind: tool, p1: first, p2: point })
           return
         }
-        const hit = handle.trendlines.hitTest(param.point.x, param.point.y)
-        selectLine(hit?.externalId ?? null)
+        const lineHit = handle.trendlines.hitTest(param.point.x, param.point.y)
+        const rectHit = handle.rectangles.hitTest(param.point.x, param.point.y)
+        const hit =
+          lineHit && rectHit
+            ? (lineHit.distance ?? 0) <= (rectHit.distance ?? 0)
+              ? lineHit
+              : rectHit
+            : (lineHit ?? rectHit)
+        selectDrawing(hit?.externalId ?? null)
       })
 
       const updateDraftPreview = (param: {
@@ -339,16 +381,16 @@ export function PriceChart({
         hoveredInfo?: { series?: unknown }
         hoveredSeries?: unknown
       }) => {
-        if (!drawModeRef.current) return
+        if (!drawToolRef.current) return
         const first = draftRef.current
         if (!first) return
         if (!param.point) {
-          handle.trendlines.setDraft({ p1: first })
+          setActiveDraft({ p1: first })
           return
         }
         const hover = pointFromEvent(param)
         if (!hover) return
-        handle.trendlines.setDraft({ p1: first, p2: hover })
+        setActiveDraft({ p1: first, p2: hover })
       }
 
       // Live preview: after p1, rubber-band to cursor/touch.
@@ -356,7 +398,7 @@ export function PriceChart({
 
       const chartEl = created.chartElement()
       const onPointerMove = (event: PointerEvent) => {
-        if (!drawModeRef.current || !draftRef.current) return
+        if (!drawToolRef.current || !draftRef.current) return
         const rect = chartEl.getBoundingClientRect()
         updateDraftPreview({
           point: { x: event.clientX - rect.left, y: event.clientY - rect.top },
@@ -393,23 +435,27 @@ export function PriceChart({
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
-    handle.trendlines.setLines(drawings)
-  }, [drawings, epoch])
+    handle.trendlines.setLines(trendlines)
+  }, [trendlines, epoch])
 
   useEffect(() => {
-    if (drawMode) {
-      selectLine(null)
-      return
-    }
-    draftRef.current = null
-    handleRef.current?.trendlines.setDraft(null)
-  }, [drawMode, epoch])
+    const handle = handleRef.current
+    if (!handle) return
+    handle.rectangles.setRects(rectangles)
+  }, [rectangles, epoch])
+
+  useEffect(() => {
+    clearDrafts()
+    if (drawTool) selectDrawing(null)
+  }, [drawTool, epoch])
 
   useEffect(() => {
     if (!selectedIdRef.current) return
-    if (drawings.some((d) => d.id === selectedIdRef.current)) return
-    selectLine(null)
-  }, [drawings, epoch])
+    const exists =
+      trendlines.some((d) => d.id === selectedIdRef.current) ||
+      rectangles.some((d) => d.id === selectedIdRef.current)
+    if (!exists) selectDrawing(null)
+  }, [trendlines, rectangles, epoch])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -424,10 +470,10 @@ export function PriceChart({
         return
       }
       const id = selectedIdRef.current
-      if (!id || drawModeRef.current) return
+      if (!id || drawToolRef.current) return
       event.preventDefault()
       onDeleteRef.current?.(id)
-      selectLine(null)
+      selectDrawing(null)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -466,7 +512,7 @@ export function PriceChart({
   return (
     <div
       ref={ref}
-      className={`h-full min-h-0 w-full${drawMode ? ' cursor-crosshair' : ''}`}
+      className={`h-full min-h-0 w-full${drawTool ? ' cursor-crosshair' : ''}`}
     />
   )
 }

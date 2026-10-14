@@ -1,19 +1,22 @@
 import { createClient } from '@/lib/supabase/client'
 
-export type ChartDrawingKind = 'trendline'
+export type ChartDrawingKind = 'trendline' | 'rectangle'
 
-export type TrendlinePoint = {
+export type DrawingPoint = {
   time: number
   price: number
 }
+
+/** @deprecated Use DrawingPoint */
+export type TrendlinePoint = DrawingPoint
 
 export type ChartDrawing = {
   id: string
   symbol: string
   timeframe: string
   kind: ChartDrawingKind
-  p1: TrendlinePoint
-  p2: TrendlinePoint
+  p1: DrawingPoint
+  p2: DrawingPoint
 }
 
 type ChartDrawingRow = {
@@ -48,17 +51,18 @@ export async function loadChartDrawings(
     .select('id, symbol, timeframe, kind, p1_time, p1_price, p2_time, p2_price')
     .eq('symbol', symbol)
     .eq('timeframe', timeframe)
-    .eq('kind', 'trendline')
+    .in('kind', ['trendline', 'rectangle'])
     .order('created_at', { ascending: true })
   if (error) throw error
   return (data as ChartDrawingRow[] | null)?.map(rowToDrawing) ?? []
 }
 
-export async function insertTrendline(input: {
+export async function insertDrawing(input: {
   symbol: string
   timeframe: string
-  p1: TrendlinePoint
-  p2: TrendlinePoint
+  kind: ChartDrawingKind
+  p1: DrawingPoint
+  p2: DrawingPoint
 }): Promise<ChartDrawing> {
   const supabase = createClient()
   const {
@@ -73,7 +77,7 @@ export async function insertTrendline(input: {
         user_id: user.id,
         symbol: input.symbol,
         timeframe: input.timeframe,
-        kind: 'trendline',
+        kind: input.kind,
         p1_time: Math.round(input.p1.time),
         p1_price: input.p1.price,
         p2_time: Math.round(input.p2.time),
@@ -84,6 +88,15 @@ export async function insertTrendline(input: {
     .single()
   if (error) throw error
   return rowToDrawing(data as ChartDrawingRow)
+}
+
+export async function insertTrendline(input: {
+  symbol: string
+  timeframe: string
+  p1: DrawingPoint
+  p2: DrawingPoint
+}): Promise<ChartDrawing> {
+  return insertDrawing({ ...input, kind: 'trendline' })
 }
 
 export async function deleteChartDrawing(id: string): Promise<void> {

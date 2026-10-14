@@ -7,13 +7,14 @@ import { QueryClient, QueryClientProvider, useInfiniteQuery, useQuery } from '@t
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { PriceChart, type ChartType } from '@/components/price-chart'
+import { PriceChart, type ChartType, type DrawTool } from '@/components/price-chart'
 import {
   deleteChartDrawing,
-  insertTrendline,
+  insertDrawing,
   loadChartDrawings,
   type ChartDrawing,
-  type TrendlinePoint,
+  type ChartDrawingKind,
+  type DrawingPoint,
 } from '@/lib/chart-drawings'
 import {
   calculateBaseLineBias,
@@ -33,6 +34,7 @@ import {
   Minimize2,
   Minus,
   Shrink,
+  Square,
   TrendingUp,
 } from 'lucide-react'
 
@@ -249,7 +251,7 @@ function DashboardPane({
     const points = calculateBaseLineBias(candles, DEFAULT_BASE_LINE_BIAS_CONFIG)
     return points.length > 0 ? points[points.length - 1].value : null
   }, [candles])
-  const [drawMode, setDrawMode] = useState(false)
+  const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
 
   useEffect(() => {
@@ -267,38 +269,57 @@ function DashboardPane({
   }, [pane.id])
 
   const trendlineDrawings = useMemo(
-    () => drawings.map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
+    () =>
+      drawings
+        .filter((d) => d.kind === 'trendline')
+        .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
+    [drawings],
+  )
+  const rectangleDrawings = useMemo(
+    () =>
+      drawings
+        .filter((d) => d.kind === 'rectangle')
+        .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
     [drawings],
   )
 
-  const onTrendlineComplete = (points: { p1: TrendlinePoint; p2: TrendlinePoint }) => {
-    setDrawMode(false)
+  const toggleTool = (tool: ChartDrawingKind) => {
+    setDrawTool((current) => (current === tool ? null : tool))
+  }
+
+  const onDrawingComplete = (input: {
+    kind: ChartDrawingKind
+    p1: DrawingPoint
+    p2: DrawingPoint
+  }) => {
+    setDrawTool(null)
     const tempId = `temp-${Date.now()}`
     const optimistic: ChartDrawing = {
       id: tempId,
       symbol: SYMBOL,
       timeframe: pane.id,
-      kind: 'trendline',
-      p1: points.p1,
-      p2: points.p2,
+      kind: input.kind,
+      p1: input.p1,
+      p2: input.p2,
     }
     setDrawings((current) => [...current, optimistic])
-    void insertTrendline({
+    void insertDrawing({
       symbol: SYMBOL,
       timeframe: pane.id,
-      p1: points.p1,
-      p2: points.p2,
+      kind: input.kind,
+      p1: input.p1,
+      p2: input.p2,
     })
       .then((saved) => {
         setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
       })
       .catch(() => {
         setDrawings((current) => current.filter((d) => d.id !== tempId))
-        toast.error('Failed to save trendline')
+        toast.error(`Failed to save ${input.kind}`)
       })
   }
 
-  const onTrendlineDelete = (id: string) => {
+  const onDrawingDelete = (id: string) => {
     if (id.startsWith('temp-')) {
       setDrawings((current) => current.filter((d) => d.id !== id))
       return
@@ -310,7 +331,7 @@ function DashboardPane({
     })
     void deleteChartDrawing(id).catch(() => {
       setDrawings(previous)
-      toast.error('Failed to delete trendline')
+      toast.error('Failed to delete drawing')
     })
   }
 
@@ -358,14 +379,24 @@ function DashboardPane({
               </Button>
             ))}
           <Button
-            variant={drawMode ? 'default' : 'ghost'}
+            variant={drawTool === 'trendline' ? 'default' : 'ghost'}
             size={compact ? 'icon-xs' : 'icon'}
-            className={compact && !drawMode ? 'bg-background/60' : undefined}
-            aria-label={drawMode ? 'Cancel trendline' : 'Draw trendline'}
-            aria-pressed={drawMode}
-            onClick={() => setDrawMode((value) => !value)}
+            className={compact && drawTool !== 'trendline' ? 'bg-background/60' : undefined}
+            aria-label={drawTool === 'trendline' ? 'Cancel trendline' : 'Draw trendline'}
+            aria-pressed={drawTool === 'trendline'}
+            onClick={() => toggleTool('trendline')}
           >
             <TrendingUp />
+          </Button>
+          <Button
+            variant={drawTool === 'rectangle' ? 'default' : 'ghost'}
+            size={compact ? 'icon-xs' : 'icon'}
+            className={compact && drawTool !== 'rectangle' ? 'bg-background/60' : undefined}
+            aria-label={drawTool === 'rectangle' ? 'Cancel rectangle' : 'Draw rectangle'}
+            aria-pressed={drawTool === 'rectangle'}
+            onClick={() => toggleTool('rectangle')}
+          >
+            <Square />
           </Button>
           <Button
             variant="ghost"
@@ -397,10 +428,11 @@ function DashboardPane({
             chartType={chartType}
             onLoadOlder={loadOlder}
             axesVisible={axesVisible}
-            drawings={trendlineDrawings}
-            drawMode={drawMode}
-            onTrendlineComplete={onTrendlineComplete}
-            onTrendlineDelete={onTrendlineDelete}
+            trendlines={trendlineDrawings}
+            rectangles={rectangleDrawings}
+            drawTool={drawTool}
+            onDrawingComplete={onDrawingComplete}
+            onDrawingDelete={onDrawingDelete}
           />
         )}
       </div>
