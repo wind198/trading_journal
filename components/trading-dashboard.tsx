@@ -17,6 +17,17 @@ import {
   type DrawingPoint,
 } from '@/lib/chart-drawings'
 import {
+  calculateForceDecay,
+  DEFAULT_FORCE_DECAY_CONFIG,
+  filterConsecutiveForceDisplay,
+  type ForceEvent,
+} from '@/lib/force-candle-decay'
+import {
+  DEFAULT_ENGULFING_CONFIG,
+  scanEngulfing,
+  type EngulfingEvent,
+} from '@/lib/engulfing'
+import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
 } from '@/lib/ticks/base-line-bias'
@@ -35,6 +46,7 @@ import {
   Minus,
   Shrink,
   Square,
+  Trash2,
   TrendingUp,
 } from 'lucide-react'
 
@@ -151,7 +163,7 @@ function Dashboard() {
         {PANES.map((pane) => {
           const isExpanded = expanded === pane.id
           if (expanded && !isExpanded) return null
-          const chartType = chartTypes[pane.id] ?? 'line'
+          const chartType = isExpanded ? (chartTypes[pane.id] ?? 'candlestick') : 'line'
           const compact = !isExpanded && !tablet
           return (
             <DashboardPane
@@ -164,7 +176,14 @@ function Dashboard() {
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
               }
-              onToggleExpand={() => setExpanded(isExpanded ? null : pane.id)}
+              onToggleExpand={() => {
+                if (isExpanded) {
+                  setExpanded(null)
+                  return
+                }
+                setExpanded(pane.id)
+                setChartTypes((current) => ({ ...current, [pane.id]: 'candlestick' }))
+              }}
             />
           )
         })}
@@ -251,8 +270,29 @@ function DashboardPane({
     const points = calculateBaseLineBias(candles, DEFAULT_BASE_LINE_BIAS_CONFIG)
     return points.length > 0 ? points[points.length - 1].value : null
   }, [candles])
+
+  // Lazy + cached: skip work when collapsed; memoized by candles identity when expanded.
+  // Calc keeps all events; display drops consecutive force candles after the first.
+  const forceEvents = useMemo((): ForceEvent[] => {
+    if (!isExpanded || candles.length === 0) return []
+    const { activeEvents } = calculateForceDecay(candles, DEFAULT_FORCE_DECAY_CONFIG)
+    return filterConsecutiveForceDisplay(activeEvents)
+  }, [isExpanded, candles])
+
+  const engulfingEvents = useMemo((): EngulfingEvent[] => {
+    if (!isExpanded || candles.length === 0) return []
+    return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
+  }, [isExpanded, candles])
+
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isExpanded) return
+    setDrawTool(null)
+    setSelectedDrawingId(null)
+  }, [isExpanded])
 
   useEffect(() => {
     let cancelled = false
@@ -320,6 +360,7 @@ function DashboardPane({
   }
 
   const onDrawingDelete = (id: string) => {
+    setSelectedDrawingId((current) => (current === id ? null : current))
     if (id.startsWith('temp-')) {
       setDrawings((current) => current.filter((d) => d.id !== id))
       return
@@ -333,6 +374,11 @@ function DashboardPane({
       setDrawings(previous)
       toast.error('Failed to delete drawing')
     })
+  }
+
+  const deleteSelectedDrawing = () => {
+    if (!selectedDrawingId) return
+    onDrawingDelete(selectedDrawingId)
   }
 
   return (
@@ -378,26 +424,38 @@ function DashboardPane({
                 {type.label}
               </Button>
             ))}
-          <Button
-            variant={drawTool === 'trendline' ? 'default' : 'ghost'}
-            size={compact ? 'icon-xs' : 'icon'}
-            className={compact && drawTool !== 'trendline' ? 'bg-background/60' : undefined}
-            aria-label={drawTool === 'trendline' ? 'Cancel trendline' : 'Draw trendline'}
-            aria-pressed={drawTool === 'trendline'}
-            onClick={() => toggleTool('trendline')}
-          >
-            <TrendingUp />
-          </Button>
-          <Button
-            variant={drawTool === 'rectangle' ? 'default' : 'ghost'}
-            size={compact ? 'icon-xs' : 'icon'}
-            className={compact && drawTool !== 'rectangle' ? 'bg-background/60' : undefined}
-            aria-label={drawTool === 'rectangle' ? 'Cancel rectangle' : 'Draw rectangle'}
-            aria-pressed={drawTool === 'rectangle'}
-            onClick={() => toggleTool('rectangle')}
-          >
-            <Square />
-          </Button>
+          {isExpanded && (
+            <>
+              <Button
+                variant={drawTool === 'trendline' ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={drawTool === 'trendline' ? 'Cancel trendline' : 'Draw trendline'}
+                aria-pressed={drawTool === 'trendline'}
+                onClick={() => toggleTool('trendline')}
+              >
+                <TrendingUp />
+              </Button>
+              <Button
+                variant={drawTool === 'rectangle' ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={drawTool === 'rectangle' ? 'Cancel rectangle' : 'Draw rectangle'}
+                aria-pressed={drawTool === 'rectangle'}
+                onClick={() => toggleTool('rectangle')}
+              >
+                <Square />
+              </Button>
+              {selectedDrawingId && (
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  aria-label="Delete selected drawing"
+                  onClick={deleteSelectedDrawing}
+                >
+                  <Trash2 />
+                </Button>
+              )}
+            </>
+          )}
           <Button
             variant="ghost"
             size={compact ? 'icon-xs' : 'icon'}
@@ -430,9 +488,12 @@ function DashboardPane({
             axesVisible={axesVisible}
             trendlines={trendlineDrawings}
             rectangles={rectangleDrawings}
+            forceEvents={forceEvents}
+            engulfingEvents={engulfingEvents}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}
             onDrawingDelete={onDrawingDelete}
+            onSelectionChange={setSelectedDrawingId}
           />
         )}
       </div>

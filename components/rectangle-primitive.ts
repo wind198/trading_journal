@@ -183,6 +183,7 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
   rects: readonly RectangleDrawing[] = []
   draft: { p1: DrawingPoint; p2?: DrawingPoint } | null = null
   selectedId: string | null = null
+  selectionEnabled = true
   private requestUpdate: (() => void) | null = null
   private readonly paneView: RectanglePaneView
   private readonly views: RectanglePaneView[]
@@ -208,6 +209,10 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate?.()
   }
 
+  setSelectionEnabled(enabled: boolean): void {
+    this.selectionEnabled = enabled
+  }
+
   attached(param: SeriesAttachedParameter<Time, SeriesType>): void {
     this.chart = param.chart
     this.series = param.series
@@ -229,6 +234,7 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
   }
 
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
+    if (!this.selectionEnabled) return null
     return this.paneView.hitTest(x, y)
   }
 }

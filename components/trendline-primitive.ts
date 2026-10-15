@@ -224,6 +224,7 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
   lines: readonly TrendlineDrawing[] = []
   draft: { p1: TrendlinePoint; p2?: TrendlinePoint } | null = null
   selectedId: string | null = null
+  selectionEnabled = true
   private requestUpdate: (() => void) | null = null
   private readonly paneView: TrendlinePaneView
   private readonly views: TrendlinePaneView[]
@@ -249,6 +250,10 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate?.()
   }
 
+  setSelectionEnabled(enabled: boolean): void {
+    this.selectionEnabled = enabled
+  }
+
   attached(param: SeriesAttachedParameter<Time, SeriesType>): void {
     this.chart = param.chart
     this.series = param.series
@@ -270,6 +275,7 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
   }
 
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
+    if (!this.selectionEnabled) return null
     return this.paneView.hitTest(x, y)
   }
 }

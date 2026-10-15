@@ -4,24 +4,41 @@ import { useEffect, useRef, useState } from 'react'
 import type { IChartApi, ISeriesApi, SeriesType, Time } from 'lightweight-charts'
 import type { LightweightCandle } from '@/lib/ticks/candles'
 import type { ChartDrawingKind, DrawingPoint } from '@/lib/chart-drawings'
+import {
+  formatChartCrosshairTime,
+  formatChartTickMark,
+} from '@/lib/chart-timezone'
+import {
+  BOLLINGER,
+  CANDLE,
+  CHART_THEME,
+  PRICE_FORMAT,
+  VIEWPORT,
+} from '@/lib/price-chart-style'
+import { bollinger, pricePoint, type ChartType } from '@/lib/price-chart-series'
+import {
+  EngulfingOverlayPrimitive,
+  type EngulfingOverlayEvent,
+} from '@/components/engulfing-overlay-primitive'
+import {
+  ForceOverlayPrimitive,
+  type ForceOverlayEvent,
+} from '@/components/force-overlay-primitive'
 import { RectanglePrimitive, type RectangleDrawing } from '@/components/rectangle-primitive'
 import { TrendlinePrimitive, type TrendlineDrawing } from '@/components/trendline-primitive'
 
-export type ChartType = 'line' | 'area' | 'candlestick' | 'bar'
+export type { ChartType }
 export type DrawTool = ChartDrawingKind | null
 
-const PRICE_FORMAT = { type: 'price' as const, precision: 5, minMove: 0.00001 }
-const VISIBLE_BARS = 256
-const MAX_VISIBLE_BARS = 1000
-const LOAD_EDGE = 50
-const BB_LENGTH = 104
-const BB_MULT = 2
-const ABOVE_BAND = '#26a69a'
-const BELOW_BAND = '#ef5350'
+type AnyPrimitive =
+  | TrendlinePrimitive
+  | RectanglePrimitive
+  | ForceOverlayPrimitive
+  | EngulfingOverlayPrimitive
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
-  attachPrimitive: (primitive: TrendlinePrimitive | RectanglePrimitive) => void
+  attachPrimitive: (primitive: AnyPrimitive) => void
 }
 
 type LineSeries = {
@@ -38,70 +55,10 @@ type ChartHandle = {
   lower: LineSeries
   trendlines: TrendlinePrimitive
   rectangles: RectanglePrimitive
+  forceOverlay: ForceOverlayPrimitive
+  engulfingOverlay: EngulfingOverlayPrimitive
   fitted: boolean
   firstTime: number | null
-}
-
-type BandLevel = { upper: number; middle: number; lower: number }
-
-function bollinger(candles: LightweightCandle[]) {
-  const upper: { time: Time; value: number }[] = []
-  const middle: { time: Time; value: number }[] = []
-  const lower: { time: Time; value: number }[] = []
-  const levels: (BandLevel | null)[] = Array.from({ length: candles.length }, () => null)
-  for (let i = BB_LENGTH - 1; i < candles.length; i++) {
-    let sum = 0
-    for (let j = i - BB_LENGTH + 1; j <= i; j++) sum += candles[j].close
-    const mean = sum / BB_LENGTH
-    let variance = 0
-    for (let j = i - BB_LENGTH + 1; j <= i; j++) {
-      const delta = candles[j].close - mean
-      variance += delta * delta
-    }
-    const deviation = Math.sqrt(variance / BB_LENGTH)
-    const time = candles[i].time as Time
-    const level = {
-      upper: mean + BB_MULT * deviation,
-      middle: mean,
-      lower: mean - BB_MULT * deviation,
-    }
-    levels[i] = level
-    middle.push({ time, value: level.middle })
-    upper.push({ time, value: level.upper })
-    lower.push({ time, value: level.lower })
-  }
-  return { upper, middle, lower, levels }
-}
-
-function outsideColor(close: number, level: BandLevel | null): string | null {
-  if (!level) return null
-  if (close > level.upper) return ABOVE_BAND
-  if (close < level.lower) return BELOW_BAND
-  return null
-}
-
-function pricePoint(bar: LightweightCandle, level: BandLevel | null, chartType: ChartType) {
-  const time = bar.time as Time
-  const color = outsideColor(bar.close, level)
-  if (chartType === 'line') {
-    return color ? { time, value: bar.close, color } : { time, value: bar.close }
-  }
-  if (chartType === 'area') {
-    if (!color) return { time, value: bar.close }
-    const fill = color === ABOVE_BAND ? 'rgba(38, 166, 154, 0.35)' : 'rgba(239, 83, 80, 0.35)'
-    const fade = color === ABOVE_BAND ? 'rgba(38, 166, 154, 0.02)' : 'rgba(239, 83, 80, 0.02)'
-    return { time, value: bar.close, lineColor: color, topColor: fill, bottomColor: fade }
-  }
-  const candle = {
-    time,
-    open: bar.open,
-    high: bar.high,
-    low: bar.low,
-    close: bar.close,
-  }
-  if (!color) return candle
-  if (chartType === 'bar') return { ...candle, color }
-  return { ...candle, color, borderColor: color, wickColor: color }
 }
 
 function asUnixSeconds(time: unknown): number | null {
@@ -174,9 +131,12 @@ export function PriceChart({
   axesVisible,
   trendlines = [],
   rectangles = [],
+  forceEvents = [],
+  engulfingEvents = [],
   drawTool = null,
   onDrawingComplete,
   onDrawingDelete,
+  onSelectionChange,
 }: {
   candles: LightweightCandle[]
   chartType: ChartType
@@ -184,6 +144,8 @@ export function PriceChart({
   axesVisible: boolean
   trendlines?: readonly TrendlineDrawing[]
   rectangles?: readonly RectangleDrawing[]
+  forceEvents?: readonly ForceOverlayEvent[]
+  engulfingEvents?: readonly EngulfingOverlayEvent[]
   drawTool?: DrawTool
   onDrawingComplete?: (input: {
     kind: ChartDrawingKind
@@ -191,6 +153,7 @@ export function PriceChart({
     p2: DrawingPoint
   }) => void
   onDrawingDelete?: (id: string) => void
+  onSelectionChange?: (id: string | null) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const handleRef = useRef<ChartHandle | null>(null)
@@ -202,6 +165,7 @@ export function PriceChart({
   const selectedIdRef = useRef<string | null>(null)
   const onCompleteRef = useRef(onDrawingComplete)
   const onDeleteRef = useRef(onDrawingDelete)
+  const onSelectionChangeRef = useRef(onSelectionChange)
   const [epoch, setEpoch] = useState(0)
   candlesRef.current = candles ?? []
   onLoadOlderRef.current = onLoadOlder
@@ -209,13 +173,15 @@ export function PriceChart({
   drawToolRef.current = drawTool
   onCompleteRef.current = onDrawingComplete
   onDeleteRef.current = onDrawingDelete
+  onSelectionChangeRef.current = onSelectionChange
 
   const selectDrawing = (id: string | null) => {
+    const changed = selectedIdRef.current !== id
     selectedIdRef.current = id
     const handle = handleRef.current
-    if (!handle) return
-    handle.trendlines.setSelectedId(id)
-    handle.rectangles.setSelectedId(id)
+    handle?.trendlines.setSelectedId(id)
+    handle?.rectangles.setSelectedId(id)
+    if (changed) onSelectionChangeRef.current?.(id)
   }
 
   const clearDrafts = () => {
@@ -253,32 +219,53 @@ export function PriceChart({
         autoSize: true,
         layout: {
           background: { type: lwc.ColorType.Solid, color: 'transparent' },
-          textColor: '#050F1A',
+          textColor: CHART_THEME.text,
         },
         grid: {
-          vertLines: { color: 'rgba(5, 15, 26, 0.06)' },
-          horzLines: { color: 'rgba(5, 15, 26, 0.06)' },
+          vertLines: { color: CHART_THEME.grid },
+          horzLines: { color: CHART_THEME.grid },
         },
-        timeScale: { timeVisible: true, secondsVisible: false, visible: axesVisibleRef.current },
+        localization: {
+          timeFormatter: (time: Time) => formatChartCrosshairTime(time),
+        },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          visible: axesVisibleRef.current,
+          tickMarkFormatter: (time: Time, tickMarkType: number) =>
+            formatChartTickMark(time, tickMarkType),
+        },
         rightPriceScale: { borderVisible: false, visible: axesVisibleRef.current },
       })
       createdChart = created
 
       const price =
         chartType === 'candlestick'
-          ? created.addSeries(lwc.CandlestickSeries, { priceFormat: PRICE_FORMAT })
+          ? created.addSeries(lwc.CandlestickSeries, {
+              priceFormat: PRICE_FORMAT,
+              upColor: CANDLE.up,
+              downColor: CANDLE.down,
+              borderUpColor: CANDLE.borderUp,
+              borderDownColor: CANDLE.borderDown,
+              wickUpColor: CANDLE.wickUp,
+              wickDownColor: CANDLE.wickDown,
+            })
           : chartType === 'bar'
-            ? created.addSeries(lwc.BarSeries, { priceFormat: PRICE_FORMAT })
+            ? created.addSeries(lwc.BarSeries, {
+                priceFormat: PRICE_FORMAT,
+                upColor: CANDLE.up,
+                downColor: CANDLE.down,
+              })
             : chartType === 'area'
               ? created.addSeries(lwc.AreaSeries, {
                   priceFormat: PRICE_FORMAT,
-                  lineColor: '#050F1A',
-                  topColor: 'rgba(5, 15, 26, 0.25)',
-                  bottomColor: 'rgba(5, 15, 26, 0.02)',
+                  lineColor: CHART_THEME.priceLine,
+                  topColor: CHART_THEME.areaTop,
+                  bottomColor: CHART_THEME.areaBottom,
                 })
               : created.addSeries(lwc.LineSeries, {
                   priceFormat: PRICE_FORMAT,
-                  color: '#050F1A',
+                  color: CHART_THEME.priceLine,
                   lineWidth: 2,
                 })
 
@@ -298,32 +285,38 @@ export function PriceChart({
 
       const trendlinePrimitive = new TrendlinePrimitive([])
       const rectanglePrimitive = new RectanglePrimitive([])
+      const forceOverlayPrimitive = new ForceOverlayPrimitive([])
+      const engulfingOverlayPrimitive = new EngulfingOverlayPrimitive([])
       price.attachPrimitive(trendlinePrimitive)
       price.attachPrimitive(rectanglePrimitive)
+      price.attachPrimitive(forceOverlayPrimitive)
+      price.attachPrimitive(engulfingOverlayPrimitive)
 
       let adjusting = false
       created.timeScale().subscribeVisibleLogicalRangeChange((range) => {
         if (!range || adjusting) return
-        if (range.to - range.from > MAX_VISIBLE_BARS) {
+        if (range.to - range.from > VIEWPORT.maxVisibleBars) {
           adjusting = true
           created.timeScale().setVisibleLogicalRange({
-            from: range.to - MAX_VISIBLE_BARS,
+            from: range.to - VIEWPORT.maxVisibleBars,
             to: range.to,
           })
           adjusting = false
           return
         }
-        if (range.from < LOAD_EDGE) onLoadOlderRef.current?.()
+        if (range.from < VIEWPORT.loadEdge) onLoadOlderRef.current?.()
       })
 
       const handle: ChartHandle = {
         chart: created,
         price: price as unknown as PriceSeries & ISeriesApi<SeriesType, Time>,
-        upper: line('#00897B') as LineSeries,
-        middle: line('#00695C') as LineSeries,
-        lower: line('#00897B') as LineSeries,
+        upper: line(BOLLINGER.bandUpper) as LineSeries,
+        middle: line(BOLLINGER.bandMiddle) as LineSeries,
+        lower: line(BOLLINGER.bandLower) as LineSeries,
         trendlines: trendlinePrimitive,
         rectangles: rectanglePrimitive,
+        forceOverlay: forceOverlayPrimitive,
+        engulfingOverlay: engulfingOverlayPrimitive,
         fitted: false,
         firstTime: null,
       }
@@ -445,8 +438,38 @@ export function PriceChart({
   }, [rectangles, epoch])
 
   useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.forceOverlay.setEvents(forceEvents)
+  }, [forceEvents, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.engulfingOverlay.setEvents(engulfingEvents)
+  }, [engulfingEvents, epoch])
+
+  useEffect(() => {
     clearDrafts()
     if (drawTool) selectDrawing(null)
+  }, [drawTool, epoch])
+
+  // Freeze pan/zoom/crosshair and block selecting existing drawings while placing.
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    const drawing = drawTool != null
+    handle.chart.applyOptions({
+      handleScroll: !drawing,
+      handleScale: !drawing,
+      kineticScroll: { mouse: !drawing, touch: !drawing },
+      crosshair: {
+        // CrosshairMode.Hidden = 2, Magnet = 1 (typings; avoid static enum import)
+        mode: drawing ? 2 : 1,
+      },
+    })
+    handle.trendlines.setSelectionEnabled(!drawing)
+    handle.rectangles.setSelectionEnabled(!drawing)
   }, [drawTool, epoch])
 
   useEffect(() => {
@@ -494,12 +517,15 @@ export function PriceChart({
     handle.upper.setData(bands.upper)
     handle.middle.setData(bands.middle)
     handle.lower.setData(bands.lower)
+    // Re-apply after setData so overlay coords resolve on first paint.
+    handle.forceOverlay.setEvents(forceEvents)
+    handle.engulfingOverlay.setEvents(engulfingEvents)
     handle.firstTime = candles[0].time
     if (keep) {
       scale.setVisibleLogicalRange({ from: keep.from + prepended, to: keep.to + prepended })
     } else {
       const to = candles.length
-      const range = { from: Math.max(0, to - VISIBLE_BARS), to }
+      const range = { from: Math.max(0, to - VIEWPORT.visibleBars), to }
       scale.setVisibleLogicalRange(range)
       handle.fitted = true
       requestAnimationFrame(() => {
@@ -507,7 +533,7 @@ export function PriceChart({
         scale.setVisibleLogicalRange(range)
       })
     }
-  }, [candles, chartType, epoch])
+  }, [candles, chartType, epoch, forceEvents, engulfingEvents])
 
   return (
     <div
