@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { QueryClient, QueryClientProvider, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -12,6 +11,7 @@ import {
   deleteChartDrawing,
   insertDrawing,
   loadChartDrawings,
+  updateChartDrawing,
   type ChartDrawing,
   type ChartDrawingKind,
   type DrawingPoint,
@@ -136,9 +136,6 @@ function Dashboard() {
         <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-2 py-1.5 sm:gap-2 sm:px-3">
           <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1>
           <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/journal">Journal</Link>
-            </Button>
             <Button variant="ghost" size="sm" onClick={() => void signOut()}>
               Sign out
             </Button>
@@ -284,9 +281,14 @@ function DashboardPane({
     return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
   }, [isExpanded, candles])
 
+  const DRAWING_UPDATE_DEBOUNCE_MS = 400
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
+  const pendingDrawingUpdatesRef = useRef<Record<string, { p1: DrawingPoint; p2: DrawingPoint }>>(
+    {},
+  )
+  const drawingUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (isExpanded) return
@@ -307,6 +309,57 @@ function DashboardPane({
       cancelled = true
     }
   }, [pane.id])
+
+  useEffect(
+    () => () => {
+      if (drawingUpdateTimerRef.current) clearTimeout(drawingUpdateTimerRef.current)
+    },
+    [],
+  )
+
+  const persistDrawingUpdate = (id: string, points: { p1: DrawingPoint; p2: DrawingPoint }) => {
+    delete pendingDrawingUpdatesRef.current[id]
+    void updateChartDrawing(id, points).catch(() => {
+      toast.error('Failed to save drawing')
+      void loadChartDrawings(SYMBOL, pane.id)
+        .then((rows) => setDrawings(rows))
+        .catch(() => {})
+    })
+  }
+
+  const scheduleDrawingPersist = () => {
+    if (drawingUpdateTimerRef.current) clearTimeout(drawingUpdateTimerRef.current)
+    drawingUpdateTimerRef.current = setTimeout(() => {
+      drawingUpdateTimerRef.current = null
+      const pending = { ...pendingDrawingUpdatesRef.current }
+      for (const [id, points] of Object.entries(pending)) {
+        persistDrawingUpdate(id, points)
+      }
+    }, DRAWING_UPDATE_DEBOUNCE_MS)
+  }
+
+  const onDrawingChange = (id: string, p1: DrawingPoint, p2: DrawingPoint) => {
+    setDrawings((current) =>
+      current.map((d) => (d.id === id ? { ...d, p1, p2 } : d)),
+    )
+    if (id.startsWith('temp-')) return
+    pendingDrawingUpdatesRef.current[id] = { p1, p2 }
+    scheduleDrawingPersist()
+  }
+
+  const onDrawingChangeEnd = (id: string) => {
+    if (id.startsWith('temp-')) return
+    const points = pendingDrawingUpdatesRef.current[id]
+    if (!points) return
+    if (drawingUpdateTimerRef.current) {
+      clearTimeout(drawingUpdateTimerRef.current)
+      drawingUpdateTimerRef.current = null
+    }
+    persistDrawingUpdate(id, points)
+    if (Object.keys(pendingDrawingUpdatesRef.current).length > 0) {
+      scheduleDrawingPersist()
+    }
+  }
 
   const trendlineDrawings = useMemo(
     () =>
@@ -492,6 +545,8 @@ function DashboardPane({
             engulfingEvents={engulfingEvents}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}
+            onDrawingChange={onDrawingChange}
+            onDrawingChangeEnd={onDrawingChangeEnd}
             onDrawingDelete={onDrawingDelete}
             onSelectionChange={setSelectedDrawingId}
           />

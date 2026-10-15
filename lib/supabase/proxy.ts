@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
 
   if (!hasSession && !isPublic) return redirectWithSessionCookies(request, supabaseResponse, '/login')
   if (hasSession && pathname === '/login') {
-    return redirectWithSessionCookies(request, supabaseResponse, '/journal')
+    return redirectWithSessionCookies(request, supabaseResponse, '/trading-dashboard')
   }
 
   return supabaseResponse

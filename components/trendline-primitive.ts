@@ -20,6 +20,7 @@ const LINE_COLOR = '#0052FF'
 const SELECTED_COLOR = '#F0AD4E'
 const DRAFT_COLOR = 'rgba(0, 82, 255, 0.55)'
 const HIT_TOLERANCE = 6
+const ANCHOR_HIT_RADIUS = 8
 
 type Segment = {
   id: string
@@ -105,6 +106,17 @@ class TrendlinePaneView {
 
   renderer(): TrendlineRenderer | null {
     return this.rendererObj
+  }
+
+  hitTestAnchor(x: number, y: number): { id: string; endpoint: 'p1' | 'p2' } | null {
+    for (const segment of this.segments) {
+      if (segment.draft || !segment.selected) continue
+      const d1 = Math.hypot(x - segment.mx1, y - segment.my1)
+      if (d1 <= ANCHOR_HIT_RADIUS) return { id: segment.id, endpoint: 'p1' }
+      const d2 = Math.hypot(x - segment.mx2, y - segment.my2)
+      if (d2 <= ANCHOR_HIT_RADIUS) return { id: segment.id, endpoint: 'p2' }
+    }
+    return null
   }
 
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
@@ -277,5 +289,14 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
     if (!this.selectionEnabled) return null
     return this.paneView.hitTest(x, y)
+  }
+
+  hitTestAnchor(x: number, y: number): { id: string; endpoint: 'p1' | 'p2' } | null {
+    if (!this.selectionEnabled) return null
+    return this.paneView.hitTestAnchor(x, y)
+  }
+
+  getDrawing(id: string): TrendlineDrawing | null {
+    return this.lines.find((line) => line.id === id) ?? null
   }
 }

@@ -5,5 +5,5 @@ export default async function Page() {
   const supabase = await createClient()
   const { data } = await supabase.auth.getClaims()
 
-  redirect(data?.claims ? '/journal' : '/login')
+  redirect(data?.claims ? '/trading-dashboard' : '/login')
 }

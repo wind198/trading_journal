@@ -22,6 +22,7 @@ const SELECTED_STROKE = '#F0AD4E'
 const DRAFT_FILL = 'rgba(156, 163, 175, 0.14)'
 const DRAFT_STROKE = 'rgba(107, 114, 128, 0.45)'
 const HIT_TOLERANCE = 6
+const ANCHOR_HIT_RADIUS = 8
 
 type RectGeom = {
   id: string
@@ -29,6 +30,10 @@ type RectGeom = {
   top: number
   right: number
   bottom: number
+  ax1: number
+  ay1: number
+  ax2: number
+  ay2: number
   draft: boolean
   selected: boolean
 }
@@ -62,6 +67,18 @@ class RectangleRenderer {
         context.setLineDash(rect.draft ? [4, 3] : [])
         context.stroke()
         context.setLineDash([])
+        if (rect.selected && !rect.draft) {
+          const stroke = SELECTED_STROKE
+          for (const [cx, cy] of [
+            [rect.ax1, rect.ay1],
+            [rect.ax2, rect.ay2],
+          ] as const) {
+            context.beginPath()
+            context.arc(cx, cy, 4, 0, Math.PI * 2)
+            context.fillStyle = stroke
+            context.fill()
+          }
+        }
       }
     })
   }
@@ -79,6 +96,17 @@ class RectanglePaneView {
 
   renderer(): RectangleRenderer | null {
     return this.rendererObj
+  }
+
+  hitTestAnchor(x: number, y: number): { id: string; endpoint: 'p1' | 'p2' } | null {
+    for (const rect of this.rects) {
+      if (rect.draft || !rect.selected) continue
+      const d1 = Math.hypot(x - rect.ax1, y - rect.ay1)
+      if (d1 <= ANCHOR_HIT_RADIUS) return { id: rect.id, endpoint: 'p1' }
+      const d2 = Math.hypot(x - rect.ax2, y - rect.ay2)
+      if (d2 <= ANCHOR_HIT_RADIUS) return { id: rect.id, endpoint: 'p2' }
+    }
+    return null
   }
 
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
@@ -143,6 +171,10 @@ class RectanglePaneView {
         top: Math.min(Number(y1), Number(y2)),
         right: Math.max(Number(x1), Number(x2)),
         bottom: Math.max(Number(y1), Number(y2)),
+        ax1: Number(x1),
+        ay1: Number(y1),
+        ax2: Number(x2),
+        ay2: Number(y2),
         draft,
         selected,
       })
@@ -166,6 +198,10 @@ class RectanglePaneView {
           top: m - 3,
           right: n + 3,
           bottom: m + 3,
+          ax1: n,
+          ay1: m,
+          ax2: n,
+          ay2: m,
           draft: true,
           selected: false,
         })
@@ -236,5 +272,14 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
     if (!this.selectionEnabled) return null
     return this.paneView.hitTest(x, y)
+  }
+
+  hitTestAnchor(x: number, y: number): { id: string; endpoint: 'p1' | 'p2' } | null {
+    if (!this.selectionEnabled) return null
+    return this.paneView.hitTestAnchor(x, y)
+  }
+
+  getDrawing(id: string): RectangleDrawing | null {
+    return this.rects.find((rect) => rect.id === id) ?? null
   }
 }

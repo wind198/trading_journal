@@ -65,60 +65,48 @@ function asUnixSeconds(time: unknown): number | null {
   return typeof time === 'number' && Number.isFinite(time) ? time : null
 }
 
-function dataPrice(data: unknown): number | null {
-  if (!data || typeof data !== 'object') return null
-  const row = data as { value?: unknown; close?: unknown }
-  if (typeof row.value === 'number' && Number.isFinite(row.value)) return row.value
-  if (typeof row.close === 'number' && Number.isFinite(row.close)) return row.close
-  return null
-}
-
-/** Prefer hovered series (e.g. BB band); else Y→price. */
-function resolveClickPrice(
+/** Time at pixel x without snapping to bar centers (linear interpolate on logical index). */
+function timeAtCoordinate(
   handle: ChartHandle,
-  point: { x: number; y: number },
-  seriesData?: Map<unknown, unknown>,
-  hoveredSeries?: unknown,
+  x: number,
+  bars: readonly LightweightCandle[],
 ): number | null {
-  try {
-    if (seriesData instanceof Map && hoveredSeries != null && seriesData.has(hoveredSeries)) {
-      const snapped = dataPrice(seriesData.get(hoveredSeries))
-      if (snapped != null) return snapped
+  const logical = handle.chart.timeScale().coordinateToLogical(x)
+  if (logical != null && Number.isFinite(logical) && bars.length >= 2) {
+    const i0 = Math.floor(logical)
+    const frac = logical - i0
+    const t0 = bars[Math.max(0, Math.min(bars.length - 1, i0))]?.time
+    const t1 = bars[Math.max(0, Math.min(bars.length - 1, i0 + 1))]?.time
+    if (t0 != null && t1 != null) {
+      if (i0 < 0) return t0 + logical * (t1 - t0)
+      if (i0 >= bars.length - 1) {
+        const last = bars.length - 1
+        const prev = bars[last - 1].time
+        const lastT = bars[last].time
+        return lastT + (logical - last) * (lastT - prev)
+      }
+      return t0 + frac * (t1 - t0)
     }
-    const fromY = handle.price.coordinateToPrice(point.y)
-    return fromY == null ? null : Number(fromY)
-  } catch {
-    return null
   }
+  if (logical != null && Number.isFinite(logical) && bars.length === 1) {
+    return bars[0].time
+  }
+  return asUnixSeconds(handle.chart.timeScale().coordinateToTime(x))
 }
 
-/** Resolve click → bar time + price (snap to hovered series when present, e.g. BB). */
+/** Resolve click → time/price at cursor (no series or bar-center snap). */
 function clickToPoint(
   handle: ChartHandle,
   point: { x: number; y: number },
   candles: readonly LightweightCandle[] | null | undefined,
-  eventTime?: unknown,
-  seriesData?: Map<unknown, unknown>,
-  hoveredSeries?: unknown,
 ): DrawingPoint | null {
   try {
     const bars = candles ?? []
-    let timeSec = asUnixSeconds(eventTime)
-    if (timeSec == null) {
-      timeSec = asUnixSeconds(handle.chart.timeScale().coordinateToTime(point.x))
-    }
-    if (timeSec == null && bars.length > 0) {
-      const logical = handle.chart.timeScale().coordinateToLogical(point.x)
-      if (logical != null && Number.isFinite(logical)) {
-        const index = Math.max(0, Math.min(bars.length - 1, Math.round(logical)))
-        timeSec = bars[index]?.time ?? null
-      }
-    }
+    const timeSec = timeAtCoordinate(handle, point.x, bars)
     if (timeSec == null) return null
-
-    const price = resolveClickPrice(handle, point, seriesData, hoveredSeries)
-    if (price == null) return null
-    return { time: timeSec, price }
+    const priceRaw = handle.price.coordinateToPrice(point.y)
+    if (priceRaw == null) return null
+    return { time: timeSec, price: Number(priceRaw) }
   } catch {
     return null
   }
@@ -135,6 +123,8 @@ export function PriceChart({
   engulfingEvents = [],
   drawTool = null,
   onDrawingComplete,
+  onDrawingChange,
+  onDrawingChangeEnd,
   onDrawingDelete,
   onSelectionChange,
 }: {
@@ -152,6 +142,8 @@ export function PriceChart({
     p1: DrawingPoint
     p2: DrawingPoint
   }) => void
+  onDrawingChange?: (id: string, p1: DrawingPoint, p2: DrawingPoint) => void
+  onDrawingChangeEnd?: (id: string) => void
   onDrawingDelete?: (id: string) => void
   onSelectionChange?: (id: string | null) => void
 }) {
@@ -162,18 +154,59 @@ export function PriceChart({
   const axesVisibleRef = useRef(axesVisible)
   const drawToolRef = useRef(drawTool)
   const draftRef = useRef<DrawingPoint | null>(null)
+  const dragRef = useRef<{
+    id: string
+    endpoint: 'p1' | 'p2'
+    p1: DrawingPoint
+    p2: DrawingPoint
+  } | null>(null)
+  const didDragRef = useRef(false)
   const selectedIdRef = useRef<string | null>(null)
+  const trendlinesRef = useRef(trendlines)
+  const rectanglesRef = useRef(rectangles)
   const onCompleteRef = useRef(onDrawingComplete)
+  const onChangeRef = useRef(onDrawingChange)
+  const onChangeEndRef = useRef(onDrawingChangeEnd)
   const onDeleteRef = useRef(onDrawingDelete)
   const onSelectionChangeRef = useRef(onSelectionChange)
   const [epoch, setEpoch] = useState(0)
   candlesRef.current = candles ?? []
+  trendlinesRef.current = trendlines
+  rectanglesRef.current = rectangles
   onLoadOlderRef.current = onLoadOlder
   axesVisibleRef.current = axesVisible
   drawToolRef.current = drawTool
   onCompleteRef.current = onDrawingComplete
+  onChangeRef.current = onDrawingChange
+  onChangeEndRef.current = onDrawingChangeEnd
   onDeleteRef.current = onDrawingDelete
   onSelectionChangeRef.current = onSelectionChange
+
+  const syncInteractionLock = () => {
+    const handle = handleRef.current
+    if (!handle) return
+    const locked = drawToolRef.current != null || dragRef.current != null
+    handle.chart.applyOptions({
+      handleScroll: !locked,
+      handleScale: !locked,
+      kineticScroll: { mouse: !locked, touch: !locked },
+      crosshair: { mode: locked ? 2 : 1 },
+    })
+  }
+
+  const drawingPoints = (id: string): { p1: DrawingPoint; p2: DrawingPoint } | null => {
+    const fromTrend = trendlinesRef.current.find((d) => d.id === id)
+    if (fromTrend) return { p1: fromTrend.p1, p2: fromTrend.p2 }
+    const fromRect = rectanglesRef.current.find((d) => d.id === id)
+    if (fromRect) return { p1: fromRect.p1, p2: fromRect.p2 }
+    const handle = handleRef.current
+    if (!handle) return null
+    const line = handle.trendlines.getDrawing(id)
+    if (line) return { p1: line.p1, p2: line.p2 }
+    const rect = handle.rectangles.getDrawing(id)
+    if (rect) return { p1: rect.p1, p2: rect.p2 }
+    return null
+  }
 
   const selectDrawing = (id: string | null) => {
     const changed = selectedIdRef.current !== id
@@ -210,7 +243,7 @@ export function PriceChart({
 
     let cancelled = false
     let createdChart: IChartApi | null = null
-    let removePointerMove: (() => void) | null = null
+    let removePointerHandlers: (() => void) | null = null
 
     void import('lightweight-charts').then((lwc) => {
       if (cancelled || !ref.current) return
@@ -322,26 +355,17 @@ export function PriceChart({
       }
       handleRef.current = handle
 
-      const pointFromEvent = (param: {
-        point?: { x: number; y: number }
-        time?: unknown
-        seriesData?: Map<unknown, unknown>
-        hoveredInfo?: { series?: unknown }
-        hoveredSeries?: unknown
-      }) => {
+      const pointFromEvent = (param: { point?: { x: number; y: number } }) => {
         if (!param.point) return null
-        return clickToPoint(
-          handle,
-          param.point,
-          candlesRef.current,
-          param.time,
-          param.seriesData,
-          param.hoveredInfo?.series ?? param.hoveredSeries,
-        )
+        return clickToPoint(handle, param.point, candlesRef.current)
       }
 
       created.subscribeClick((param) => {
         if (!param.point) return
+        if (didDragRef.current) {
+          didDragRef.current = false
+          return
+        }
         const tool = drawToolRef.current
         if (tool) {
           const point = pointFromEvent(param)
@@ -367,13 +391,7 @@ export function PriceChart({
         selectDrawing(hit?.externalId ?? null)
       })
 
-      const updateDraftPreview = (param: {
-        point?: { x: number; y: number }
-        time?: unknown
-        seriesData?: Map<unknown, unknown>
-        hoveredInfo?: { series?: unknown }
-        hoveredSeries?: unknown
-      }) => {
+      const updateDraftPreview = (param: { point?: { x: number; y: number } }) => {
         if (!drawToolRef.current) return
         const first = draftRef.current
         if (!first) return
@@ -390,17 +408,76 @@ export function PriceChart({
       created.subscribeCrosshairMove(updateDraftPreview)
 
       const chartEl = created.chartElement()
-      const onPointerMove = (event: PointerEvent) => {
-        if (!drawToolRef.current || !draftRef.current) return
+      const localPoint = (event: PointerEvent) => {
         const rect = chartEl.getBoundingClientRect()
-        updateDraftPreview({
-          point: { x: event.clientX - rect.left, y: event.clientY - rect.top },
-        })
+        return { x: event.clientX - rect.left, y: event.clientY - rect.top }
       }
+
+      const onPointerDown = (event: PointerEvent) => {
+        if (drawToolRef.current) return
+        const selectedId = selectedIdRef.current
+        if (!selectedId || selectedId.startsWith('temp-')) return
+        const point = localPoint(event)
+        const anchor =
+          handle.trendlines.hitTestAnchor(point.x, point.y) ??
+          handle.rectangles.hitTestAnchor(point.x, point.y)
+        if (!anchor || anchor.id !== selectedId) return
+        const points = drawingPoints(anchor.id)
+        if (!points) return
+        event.preventDefault()
+        dragRef.current = {
+          id: anchor.id,
+          endpoint: anchor.endpoint,
+          p1: points.p1,
+          p2: points.p2,
+        }
+        chartEl.setPointerCapture(event.pointerId)
+        syncInteractionLock()
+      }
+
+      const onPointerMove = (event: PointerEvent) => {
+        const point = localPoint(event)
+        const drag = dragRef.current
+        if (drag && !drawToolRef.current) {
+          const next = clickToPoint(handle, point, candlesRef.current)
+          if (!next) return
+          didDragRef.current = true
+          const p1 = drag.endpoint === 'p1' ? next : drag.p1
+          const p2 = drag.endpoint === 'p2' ? next : drag.p2
+          drag.p1 = p1
+          drag.p2 = p2
+          onChangeRef.current?.(drag.id, p1, p2)
+          return
+        }
+        if (!drawToolRef.current || !draftRef.current) return
+        updateDraftPreview({ point })
+      }
+
+      const finishDrag = (event: PointerEvent) => {
+        if (!dragRef.current) return
+        const id = dragRef.current.id
+        dragRef.current = null
+        try {
+          chartEl.releasePointerCapture(event.pointerId)
+        } catch {
+          /* lost capture */
+        }
+        syncInteractionLock()
+        onChangeEndRef.current?.(id)
+      }
+
+      chartEl.addEventListener('pointerdown', onPointerDown)
       chartEl.addEventListener('pointermove', onPointerMove)
-      removePointerMove = () => chartEl.removeEventListener('pointermove', onPointerMove)
+      chartEl.addEventListener('pointerup', finishDrag)
+      chartEl.addEventListener('pointercancel', finishDrag)
+      removePointerHandlers = () => {
+        chartEl.removeEventListener('pointerdown', onPointerDown)
+        chartEl.removeEventListener('pointermove', onPointerMove)
+        chartEl.removeEventListener('pointerup', finishDrag)
+        chartEl.removeEventListener('pointercancel', finishDrag)
+      }
       if (cancelled) {
-        removePointerMove()
+        removePointerHandlers()
         created.remove()
         return
       }
@@ -410,9 +487,10 @@ export function PriceChart({
 
     return () => {
       cancelled = true
-      removePointerMove?.()
+      removePointerHandlers?.()
       handleRef.current = null
       draftRef.current = null
+      dragRef.current = null
       selectedIdRef.current = null
       createdChart?.remove()
     }
@@ -454,20 +532,12 @@ export function PriceChart({
     if (drawTool) selectDrawing(null)
   }, [drawTool, epoch])
 
-  // Freeze pan/zoom/crosshair and block selecting existing drawings while placing.
+  // Freeze pan/zoom/crosshair while placing or dragging endpoints.
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
+    syncInteractionLock()
     const drawing = drawTool != null
-    handle.chart.applyOptions({
-      handleScroll: !drawing,
-      handleScale: !drawing,
-      kineticScroll: { mouse: !drawing, touch: !drawing },
-      crosshair: {
-        // CrosshairMode.Hidden = 2, Magnet = 1 (typings; avoid static enum import)
-        mode: drawing ? 2 : 1,
-      },
-    })
     handle.trendlines.setSelectionEnabled(!drawing)
     handle.rectangles.setSelectionEnabled(!drawing)
   }, [drawTool, epoch])

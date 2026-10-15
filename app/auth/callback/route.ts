@@ -24,6 +24,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirectTo)
   }
 
-  redirectTo.pathname = '/journal'
+  redirectTo.pathname = '/trading-dashboard'
   return NextResponse.redirect(redirectTo)
 }

@@ -29,7 +29,7 @@ export function PasswordSignIn() {
         password,
       })
       if (signInError) throw signInError
-      router.push('/journal')
+      router.push('/trading-dashboard')
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-in failed')

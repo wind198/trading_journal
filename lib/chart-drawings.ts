@@ -99,6 +99,23 @@ export async function insertTrendline(input: {
   return insertDrawing({ ...input, kind: 'trendline' })
 }
 
+export async function updateChartDrawing(
+  id: string,
+  points: { p1: DrawingPoint; p2: DrawingPoint },
+): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('chart_drawings')
+    .update({
+      p1_time: Math.round(points.p1.time),
+      p1_price: points.p1.price,
+      p2_time: Math.round(points.p2.time),
+      p2_price: points.p2.price,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function deleteChartDrawing(id: string): Promise<void> {
   const supabase = createClient()
   const { error } = await supabase.from('chart_drawings').delete().eq('id', id)
