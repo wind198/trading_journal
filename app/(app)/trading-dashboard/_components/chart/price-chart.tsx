@@ -3,29 +3,29 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IChartApi, ISeriesApi, SeriesType, Time } from 'lightweight-charts'
 import type { LightweightCandle } from '@/lib/ticks/candles'
-import type { ChartDrawingKind, DrawingPoint } from '@/lib/chart-drawings'
+import type { ChartDrawingKind, DrawingPoint } from '../../_lib/chart/chart-drawings'
 import {
   formatChartCrosshairTime,
   formatChartTickMark,
-} from '@/lib/chart-timezone'
+} from '../../_lib/chart/chart-timezone'
 import {
   BOLLINGER,
   CANDLE,
   CHART_THEME,
   PRICE_FORMAT,
   VIEWPORT,
-} from '@/lib/price-chart-style'
-import { bollinger, pricePoint, type ChartType } from '@/lib/price-chart-series'
+} from '../../_lib/chart/price-chart-style'
+import { bollinger, pricePoint, type ChartType } from '../../_lib/chart/price-chart-series'
 import {
   EngulfingOverlayPrimitive,
   type EngulfingOverlayEvent,
-} from '@/components/engulfing-overlay-primitive'
+} from './primitives/engulfing-overlay-primitive'
 import {
   ForceOverlayPrimitive,
   type ForceOverlayEvent,
-} from '@/components/force-overlay-primitive'
-import { RectanglePrimitive, type RectangleDrawing } from '@/components/rectangle-primitive'
-import { TrendlinePrimitive, type TrendlineDrawing } from '@/components/trendline-primitive'
+} from './primitives/force-overlay-primitive'
+import { RectanglePrimitive, type RectangleDrawing } from './primitives/rectangle-primitive'
+import { TrendlinePrimitive, type TrendlineDrawing } from './primitives/trendline-primitive'
 
 export type { ChartType }
 export type DrawTool = ChartDrawingKind | null
@@ -46,6 +46,9 @@ type LineSeries = {
 }
 
 type LogicalRange = { from: number; to: number }
+
+const TAP_MOVE_THRESHOLD_PX = 12
+const TOUCH_HIT_BOOST = 1.75
 
 type ChartHandle = {
   chart: IChartApi
@@ -161,6 +164,10 @@ export function PriceChart({
     p2: DrawingPoint
   } | null>(null)
   const didDragRef = useRef(false)
+  const skipNextClickRef = useRef(false)
+  const tapStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
+  const pointerCoarseRef = useRef(false)
+  const chartElRef = useRef<HTMLElement | null>(null)
   const selectedIdRef = useRef<string | null>(null)
   const trendlinesRef = useRef(trendlines)
   const rectanglesRef = useRef(rectangles)
@@ -192,7 +199,19 @@ export function PriceChart({
       kineticScroll: { mouse: !locked, touch: !locked },
       crosshair: { mode: locked ? 2 : 1 },
     })
+    const el = chartElRef.current
+    if (el) el.style.touchAction = locked ? 'none' : 'manipulation'
   }
+
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)')
+    const update = () => {
+      pointerCoarseRef.current = mq.matches
+    }
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   const drawingPoints = (id: string): { p1: DrawingPoint; p2: DrawingPoint } | null => {
     const fromTrend = trendlinesRef.current.find((d) => d.id === id)
@@ -360,28 +379,30 @@ export function PriceChart({
         return clickToPoint(handle, param.point, candlesRef.current)
       }
 
-      created.subscribeClick((param) => {
-        if (!param.point) return
-        if (didDragRef.current) {
-          didDragRef.current = false
-          return
-        }
+      const applyPointerHitBoost = (event: PointerEvent) => {
+        const boost =
+          event.pointerType === 'touch' || pointerCoarseRef.current ? TOUCH_HIT_BOOST : 1
+        handle.trendlines.setHitBoost(boost)
+        handle.rectangles.setHitBoost(boost)
+      }
+
+      const handleChartTap = (point: { x: number; y: number }) => {
         const tool = drawToolRef.current
         if (tool) {
-          const point = pointFromEvent(param)
-          if (!point) return
+          const mapped = clickToPoint(handle, point, candlesRef.current)
+          if (!mapped) return
           const first = draftRef.current
           if (!first) {
-            draftRef.current = point
-            setActiveDraft({ p1: point })
+            draftRef.current = mapped
+            setActiveDraft({ p1: mapped })
             return
           }
           clearDrafts()
-          onCompleteRef.current?.({ kind: tool, p1: first, p2: point })
+          onCompleteRef.current?.({ kind: tool, p1: first, p2: mapped })
           return
         }
-        const lineHit = handle.trendlines.hitTest(param.point.x, param.point.y)
-        const rectHit = handle.rectangles.hitTest(param.point.x, param.point.y)
+        const lineHit = handle.trendlines.hitTest(point.x, point.y)
+        const rectHit = handle.rectangles.hitTest(point.x, point.y)
         const hit =
           lineHit && rectHit
             ? (lineHit.distance ?? 0) <= (rectHit.distance ?? 0)
@@ -389,6 +410,19 @@ export function PriceChart({
               : rectHit
             : (lineHit ?? rectHit)
         selectDrawing(hit?.externalId ?? null)
+      }
+
+      created.subscribeClick((param) => {
+        if (!param.point) return
+        if (skipNextClickRef.current) {
+          skipNextClickRef.current = false
+          return
+        }
+        if (didDragRef.current) {
+          didDragRef.current = false
+          return
+        }
+        handleChartTap(param.point)
       })
 
       const updateDraftPreview = (param: { point?: { x: number; y: number } }) => {
@@ -408,13 +442,37 @@ export function PriceChart({
       created.subscribeCrosshairMove(updateDraftPreview)
 
       const chartEl = created.chartElement()
+      chartElRef.current = chartEl
+      chartEl.style.touchAction = 'manipulation'
+
       const localPoint = (event: PointerEvent) => {
         const rect = chartEl.getBoundingClientRect()
         return { x: event.clientX - rect.left, y: event.clientY - rect.top }
       }
 
+      const releaseCapture = (event: PointerEvent) => {
+        try {
+          chartEl.releasePointerCapture(event.pointerId)
+        } catch {
+          /* lost capture */
+        }
+      }
+
       const onPointerDown = (event: PointerEvent) => {
-        if (drawToolRef.current) return
+        applyPointerHitBoost(event)
+        tapStartRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          pointerId: event.pointerId,
+        }
+
+        if (drawToolRef.current) {
+          event.preventDefault()
+          chartEl.setPointerCapture(event.pointerId)
+          syncInteractionLock()
+          return
+        }
+
         const selectedId = selectedIdRef.current
         if (!selectedId || selectedId.startsWith('temp-')) return
         const point = localPoint(event)
@@ -453,28 +511,57 @@ export function PriceChart({
         updateDraftPreview({ point })
       }
 
-      const finishDrag = (event: PointerEvent) => {
-        if (!dragRef.current) return
+      const onPointerUp = (event: PointerEvent) => {
+        const drag = dragRef.current
+        if (drag) {
+          const id = drag.id
+          dragRef.current = null
+          releaseCapture(event)
+          syncInteractionLock()
+          onChangeEndRef.current?.(id)
+          tapStartRef.current = null
+          return
+        }
+
+        releaseCapture(event)
+
+        const tap = tapStartRef.current
+        tapStartRef.current = null
+        if (!tap || tap.pointerId !== event.pointerId) return
+
+        const moved = Math.hypot(event.clientX - tap.x, event.clientY - tap.y)
+        if (moved > TAP_MOVE_THRESHOLD_PX) return
+
+        skipNextClickRef.current = true
+        handleChartTap(localPoint(event))
+        syncInteractionLock()
+      }
+
+      const onPointerCancel = (event: PointerEvent) => {
+        tapStartRef.current = null
+        if (!dragRef.current) {
+          releaseCapture(event)
+          syncInteractionLock()
+          return
+        }
         const id = dragRef.current.id
         dragRef.current = null
-        try {
-          chartEl.releasePointerCapture(event.pointerId)
-        } catch {
-          /* lost capture */
-        }
+        releaseCapture(event)
         syncInteractionLock()
         onChangeEndRef.current?.(id)
       }
 
-      chartEl.addEventListener('pointerdown', onPointerDown)
+      const pointerOpts: AddEventListenerOptions = { passive: false }
+      chartEl.addEventListener('pointerdown', onPointerDown, pointerOpts)
       chartEl.addEventListener('pointermove', onPointerMove)
-      chartEl.addEventListener('pointerup', finishDrag)
-      chartEl.addEventListener('pointercancel', finishDrag)
+      chartEl.addEventListener('pointerup', onPointerUp, pointerOpts)
+      chartEl.addEventListener('pointercancel', onPointerCancel, pointerOpts)
       removePointerHandlers = () => {
-        chartEl.removeEventListener('pointerdown', onPointerDown)
+        chartElRef.current = null
+        chartEl.removeEventListener('pointerdown', onPointerDown, pointerOpts)
         chartEl.removeEventListener('pointermove', onPointerMove)
-        chartEl.removeEventListener('pointerup', finishDrag)
-        chartEl.removeEventListener('pointercancel', finishDrag)
+        chartEl.removeEventListener('pointerup', onPointerUp, pointerOpts)
+        chartEl.removeEventListener('pointercancel', onPointerCancel, pointerOpts)
       }
       if (cancelled) {
         removePointerHandlers()
@@ -608,7 +695,7 @@ export function PriceChart({
   return (
     <div
       ref={ref}
-      className={`h-full min-h-0 w-full${drawTool ? ' cursor-crosshair' : ''}`}
+      className={`h-full min-h-0 w-full${drawTool ? ' cursor-crosshair touch-none' : ''}`}
     />
   )
 }

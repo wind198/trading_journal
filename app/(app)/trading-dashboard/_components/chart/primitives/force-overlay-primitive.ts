@@ -10,13 +10,13 @@ import type {
 import {
   CANDLE_OVERLAY_STACK,
   overlayMarkerGeometry,
-} from '@/lib/candle-overlay-layout'
+} from '../../../_lib/chart/candle-overlay-layout'
 import {
   ForceDirection,
   ForceStatus,
   type ForceEvent,
-} from '@/lib/force-candle-decay'
-import { FORCE } from '@/lib/price-chart-style'
+} from '../../../_lib/overlays/force-candle-decay'
+import { FORCE } from '../../../_lib/chart/price-chart-style'
 
 export type ForceOverlayEvent = Pick<
   ForceEvent,

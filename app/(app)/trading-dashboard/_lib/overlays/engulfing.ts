@@ -1,7 +1,7 @@
 /** Port of TradingView library EngulfingDetector. */
 
 import { percentileNearestRank } from './force-candles'
-import type { LightweightCandle } from './ticks/candles'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 
 export const EngulfingDirection = {
   Bullish: 'BULLISH',

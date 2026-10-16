@@ -1,4 +1,4 @@
-import type { LightweightCandle } from './candles'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 
 export interface BaseLineBiasConfig {
   baseLineLength: number

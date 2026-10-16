@@ -7,19 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:ticks": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test lib/ticks/ichimoku.test.ts lib/ticks/merge.test.ts lib/ticks/base-line-bias.test.ts lib/ticks/fetch.integration.test.ts lib/ticks/candle-color.integration.test.ts lib/force-candles.test.ts lib/engulfing.test.ts"
+    "test:ticks": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test lib/ticks/ichimoku.test.ts lib/ticks/merge.test.ts lib/ticks/fetch.integration.test.ts lib/ticks/candle-color.integration.test.ts \"app/(app)/trading-dashboard/_lib/overlays/force-candles.test.ts\" \"app/(app)/trading-dashboard/_lib/overlays/engulfing.test.ts\" \"app/(app)/trading-dashboard/_lib/bias/base-line-bias.test.ts\""
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.4.0",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "@tanstack/react-query": "^5.104.0",
     "@vercel/analytics": "1.6.1",
-    "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dayjs": "^1.11.21",
     "fancy-canvas": "2.1.0",
     "lightweight-charts": "^5.2.1",
     "lucide-react": "^1.16.0",
@@ -27,15 +24,12 @@
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.7",
     "react": "^19",
-    "react-chartjs-2": "^5.3.1",
     "react-dom": "^19",
-    "react-hook-form": "^7.77.0",
-    "react-swipeable": "^7.0.2",
     "shadcn": "^4.16.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "tw-animate-css": "^1.4.0",
-    "zod": "^4.4.3"
+    "usehooks-ts": "^3.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { before, test } from 'node:test'
-import { BOLLINGER } from '../price-chart-style'
-import { bollinger, outsideColor, pricePoint } from '../price-chart-series'
+import { BOLLINGER } from '@/app/(app)/trading-dashboard/_lib/chart/price-chart-style'
+import { bollinger, outsideColor, pricePoint } from '@/app/(app)/trading-dashboard/_lib/chart/price-chart-series'
 import { HISTORY_CANDLE_LIMIT, type LightweightCandle } from './candles'
 
 function loadEnv() {

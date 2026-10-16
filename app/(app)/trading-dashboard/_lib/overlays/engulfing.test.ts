@@ -6,7 +6,7 @@ import {
   EngulfingDirection,
   scanEngulfing,
 } from './engulfing'
-import type { LightweightCandle } from './ticks/candles'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 
 test('bullish engulfing + force qualifies as bullishSignal', () => {
   // Prior ranges small → current wide range qualifies at 65th pct

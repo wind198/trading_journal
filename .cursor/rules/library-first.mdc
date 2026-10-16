@@ -1,0 +1,84 @@
+---
+description: Prefer existing, well-maintained libraries and established solutions over reinventing common functionality.
+alwaysApply: true
+---
+
+# Library-First Development
+
+## Objective
+
+Prefer proven, reusable libraries and existing project utilities over implementing common functionality from scratch. Reduce duplicated code, implementation effort, maintenance burden, and avoidable bugs.
+
+## Mandatory Rules
+
+1. **Search before implementing.** Before writing a custom implementation of common functionality, inspect the existing codebase, installed dependencies, and available libraries for a suitable solution.
+
+2. **Reuse existing dependencies first.** If the project already has a suitable utility, hook, component, or abstraction, reuse it instead of creating another implementation.
+
+3. **Evaluate established libraries.** If no existing solution is suitable, consider established libraries from the ecosystem relevant to the project's language and framework. For example:
+   - React hooks: `beautiful-react-hooks`, `usehooks-ts`, or equivalent libraries.
+   - Date and time: established date/time libraries.
+   - Validation: established schema validation libraries.
+   - HTTP requests: the project's existing HTTP client or a suitable standard library.
+   - Collections and algorithms: native APIs or established utility libraries.
+   - UI components: the existing component library or a suitable maintained package.
+
+4. **Verify before recommending or using a library.** Check its documentation, API compatibility, maintenance status, license, dependency requirements, security considerations, and suitability for the current project. Do not assume that a package is appropriate simply because it exists.
+
+5. **Do not add dependencies blindly.** Before installing a new package, assess its bundle size, transitive dependencies, runtime requirements, and compatibility. Prefer an existing dependency or native API when it provides an equally good solution with less complexity.
+
+6. **Avoid unnecessary custom implementations.** Do not write custom hooks, utility functions, state-management abstractions, date helpers, retry logic, caching mechanisms, or similar infrastructure when an appropriate existing solution already meets the requirements.
+
+7. **Do not over-abstract.** A small, trivial, project-specific function may be better implemented locally than introducing an external dependency. Prefer simplicity when the library would add more complexity than it removes.
+
+8. **Preserve project conventions.** Follow the existing architecture, dependency-management strategy, coding standards, and abstraction boundaries. Do not introduce competing libraries when the project already standardizes on an equivalent solution.
+
+9. **Explain justified exceptions.** If you choose a custom implementation over an available library, briefly explain why, such as incompatible APIs, excessive dependencies, missing functionality, security concerns, or project-specific requirements.
+
+## Required Workflow
+
+For every non-trivial implementation:
+
+1. Identify the functionality required.
+2. Search the codebase for existing implementations and dependencies.
+3. Check whether the framework, standard library, or an existing package provides the functionality.
+4. If necessary, evaluate suitable external libraries using their official documentation and package metadata.
+5. Compare reuse, custom implementation, and dependency cost.
+6. Implement the simplest suitable solution.
+7. Verify API usage against documentation and run relevant tests.
+
+Do not perform exhaustive library research for trivial tasks. Scale the investigation to the complexity, risk, and long-term maintenance impact of the implementation.
+
+## React Hook Example
+
+Before implementing a hook for common behavior such as toggling state, tracking previous values, observing browser events, handling viewport changes, or managing timers:
+
+- Check existing project hooks and installed dependencies.
+- Consider `beautiful-react-hooks` or another suitable React hooks library.
+- Read the documentation for the specific hook before using it.
+- Verify React version compatibility and any required peer dependencies.
+- Reuse the library when it is suitable; otherwise, implement a focused custom hook and explain the reason.
+
+Do not install an entire library solely to use one trivial hook if a native React hook or existing dependency already provides an adequate solution.
+
+## Expected Outcome
+
+Produce maintainable, production-appropriate code that maximizes reuse of suitable existing solutions without introducing unnecessary dependencies or abstraction.
+
+**Default decision:** Reuse first, evaluate second, implement from scratch only when justified.
+
+---
+
+## This repository
+
+| Concern | Use |
+|--------|-----|
+| Charts | `lightweight-charts` (not Chart.js) |
+| Server/client data | `@tanstack/react-query` |
+| Auth / DB client | `@supabase/ssr`, `@supabase/supabase-js` |
+| Generic React hooks | `usehooks-ts` (e.g. `useDebounceCallback`) before new global `hooks/*` |
+| UI | `components/ui/*` (shadcn / radix) |
+| Chart time labels | `Intl` via `app/(app)/trading-dashboard/_lib/chart/chart-timezone.ts` |
+| Class names | `clsx` + `tailwind-merge` (`lib/utils.ts` `cn`) |
+
+Do not re-add Chart.js, dayjs, or react-hook-form + zod unless a concrete feature needs them.

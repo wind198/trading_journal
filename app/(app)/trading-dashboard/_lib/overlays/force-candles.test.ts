@@ -14,7 +14,7 @@ import {
   ForceStatus,
   type ForceEvent,
 } from './force-candle-decay'
-import type { LightweightCandle } from './ticks/candles'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 
 test('calculateMetrics close at high / low', () => {
   const high = calculateMetrics(10, 0, 2, 10)

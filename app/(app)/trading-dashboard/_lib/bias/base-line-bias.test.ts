@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { LightweightCandle } from './candles'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
@@ -22,6 +22,12 @@ function flatBars(count: number, mid: number, close: number): LightweightCandle[
   )
 }
 
+const CONFIG_52_80 = {
+  ...DEFAULT_BASE_LINE_BIAS_CONFIG,
+  analysisLength: 52,
+  thresholdPercent: 80,
+}
+
 test('rejects invalid config', () => {
   assert.throws(() => calculateBaseLineBias([], { ...DEFAULT_BASE_LINE_BIAS_CONFIG, baseLineLength: 0 }))
   assert.throws(() =>
@@ -37,7 +43,7 @@ test('42/52 bullish meets threshold; 41/52 stays neutral', () => {
     ...Array.from({ length: 42 }, (_, i) => bar(1_700_000_000 + (51 + i) * 60, mid + 1, mid - 1, mid + 1)),
     ...Array.from({ length: 10 }, (_, i) => bar(1_700_000_000 + (93 + i) * 60, mid + 1, mid - 1, mid - 1)),
   ]
-  const at42 = calculateBaseLineBias([...warm, ...analysisBull42])
+  const at42 = calculateBaseLineBias([...warm, ...analysisBull42], CONFIG_52_80)
   const last42 = at42[at42.length - 1]
   assert.equal(last42.bullishCount, 42)
   assert.equal(last42.bearishCount, 10)
@@ -48,7 +54,7 @@ test('42/52 bullish meets threshold; 41/52 stays neutral', () => {
     ...Array.from({ length: 41 }, (_, i) => bar(1_700_000_000 + (51 + i) * 60, mid + 1, mid - 1, mid + 1)),
     ...Array.from({ length: 11 }, (_, i) => bar(1_700_000_000 + (92 + i) * 60, mid + 1, mid - 1, mid - 1)),
   ]
-  const at41 = calculateBaseLineBias([...warm, ...analysisBull41])
+  const at41 = calculateBaseLineBias([...warm, ...analysisBull41], CONFIG_52_80)
   const last41 = at41[at41.length - 1]
   assert.equal(last41.bullishCount, 41)
   assert.ok(last41.bullishPercent < 80)
@@ -62,7 +68,7 @@ test('42/52 bearish meets threshold', () => {
     ...Array.from({ length: 42 }, (_, i) => bar(1_700_000_000 + (51 + i) * 60, mid + 1, mid - 1, mid - 1)),
     ...Array.from({ length: 10 }, (_, i) => bar(1_700_000_000 + (93 + i) * 60, mid + 1, mid - 1, mid + 1)),
   ]
-  const points = calculateBaseLineBias([...warm, ...analysis])
+  const points = calculateBaseLineBias([...warm, ...analysis], CONFIG_52_80)
   const last = points[points.length - 1]
   assert.equal(last.bearishCount, 42)
   assert.equal(last.value, -1)

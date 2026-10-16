@@ -8,7 +8,7 @@ import type {
   SeriesType,
   Time,
 } from 'lightweight-charts'
-import type { TrendlinePoint } from '@/lib/chart-drawings'
+import type { TrendlinePoint } from '../../../_lib/chart/chart-drawings'
 
 export type TrendlineDrawing = {
   id: string
@@ -109,22 +109,24 @@ class TrendlinePaneView {
   }
 
   hitTestAnchor(x: number, y: number): { id: string; endpoint: 'p1' | 'p2' } | null {
+    const anchorR = ANCHOR_HIT_RADIUS * this.source.hitBoost
     for (const segment of this.segments) {
       if (segment.draft || !segment.selected) continue
       const d1 = Math.hypot(x - segment.mx1, y - segment.my1)
-      if (d1 <= ANCHOR_HIT_RADIUS) return { id: segment.id, endpoint: 'p1' }
+      if (d1 <= anchorR) return { id: segment.id, endpoint: 'p1' }
       const d2 = Math.hypot(x - segment.mx2, y - segment.my2)
-      if (d2 <= ANCHOR_HIT_RADIUS) return { id: segment.id, endpoint: 'p2' }
+      if (d2 <= anchorR) return { id: segment.id, endpoint: 'p2' }
     }
     return null
   }
 
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
+    const lineTol = HIT_TOLERANCE * this.source.hitBoost
     let best: { id: string; distance: number } | null = null
     for (const segment of this.segments) {
       if (segment.draft) continue
       const distance = distToSegment(x, y, segment.x1, segment.y1, segment.x2, segment.y2)
-      if (distance > HIT_TOLERANCE) continue
+      if (distance > lineTol) continue
       if (!best || distance < best.distance) best = { id: segment.id, distance }
     }
     if (!best) return null
@@ -237,6 +239,8 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
   draft: { p1: TrendlinePoint; p2?: TrendlinePoint } | null = null
   selectedId: string | null = null
   selectionEnabled = true
+  /** 1 = default; >1 enlarges hit targets for touch / coarse pointers. */
+  hitBoost = 1
   private requestUpdate: (() => void) | null = null
   private readonly paneView: TrendlinePaneView
   private readonly views: TrendlinePaneView[]
@@ -264,6 +268,11 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
 
   setSelectionEnabled(enabled: boolean): void {
     this.selectionEnabled = enabled
+  }
+
+  setHitBoost(boost: number): void {
+    this.hitBoost = boost
+    this.requestUpdate?.()
   }
 
   attached(param: SeriesAttachedParameter<Time, SeriesType>): void {

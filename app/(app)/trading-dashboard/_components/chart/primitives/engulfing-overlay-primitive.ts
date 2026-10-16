@@ -10,12 +10,12 @@ import type {
 import {
   CANDLE_OVERLAY_STACK,
   overlayMarkerGeometry,
-} from '@/lib/candle-overlay-layout'
+} from '../../../_lib/chart/candle-overlay-layout'
 import {
   EngulfingDirection,
   type EngulfingEvent,
-} from '@/lib/engulfing'
-import { ENGULFING } from '@/lib/price-chart-style'
+} from '../../../_lib/overlays/engulfing'
+import { ENGULFING } from '../../../_lib/chart/price-chart-style'
 
 export type EngulfingOverlayEvent = Pick<
   EngulfingEvent,

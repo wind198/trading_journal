@@ -1,0 +1,262 @@
+---
+description: Frontend file placement — ownership and scope (Next.js App Router)
+alwaysApply: true
+---
+
+# Frontend Architecture & File Organization Rules
+
+Follow these rules when creating, moving, or refactoring frontend code in this Next.js application.
+
+The primary architectural principle is:
+
+> **Organize code by ownership and scope, not by file type.**
+
+A component, hook, type, constant, helper, schema, or action should live at the **narrowest scope that correctly owns it**.
+
+Do not create global `utils/`, `helpers/`, `types/`, `constants/`, or similar directories merely because those categories exist.
+
+---
+
+## This repository
+
+- Paths are **at the repo root** (no `src/`): `app/`, `components/`, `lib/`, `hooks/`.
+- There is **no** `features/` tree yet. Add `features/<domain>/` only when a real domain boundary exists (multiple routes, coherent business capability).
+- Examples today: `app/(app)/trading-dashboard/` (`_components/dashboard|chart/`, `_lib/chart|overlays|bias/`), shared UI in `components/ui/`, market API pipeline in `lib/ticks/`, auth in `lib/supabase/`.
+- **Do not mass-reorganize** existing files for style alone (see §20). Apply these rules to **new** code and low-risk colocation when you are already modifying an area.
+
+Import aliases use `@/` (e.g. `@/components/...`, `@/lib/...`).
+
+---
+
+## 1. Default Next.js structure
+
+Use the Next.js App Router.
+
+A representative structure (this repo uses root-level `app/`, not `src/app/`):
+
+```text
+app/
+├── (auth)/
+│   ├── login/
+│   │   ├── page.tsx
+│   │   └── _components/
+│   │       └── LoginForm.tsx
+│   └── register/
+│       ├── page.tsx
+│       └── _components/
+│           └── RegisterForm.tsx
+├── dashboard/
+│   ├── page.tsx
+│   ├── loading.tsx
+│   ├── _components/
+│   ├── _hooks/
+│   ├── types.ts
+│   └── constants.ts
+├── layout.tsx
+└── globals.css
+
+components/
+├── ui/
+└── layout/
+
+hooks/
+lib/
+features/          # only when a real domain boundary exists
+stores/
+providers/
+types/
+```
+
+This is a **reference**, not a requirement to create every directory. Do not create empty directories or placeholders.
+
+---
+
+## 2. Scope hierarchy
+
+```text
+Page / route → Domain / feature → Application-wide shared
+```
+
+Always start with the narrowest scope.
+
+### Decision tree
+
+```text
+Only needed by one route/page? → app/<route>/
+
+Shared by multiple pages in one domain? → features/<domain>/
+
+Genuinely generic/application-wide? → components/, hooks/, lib/, stores/, providers/, types/, etc.
+```
+
+Do not move code global because it might be reused someday.
+
+---
+
+## 3. Page-owned components
+
+Prefer:
+
+```text
+app/users/
+├── page.tsx
+└── _components/
+    ├── UserTable.tsx
+    └── UserFilters.tsx
+```
+
+over `components/users/...` when those components are only for `/users`.
+
+`_` prefix = private route implementation. Promote upward only when ownership genuinely broadens.
+
+---
+
+## 4. Page-owned hooks
+
+Route-only hooks live with the route:
+
+```text
+app/users/_hooks/useUserFilters.ts
+```
+
+Global `hooks/` is for **generic** React behavior only (`useDebounce`, `useMediaQuery`, `usePrevious`, etc.).
+
+---
+
+## 5. Page-owned types
+
+Page-specific types beside the page:
+
+```text
+app/users/types.ts
+```
+
+Avoid `app/users/_types/` unless complexity warrants a directory. Avoid `types/` at root for page-only types.
+
+---
+
+## 6. Domain / feature scope
+
+Use `features/<domain>/` only for a **real domain boundary** (coherent business capability, shared across routes).
+
+Good: `user`, `billing`, `orders`, `notifications`, `authentication`.
+
+Do not invent domains to avoid global files. Before creating a domain, ask: business ownership? multiple behaviors? shared routes? understandable boundary?
+
+---
+
+## 7. Be careful with domain separation
+
+Do not force technical concepts into `features/` (`form`, `table`, `modal`, `date`, `validation`).
+
+Prefer `components/ui/`, `lib/date/`, `lib/validation/`.
+
+A **route** is not automatically a **domain** (`features/dashboard/` just because `/dashboard` exists).
+
+---
+
+## 8. Shared UI
+
+Generic UI in `components/ui/` with minimal domain knowledge.
+
+---
+
+## 9. Shared hooks
+
+Global `hooks/` = generic React only. Domain/page hooks stay page- or feature-scoped.
+
+---
+
+## 10. Shared helpers / utilities
+
+Avoid a giant global `utils/` dump. Organize shared code by semantic purpose under `lib/`:
+
+```text
+lib/date/
+lib/validation/
+lib/api/
+```
+
+Prefer `@/lib/date/formatDateTime` over `@/utils`. Avoid `helpers/` without strong reason.
+
+---
+
+## 11. Shared constants
+
+Global only when application-wide (`constants/routes.ts`). Domain constants in `features/<domain>/constants.ts`. Page constants in `app/<route>/constants.ts`.
+
+---
+
+## 12. Validation rules
+
+Generic validation → `lib/validation/`. Business limits (e.g. max username length) → domain or page constants/schema. Ask: technical, domain, or page-specific?
+
+---
+
+## 13. Shared types
+
+Prefer `features/<domain>/types.ts` or `app/<route>/types.ts`. Global `types/` only for truly cross-cutting abstractions (e.g. pagination).
+
+---
+
+## 14. Zustand stores
+
+Store lives where state is owned: global UI → `stores/`; domain → `features/<domain>/`; page → `app/<route>/_stores/`.
+
+---
+
+## 15. Server Actions
+
+Page-specific → `app/<route>/_actions/`. Domain → `features/<domain>/actions.ts`. Avoid a giant global `actions/` dump unless truly app-wide.
+
+---
+
+## 16. Avoid premature abstraction
+
+Do not promote to shared scope because it might be reused, looks generic, or two files use it today. Progression: inline in page → `_components/` → `features/<domain>/` → generic `components/ui/` only with evidence.
+
+---
+
+## 17. Avoid junk drawer directories
+
+Be careful with `utils/`, `helpers/`, `misc/`, `common/`, `shared/`, undifferentiated `types/`, `constants/`. Ask: **What owns this?** Never use `common/` or `shared/` as a dump.
+
+---
+
+## 18. Prefer semantic directories
+
+Prefer `lib/date/`, `lib/validation/`, `lib/api/` over `lib/utils/`, `lib/helpers/`, `lib/common/`.
+
+---
+
+## 19. Placement over convenience
+
+Do not ask “What type of file is this?” Ask **“Who owns this code?”** then pick page, domain, or shared tier.
+
+---
+
+## 20. Do not reorganize unnecessarily
+
+Preserve coherent existing layout. No large moves for style alone. New code follows ownership rules. Fix placement only when already in that area and low-risk.
+
+---
+
+## 21. Final principle
+
+> **Keep code as close as possible to the thing that owns it. Promote only when ownership genuinely broadens.**
+
+```text
+                    GLOBAL / GENERIC
+                          │
+             ┌────────────┼────────────┐
+         components/    hooks/       lib/
+                          │
+                    DOMAIN / FEATURE
+                    features/<domain>/
+                          │
+                     PAGE / ROUTE
+                    app/<route>/
+                 _components / _hooks / _utils / _actions
+```
+
+When uncertain, prefer the **narrower** scope. Do not create abstractions without evidence of real ownership.

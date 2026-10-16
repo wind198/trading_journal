@@ -1,5 +1,5 @@
 import type { Time } from 'lightweight-charts'
-import type { LightweightCandle } from './ticks/candles'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 import { BOLLINGER } from './price-chart-style'
 
 export type ChartType = 'line' | 'area' | 'candlestick' | 'bar'

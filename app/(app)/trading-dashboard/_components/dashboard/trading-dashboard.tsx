@@ -6,31 +6,31 @@ import { QueryClient, QueryClientProvider, useInfiniteQuery, useQuery } from '@t
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { PriceChart, type ChartType, type DrawTool } from '@/components/price-chart'
+import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import {
   deleteChartDrawing,
   insertDrawing,
   loadChartDrawings,
-  updateChartDrawing,
   type ChartDrawing,
   type ChartDrawingKind,
   type DrawingPoint,
-} from '@/lib/chart-drawings'
+} from '../../_lib/chart/chart-drawings'
+import { useDebouncedDrawingPersist } from '../../_hooks/useDebouncedDrawingPersist'
 import {
   calculateForceDecay,
   DEFAULT_FORCE_DECAY_CONFIG,
   filterConsecutiveForceDisplay,
   type ForceEvent,
-} from '@/lib/force-candle-decay'
+} from '../../_lib/overlays/force-candle-decay'
 import {
   DEFAULT_ENGULFING_CONFIG,
   scanEngulfing,
   type EngulfingEvent,
-} from '@/lib/engulfing'
+} from '../../_lib/overlays/engulfing'
 import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
-} from '@/lib/ticks/base-line-bias'
+} from '../../_lib/bias/base-line-bias'
 import { mergeCandles } from '@/lib/ticks/merge'
 import {
   HISTORY_CANDLE_LIMIT,
@@ -281,14 +281,10 @@ function DashboardPane({
     return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
   }, [isExpanded, candles])
 
-  const DRAWING_UPDATE_DEBOUNCE_MS = 400
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
-  const pendingDrawingUpdatesRef = useRef<Record<string, { p1: DrawingPoint; p2: DrawingPoint }>>(
-    {},
-  )
-  const drawingUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { queuePersist, commitPersist } = useDebouncedDrawingPersist(pane.id, setDrawings)
 
   useEffect(() => {
     if (isExpanded) return
@@ -310,55 +306,15 @@ function DashboardPane({
     }
   }, [pane.id])
 
-  useEffect(
-    () => () => {
-      if (drawingUpdateTimerRef.current) clearTimeout(drawingUpdateTimerRef.current)
-    },
-    [],
-  )
-
-  const persistDrawingUpdate = (id: string, points: { p1: DrawingPoint; p2: DrawingPoint }) => {
-    delete pendingDrawingUpdatesRef.current[id]
-    void updateChartDrawing(id, points).catch(() => {
-      toast.error('Failed to save drawing')
-      void loadChartDrawings(SYMBOL, pane.id)
-        .then((rows) => setDrawings(rows))
-        .catch(() => {})
-    })
-  }
-
-  const scheduleDrawingPersist = () => {
-    if (drawingUpdateTimerRef.current) clearTimeout(drawingUpdateTimerRef.current)
-    drawingUpdateTimerRef.current = setTimeout(() => {
-      drawingUpdateTimerRef.current = null
-      const pending = { ...pendingDrawingUpdatesRef.current }
-      for (const [id, points] of Object.entries(pending)) {
-        persistDrawingUpdate(id, points)
-      }
-    }, DRAWING_UPDATE_DEBOUNCE_MS)
-  }
-
   const onDrawingChange = (id: string, p1: DrawingPoint, p2: DrawingPoint) => {
     setDrawings((current) =>
       current.map((d) => (d.id === id ? { ...d, p1, p2 } : d)),
     )
-    if (id.startsWith('temp-')) return
-    pendingDrawingUpdatesRef.current[id] = { p1, p2 }
-    scheduleDrawingPersist()
+    queuePersist(id, p1, p2)
   }
 
   const onDrawingChangeEnd = (id: string) => {
-    if (id.startsWith('temp-')) return
-    const points = pendingDrawingUpdatesRef.current[id]
-    if (!points) return
-    if (drawingUpdateTimerRef.current) {
-      clearTimeout(drawingUpdateTimerRef.current)
-      drawingUpdateTimerRef.current = null
-    }
-    persistDrawingUpdate(id, points)
-    if (Object.keys(pendingDrawingUpdatesRef.current).length > 0) {
-      scheduleDrawingPersist()
-    }
+    commitPersist(id)
   }
 
   const trendlineDrawings = useMemo(

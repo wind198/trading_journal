@@ -1,4 +1,4 @@
-import type { LightweightCandle } from './ticks/candles'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 import {
   calculateForceSignals,
   DEFAULT_FORCE_CANDLE_CONFIG,

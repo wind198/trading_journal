@@ -8,7 +8,7 @@ import type {
   SeriesType,
   Time,
 } from 'lightweight-charts'
-import type { DrawingPoint } from '@/lib/chart-drawings'
+import type { DrawingPoint } from '../../../_lib/chart/chart-drawings'
 
 export type RectangleDrawing = {
   id: string
@@ -99,17 +99,19 @@ class RectanglePaneView {
   }
 
   hitTestAnchor(x: number, y: number): { id: string; endpoint: 'p1' | 'p2' } | null {
+    const anchorR = ANCHOR_HIT_RADIUS * this.source.hitBoost
     for (const rect of this.rects) {
       if (rect.draft || !rect.selected) continue
       const d1 = Math.hypot(x - rect.ax1, y - rect.ay1)
-      if (d1 <= ANCHOR_HIT_RADIUS) return { id: rect.id, endpoint: 'p1' }
+      if (d1 <= anchorR) return { id: rect.id, endpoint: 'p1' }
       const d2 = Math.hypot(x - rect.ax2, y - rect.ay2)
-      if (d2 <= ANCHOR_HIT_RADIUS) return { id: rect.id, endpoint: 'p2' }
+      if (d2 <= anchorR) return { id: rect.id, endpoint: 'p2' }
     }
     return null
   }
 
   hitTest(x: number, y: number): PrimitiveHoveredItem | null {
+    const borderTol = HIT_TOLERANCE * this.source.hitBoost
     let best: { id: string; distance: number } | null = null
     for (const rect of this.rects) {
       if (rect.draft) continue
@@ -120,7 +122,7 @@ class RectanglePaneView {
           distToSegment(x, y, right, top, right, bottom),
           distToSegment(x, y, right, bottom, left, bottom),
           distToSegment(x, y, left, bottom, left, top),
-        ) <= HIT_TOLERANCE
+        ) <= borderTol
       const inside = x >= left && x <= right && y >= top && y <= bottom
       if (!onBorder && !inside) continue
       const distance = onBorder
@@ -220,6 +222,7 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
   draft: { p1: DrawingPoint; p2?: DrawingPoint } | null = null
   selectedId: string | null = null
   selectionEnabled = true
+  hitBoost = 1
   private requestUpdate: (() => void) | null = null
   private readonly paneView: RectanglePaneView
   private readonly views: RectanglePaneView[]
@@ -247,6 +250,11 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
 
   setSelectionEnabled(enabled: boolean): void {
     this.selectionEnabled = enabled
+  }
+
+  setHitBoost(boost: number): void {
+    this.hitBoost = boost
+    this.requestUpdate?.()
   }
 
   attached(param: SeriesAttachedParameter<Time, SeriesType>): void {

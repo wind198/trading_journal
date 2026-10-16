@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { GoogleSignIn } from '@/app/login/google-sign-in'
-import { PasswordSignIn } from '@/app/login/password-sign-in'
+import { GoogleSignIn } from '@/app/login/_components/sign-in/google-sign-in'
+import { PasswordSignIn } from '@/app/login/_components/sign-in/password-sign-in'
 
 export default async function LoginPage({
   searchParams,
