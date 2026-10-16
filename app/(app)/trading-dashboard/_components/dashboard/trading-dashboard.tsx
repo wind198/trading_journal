@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { QueryClient, QueryClientProvider, useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -32,11 +32,11 @@ import {
   DEFAULT_BASE_LINE_BIAS_CONFIG,
 } from '../../_lib/bias/base-line-bias'
 import { mergeCandles } from '@/lib/ticks/merge'
+import type { LightweightCandle } from '@/lib/ticks/candles'
 import {
-  HISTORY_CANDLE_LIMIT,
-  RECENT_CANDLE_LIMIT,
-  type LightweightCandle,
-} from '@/lib/ticks/candles'
+  marketHistoryInfiniteOptions,
+  marketRecentQueryOptions,
+} from '../../_lib/market-queries'
 import {
   ArrowDown,
   ArrowUp,
@@ -110,12 +110,7 @@ function BiasArrow({ value, compact }: { value: BiasValue | null; compact: boole
 }
 
 export function TradingDashboard() {
-  const [client] = useState(() => new QueryClient())
-  return (
-    <QueryClientProvider client={client}>
-      <Dashboard />
-    </QueryClientProvider>
-  )
+  return <Dashboard />
 }
 
 function Dashboard() {
@@ -218,31 +213,8 @@ function DashboardPane({
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
 }) {
-  const history = useInfiniteQuery({
-    queryKey: ['market', 'candles', 'history', SYMBOL, pane.id],
-    queryFn: ({ pageParam, signal }) => {
-      const before = pageParam == null ? '' : `&before=${pageParam}`
-      return getCandles(
-        `/api/bars/history?timeframe=${pane.id}&limit=${HISTORY_CANDLE_LIMIT}${before}`,
-        signal,
-      )
-    },
-    initialPageParam: undefined as number | undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.length < HISTORY_CANDLE_LIMIT ? undefined : lastPage[0]?.time,
-    staleTime: Infinity,
-    gcTime: 30 * 60 * 1000,
-  })
-  const recent = useQuery({
-    queryKey: ['market', 'candles', 'recent', SYMBOL, pane.id],
-    queryFn: ({ signal }) =>
-      getCandles(`/api/bars/recent?timeframe=${pane.id}&limit=${RECENT_CANDLE_LIMIT}`, signal),
-    refetchInterval: 5 * 60 * 1000,
-    refetchIntervalInBackground: false,
-    refetchOnMount: true,
-    refetchOnWindowFocus: process.env.NODE_ENV !== 'development',
-    staleTime: 60 * 1000,
-  })
+  const history = useInfiniteQuery(marketHistoryInfiniteOptions(pane.id))
+  const recent = useQuery(marketRecentQueryOptions(pane.id))
   const loadingOlder = useRef(false)
   const historyBars = useMemo(
     () =>
@@ -512,9 +484,3 @@ function DashboardPane({
   )
 }
 
-async function getCandles(url: string, signal: AbortSignal): Promise<LightweightCandle[]> {
-  const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error('bars')
-  const body = (await response.json()) as { data?: LightweightCandle[] }
-  return body.data ?? []
-}
