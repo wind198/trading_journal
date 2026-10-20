@@ -6,15 +6,39 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import {
   deleteChartDrawing,
   insertDrawing,
+  insertPolylineArrow,
+  isPolylineArrowKind,
   loadChartDrawings,
+  updatePolylineArrow,
   type ChartDrawing,
   type ChartDrawingKind,
   type DrawingPoint,
 } from '../../_lib/chart/chart-drawings'
+import {
+  CHART_ICON_DEFINITIONS,
+  isChartIconKind,
+  type ChartIconKind,
+} from '../../_lib/chart/chart-icons'
 import { useDebouncedDrawingPersist } from '../../_hooks/useDebouncedDrawingPersist'
 import {
   calculateForceDecay,
@@ -45,6 +69,8 @@ import {
   Minimize2,
   Minus,
   Shrink,
+  MapPin,
+  Spline,
   Square,
   Trash2,
   TrendingUp,
@@ -256,7 +282,10 @@ function DashboardPane({
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
-  const { queuePersist, commitPersist } = useDebouncedDrawingPersist(pane.id, setDrawings)
+  const [labelEditDrawingId, setLabelEditDrawingId] = useState<string | null>(null)
+  const [labelDraft, setLabelDraft] = useState('')
+  const { queuePersist, commitPersist, queuePolylinePersist, commitPolylinePersist } =
+    useDebouncedDrawingPersist(pane.id, setDrawings)
 
   useEffect(() => {
     if (isExpanded) return
@@ -303,9 +332,33 @@ function DashboardPane({
         .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
     [drawings],
   )
+  const iconDrawings = useMemo(
+    () =>
+      drawings
+        .filter((d) => isChartIconKind(d.kind))
+        .map((d) => ({ id: d.id, kind: d.kind as ChartIconKind, p1: d.p1 })),
+    [drawings],
+  )
+  const polylineDrawings = useMemo(
+    () =>
+      drawings
+        .filter((d) => isPolylineArrowKind(d.kind) && d.points && d.points.length >= 2)
+        .map((d) => ({
+          id: d.id,
+          points: d.points!,
+          label: d.label,
+        })),
+    [drawings],
+  )
+
+  const iconToolActive = drawTool != null && isChartIconKind(drawTool)
 
   const toggleTool = (tool: ChartDrawingKind) => {
     setDrawTool((current) => (current === tool ? null : tool))
+  }
+
+  const selectIconTool = (kind: ChartIconKind) => {
+    setDrawTool((current) => (current === kind ? null : kind))
   }
 
   const onDrawingComplete = (input: {
@@ -313,23 +366,26 @@ function DashboardPane({
     p1: DrawingPoint
     p2: DrawingPoint
   }) => {
-    setDrawTool(null)
+    if (!isChartIconKind(input.kind) && !isPolylineArrowKind(input.kind)) {
+      setDrawTool(null)
+    }
+    const anchor = input.p1
     const tempId = `temp-${Date.now()}`
     const optimistic: ChartDrawing = {
       id: tempId,
       symbol: SYMBOL,
       timeframe: pane.id,
       kind: input.kind,
-      p1: input.p1,
-      p2: input.p2,
+      p1: anchor,
+      p2: isChartIconKind(input.kind) ? anchor : input.p2,
     }
     setDrawings((current) => [...current, optimistic])
     void insertDrawing({
       symbol: SYMBOL,
       timeframe: pane.id,
       kind: input.kind,
-      p1: input.p1,
-      p2: input.p2,
+      p1: anchor,
+      p2: isChartIconKind(input.kind) ? anchor : input.p2,
     })
       .then((saved) => {
         setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
@@ -360,6 +416,77 @@ function DashboardPane({
   const deleteSelectedDrawing = () => {
     if (!selectedDrawingId) return
     onDrawingDelete(selectedDrawingId)
+  }
+
+  const onPolylineComplete = (input: { points: DrawingPoint[] }) => {
+    if (input.points.length < 2) return
+    setDrawTool(null)
+    const first = input.points[0]
+    const last = input.points[input.points.length - 1]
+    const tempId = `temp-${Date.now()}`
+    const optimistic: ChartDrawing = {
+      id: tempId,
+      symbol: SYMBOL,
+      timeframe: pane.id,
+      kind: 'polyline_arrow',
+      p1: first,
+      p2: last,
+      points: input.points,
+      label: '',
+    }
+    setDrawings((current) => [...current, optimistic])
+    void insertPolylineArrow({
+      symbol: SYMBOL,
+      timeframe: pane.id,
+      points: input.points,
+      label: '',
+    })
+      .then((saved) => {
+        setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
+      })
+      .catch(() => {
+        setDrawings((current) => current.filter((d) => d.id !== tempId))
+        toast.error('Failed to save polyline arrow')
+      })
+  }
+
+  const onPolylineChange = (id: string, points: DrawingPoint[]) => {
+    if (points.length < 2) return
+    const first = points[0]
+    const last = points[points.length - 1]
+    setDrawings((current) =>
+      current.map((d) =>
+        d.id === id ? { ...d, points, p1: first, p2: last } : d,
+      ),
+    )
+    queuePolylinePersist(id, points)
+  }
+
+  const onPolylineChangeEnd = (id: string) => {
+    commitPolylinePersist(id)
+  }
+
+  const openLabelEditor = (id: string) => {
+    const drawing = drawings.find((d) => d.id === id)
+    setLabelEditDrawingId(id)
+    setLabelDraft(drawing?.label ?? '')
+  }
+
+  const savePolylineLabel = () => {
+    if (!labelEditDrawingId) return
+    const id = labelEditDrawingId
+    const label = labelDraft
+    setDrawings((current) =>
+      current.map((d) => (d.id === id ? { ...d, label } : d)),
+    )
+    setLabelEditDrawingId(null)
+    if (id.startsWith('temp-')) return
+    void updatePolylineArrow(id, { label }).catch(() => {
+      toast.error('Failed to save label')
+      void loadChartDrawings(SYMBOL, pane.id)
+        .then((rows) => setDrawings(rows))
+        .catch(() => {})
+    })
   }
 
   return (
@@ -425,6 +552,53 @@ function DashboardPane({
               >
                 <Square />
               </Button>
+              <Button
+                variant={drawTool === 'polyline_arrow' ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={
+                  drawTool === 'polyline_arrow' ? 'Cancel polyline arrow' : 'Draw polyline arrow'
+                }
+                aria-pressed={drawTool === 'polyline_arrow'}
+                onClick={() => toggleTool('polyline_arrow')}
+              >
+                <Spline />
+              </Button>
+              {drawTool === 'polyline_arrow' && (
+                <span className="text-xs text-muted-foreground">
+                  Tap points · double-tap final point
+                </span>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={iconToolActive ? 'default' : 'ghost'}
+                    size="icon"
+                    aria-label={iconToolActive ? 'Cancel icon placement' : 'Place chart icon'}
+                    aria-pressed={iconToolActive}
+                  >
+                    <MapPin />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Icons</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {CHART_ICON_DEFINITIONS.map((def) => (
+                    <DropdownMenuItem
+                      key={def.kind}
+                      onClick={() => selectIconTool(def.kind)}
+                      className={drawTool === def.kind ? 'bg-accent' : undefined}
+                    >
+                      {def.label}
+                    </DropdownMenuItem>
+                  ))}
+                  {iconToolActive && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setDrawTool(null)}>Clear tool</DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               {selectedDrawingId && (
                 <Button
                   variant="destructive"
@@ -469,6 +643,8 @@ function DashboardPane({
             axesVisible={axesVisible}
             trendlines={trendlineDrawings}
             rectangles={rectangleDrawings}
+            icons={iconDrawings}
+            polylines={polylineDrawings}
             forceEvents={forceEvents}
             engulfingEvents={engulfingEvents}
             drawTool={drawTool}
@@ -477,9 +653,40 @@ function DashboardPane({
             onDrawingChangeEnd={onDrawingChangeEnd}
             onDrawingDelete={onDrawingDelete}
             onSelectionChange={setSelectedDrawingId}
+            onDrawToolCancel={() => setDrawTool(null)}
+            onPolylineComplete={onPolylineComplete}
+            onPolylineChange={onPolylineChange}
+            onPolylineChangeEnd={onPolylineChangeEnd}
+            onPolylineLabelEdit={openLabelEditor}
           />
         )}
       </div>
+      <Dialog
+        open={labelEditDrawingId != null}
+        onOpenChange={(open) => {
+          if (!open) setLabelEditDrawingId(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Arrow label</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={labelDraft}
+            onChange={(e) => setLabelDraft(e.target.value)}
+            placeholder="Label at arrow head"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') savePolylineLabel()
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLabelEditDrawingId(null)}>
+              Cancel
+            </Button>
+            <Button onClick={savePolylineLabel}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

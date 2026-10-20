@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import {
   loadChartDrawings,
   updateChartDrawing,
+  updatePolylineArrow,
   type ChartDrawing,
   type DrawingPoint,
 } from '../_lib/chart/chart-drawings'
@@ -18,6 +19,7 @@ export function useDebouncedDrawingPersist(
   setDrawings: Dispatch<SetStateAction<ChartDrawing[]>>,
 ) {
   const pendingRef = useRef<Record<string, { p1: DrawingPoint; p2: DrawingPoint }>>({})
+  const polylinePendingRef = useRef<Record<string, DrawingPoint[]>>({})
 
   const persistOne = useCallback(
     (id: string, points: { p1: DrawingPoint; p2: DrawingPoint }) => {
@@ -32,12 +34,29 @@ export function useDebouncedDrawingPersist(
     [timeframe, setDrawings],
   )
 
+  const persistPolylineOne = useCallback(
+    (id: string, points: DrawingPoint[]) => {
+      delete polylinePendingRef.current[id]
+      void updatePolylineArrow(id, { points }).catch(() => {
+        toast.error('Failed to save polyline')
+        void loadChartDrawings(SYMBOL, timeframe)
+          .then((rows) => setDrawings(rows))
+          .catch(() => {})
+      })
+    },
+    [timeframe, setDrawings],
+  )
+
   const flushAll = useCallback(() => {
     const pending = { ...pendingRef.current }
     for (const [id, points] of Object.entries(pending)) {
       persistOne(id, points)
     }
-  }, [persistOne])
+    const polyPending = { ...polylinePendingRef.current }
+    for (const [id, points] of Object.entries(polyPending)) {
+      persistPolylineOne(id, points)
+    }
+  }, [persistOne, persistPolylineOne])
 
   const debouncedFlushAll = useDebounceCallback(flushAll, DRAWING_UPDATE_DEBOUNCE_MS)
 
@@ -64,5 +83,31 @@ export function useDebouncedDrawingPersist(
     [debouncedFlushAll, persistOne],
   )
 
-  return { queuePersist, commitPersist }
+  const queuePolylinePersist = useCallback(
+    (id: string, points: DrawingPoint[]) => {
+      if (id.startsWith('temp-')) return
+      polylinePendingRef.current[id] = points
+      debouncedFlushAll()
+    },
+    [debouncedFlushAll],
+  )
+
+  const commitPolylinePersist = useCallback(
+    (id: string) => {
+      if (id.startsWith('temp-')) return
+      const points = polylinePendingRef.current[id]
+      if (!points) return
+      debouncedFlushAll.cancel()
+      persistPolylineOne(id, points)
+      if (
+        Object.keys(pendingRef.current).length > 0 ||
+        Object.keys(polylinePendingRef.current).length > 0
+      ) {
+        debouncedFlushAll()
+      }
+    },
+    [debouncedFlushAll, persistPolylineOne],
+  )
+
+  return { queuePersist, commitPersist, queuePolylinePersist, commitPolylinePersist }
 }

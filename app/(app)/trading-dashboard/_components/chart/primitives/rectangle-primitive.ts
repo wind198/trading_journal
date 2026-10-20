@@ -8,6 +8,7 @@ import type {
   SeriesType,
   Time,
 } from 'lightweight-charts'
+import { chartXAtTime, type BarTimeSeries } from '../../../_lib/chart/chart-coordinates'
 import type { DrawingPoint } from '../../../_lib/chart/chart-drawings'
 
 export type RectangleDrawing = {
@@ -162,9 +163,10 @@ class RectanglePaneView {
       draft: boolean,
       selected: boolean,
     ) => {
-      const x1 = chart.timeScale().timeToCoordinate(p1.time as Time)
+      const bars = this.source.bars
+      const x1 = chartXAtTime(chart, p1.time, bars)
       const y1 = series.priceToCoordinate(p1.price)
-      const x2 = chart.timeScale().timeToCoordinate(p2.time as Time)
+      const x2 = chartXAtTime(chart, p2.time, bars)
       const y2 = series.priceToCoordinate(p2.price)
       if (x1 == null || y1 == null || x2 == null || y2 == null) return
       rects.push({
@@ -189,7 +191,7 @@ class RectanglePaneView {
     if (draft?.p1 && draft.p2) {
       push('draft', draft.p1, draft.p2, true, false)
     } else if (draft?.p1) {
-      const x = chart.timeScale().timeToCoordinate(draft.p1.time as Time)
+      const x = chartXAtTime(chart, draft.p1.time, this.source.bars)
       const y = series.priceToCoordinate(draft.p1.price)
       if (x != null && y != null) {
         const n = Number(x)
@@ -219,6 +221,7 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
   chart: IChartApi | null = null
   series: ISeriesApi<SeriesType, Time> | null = null
   rects: readonly RectangleDrawing[] = []
+  bars: BarTimeSeries = []
   draft: { p1: DrawingPoint; p2?: DrawingPoint } | null = null
   selectedId: string | null = null
   selectionEnabled = true
@@ -235,6 +238,11 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
 
   setRects(rects: readonly RectangleDrawing[]): void {
     this.rects = rects
+    this.requestUpdate?.()
+  }
+
+  setBars(bars: BarTimeSeries): void {
+    this.bars = bars
     this.requestUpdate?.()
   }
 

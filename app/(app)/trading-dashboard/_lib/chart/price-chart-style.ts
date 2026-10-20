@@ -4,6 +4,8 @@ export const VIEWPORT = {
   visibleBars: 256,
   maxVisibleBars: 1000,
   loadEdge: 50,
+  /** Empty logical bars right of last candle for projection drawings. */
+  futureLogicalBars: 24,
 } as const
 
 export const BOLLINGER = {

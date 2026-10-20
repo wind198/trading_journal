@@ -8,6 +8,7 @@ import type {
   SeriesType,
   Time,
 } from 'lightweight-charts'
+import { chartXAtTime, type BarTimeSeries } from '../../../_lib/chart/chart-coordinates'
 import type { TrendlinePoint } from '../../../_lib/chart/chart-drawings'
 
 export type TrendlineDrawing = {
@@ -156,23 +157,23 @@ class TrendlinePaneView {
       draft: boolean,
       selected: boolean,
     ) => {
+      const bars = this.source.bars
       const { left, right, extended } = extendRight(p1, p2)
-      const lx = chart.timeScale().timeToCoordinate(left.time as Time)
+      const lx = chartXAtTime(chart, left.time, bars)
       const ly = series.priceToCoordinate(left.price)
-      const rx = chart.timeScale().timeToCoordinate(right.time as Time)
+      const rx = chartXAtTime(chart, right.time, bars)
       const ry = series.priceToCoordinate(right.price)
-      const ax = chart.timeScale().timeToCoordinate(p1.time as Time)
+      const ax = chartXAtTime(chart, p1.time, bars)
       const ay = series.priceToCoordinate(p1.price)
-      const bx = chart.timeScale().timeToCoordinate(p2.time as Time)
+      const bx = chartXAtTime(chart, p2.time, bars)
       const by = series.priceToCoordinate(p2.price)
       if (lx == null || ly == null || rx == null || ry == null || ax == null || ay == null || bx == null || by == null) {
         return
       }
-      const exCoord = chart.timeScale().timeToCoordinate(extended.time as Time)
-      const eyCoord = series.priceToCoordinate(extended.price)
-      // Off-scale future time: extrapolate in pixel space (same geometry).
-      const ex = exCoord == null ? rx + (rx - lx) : exCoord
-      const ey = eyCoord == null ? ry + (ry - ly) : eyCoord
+      const ex =
+        chartXAtTime(chart, extended.time, bars) ??
+        Number(rx) + (Number(rx) - Number(lx))
+      const ey = series.priceToCoordinate(extended.price) ?? Number(ry) + (Number(ry) - Number(ly))
       segments.push({
         id,
         x1: Number(lx),
@@ -195,7 +196,7 @@ class TrendlinePaneView {
     if (draft?.p1 && draft.p2) {
       push('draft', draft.p1, draft.p2, true, false)
     } else if (draft?.p1) {
-      const x = chart.timeScale().timeToCoordinate(draft.p1.time as Time)
+      const x = chartXAtTime(chart, draft.p1.time, this.source.bars)
       const y = series.priceToCoordinate(draft.p1.price)
       if (x != null && y != null) {
         segments.push({
@@ -236,6 +237,7 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
   chart: IChartApi | null = null
   series: ISeriesApi<SeriesType, Time> | null = null
   lines: readonly TrendlineDrawing[] = []
+  bars: BarTimeSeries = []
   draft: { p1: TrendlinePoint; p2?: TrendlinePoint } | null = null
   selectedId: string | null = null
   selectionEnabled = true
@@ -253,6 +255,11 @@ export class TrendlinePrimitive implements ISeriesPrimitive<Time> {
 
   setLines(lines: readonly TrendlineDrawing[]): void {
     this.lines = lines
+    this.requestUpdate?.()
+  }
+
+  setBars(bars: BarTimeSeries): void {
+    this.bars = bars
     this.requestUpdate?.()
   }
 
