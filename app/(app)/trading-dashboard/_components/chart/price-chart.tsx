@@ -9,7 +9,7 @@ import {
   type DrawingPoint,
 } from '../../_lib/chart/chart-drawings'
 import { isChartIconKind } from '../../_lib/chart/chart-icons'
-import { timeAtChartX } from '../../_lib/chart/chart-coordinates'
+import { barIntervalSec, timeAtChartX } from '../../_lib/chart/chart-coordinates'
 import {
   formatChartCrosshairTime,
   formatChartTickMark,
@@ -62,15 +62,22 @@ type LogicalRange = { from: number; to: number }
 
 const TAP_MOVE_THRESHOLD_PX = 12
 const TOUCH_HIT_BOOST = 1.75
-const MIN_SHAPE_COMMIT_PX = 4
 const DOUBLE_TAP_MS = 350
 const DOUBLE_TAP_PX = 24
 
 type ShapeDrawTool = 'trendline' | 'rectangle'
-type TouchShapePhase = 'idle' | 'has_p1' | 'dragging_p2'
+type TouchShapePhase = 'idle' | 'has_p1' | 'preview_drag'
 
 function isShapeDrawTool(tool: ChartDrawingKind | null): tool is ShapeDrawTool {
   return tool === 'trendline' || tool === 'rectangle'
+}
+
+function defaultShapePreviewP2(
+  p1: DrawingPoint,
+  bars: readonly { time: number }[],
+): DrawingPoint {
+  const dt = barIntervalSec(bars) ?? 60
+  return { time: p1.time + dt, price: p1.price }
 }
 
 type ChartHandle = {
@@ -195,6 +202,8 @@ export function PriceChart({
   } | null>(null)
   const touchShapePhaseRef = useRef<TouchShapePhase>('idle')
   const touchShapeDragStartRef = useRef<{ x: number; y: number } | null>(null)
+  const shapePreviewP2Ref = useRef<DrawingPoint | null>(null)
+  const shapeP1GestureRef = useRef(false)
   const polylineDraftRef = useRef<DrawingPoint[]>([])
   const lastPolyTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
   const lastLabelTapRef = useRef<{ id: string; time: number; x: number; y: number } | null>(
@@ -327,6 +336,8 @@ export function PriceChart({
     lastLabelTapRef.current = null
     touchShapePhaseRef.current = 'idle'
     touchShapeDragStartRef.current = null
+    shapePreviewP2Ref.current = null
+    shapeP1GestureRef.current = false
     const handle = handleRef.current
     handle?.trendlines.setDraft(null)
     handle?.rectangles.setDraft(null)
@@ -342,12 +353,20 @@ export function PriceChart({
       handle.trendlines.setDraft(draft)
       handle.rectangles.setDraft(null)
       handle.icons.setDraft(null)
-    } else {
+    } else if (tool === 'rectangle') {
       handle.rectangles.setDraft(draft)
       handle.trendlines.setDraft(null)
       handle.icons.setDraft(null)
     }
   }
+
+  const setShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint) => {
+    const preview = p2 ?? shapePreviewP2Ref.current ?? p1
+    shapePreviewP2Ref.current = preview
+    setActiveDraft({ p1, p2: preview })
+  }
+  const setShapeDraftRef = useRef(setShapeDraft)
+  setShapeDraftRef.current = setShapeDraft
 
   useEffect(() => {
     const el = ref.current
@@ -491,6 +510,11 @@ export function PriceChart({
       const isCoarsePointer = (event: PointerEvent) =>
         event.pointerType === 'touch' || pointerCoarseRef.current
 
+      const shapePreviewFollowsPointer = (event?: PointerEvent) => {
+        if (event) return !isCoarsePointer(event)
+        return !pointerCoarseRef.current
+      }
+
       const isDoubleTapAt = (clientX: number, clientY: number) => {
         const prev = lastPolyTapRef.current
         if (!prev) return false
@@ -567,7 +591,7 @@ export function PriceChart({
           const first = draftRef.current
           if (!first) {
             draftRef.current = mapped
-            setActiveDraft({ p1: mapped })
+            setShapeDraft(mapped)
             return
           }
           clearDrafts()
@@ -615,13 +639,14 @@ export function PriceChart({
         if (!tool) return
         const first = draftRef.current
         if (!first) return
+        if (tool && isShapeDrawTool(tool) && !shapePreviewFollowsPointer()) return
         if (!param.point) {
-          setActiveDraft({ p1: first })
+          setShapeDraft(first)
           return
         }
         const hover = pointFromEvent(param)
         if (!hover) return
-        setActiveDraft({ p1: first, p2: hover })
+        setShapeDraft(first, hover)
       }
 
       // Live preview: after p1, rubber-band to cursor/touch.
@@ -674,17 +699,22 @@ export function PriceChart({
           if (touchShapePhaseRef.current === 'idle' || !draftRef.current) {
             draftRef.current = mapped
             touchShapePhaseRef.current = 'has_p1'
-            setActiveDraft({ p1: mapped })
+            shapeP1GestureRef.current = true
+            setShapeDraftRef.current(
+              mapped,
+              defaultShapePreviewP2(mapped, candlesRef.current),
+            )
             skipNextClickRef.current = true
             return
           }
           if (touchShapePhaseRef.current === 'has_p1') {
-            touchShapePhaseRef.current = 'dragging_p2'
+            shapeP1GestureRef.current = false
+            touchShapePhaseRef.current = 'preview_drag'
             touchShapeDragStartRef.current = {
               x: event.clientX,
               y: event.clientY,
             }
-            setActiveDraft({ p1: draftRef.current, p2: mapped })
+            setShapeDraftRef.current(draftRef.current, mapped)
             skipNextClickRef.current = true
           }
         }
@@ -707,15 +737,20 @@ export function PriceChart({
         if (
           tool &&
           isShapeDrawTool(tool) &&
-          touchShapePhaseRef.current === 'dragging_p2' &&
-          draftRef.current
+          isCoarsePointer(event) &&
+          draftRef.current &&
+          (touchShapePhaseRef.current === 'preview_drag' ||
+            (touchShapePhaseRef.current === 'has_p1' && shapeP1GestureRef.current))
         ) {
           const mapped = clickToPoint(handle, point, candlesRef.current)
-          if (mapped) setActiveDraft({ p1: draftRef.current, p2: mapped })
+          if (mapped) setShapeDraftRef.current(draftRef.current, mapped)
           return
         }
 
-        if (draftRef.current) updateDraftPreview({ point })
+        if (draftRef.current) {
+          if (tool && isShapeDrawTool(tool) && !shapePreviewFollowsPointer(event)) return
+          updateDraftPreview({ point })
+        }
       }
 
       const onDrawOverlayPointerUp = (event: PointerEvent) => {
@@ -727,37 +762,49 @@ export function PriceChart({
 
         if (coarseShape) {
           const phase = touchShapePhaseRef.current
+          const tap = tapStartRef.current
+          const gestureMoved =
+            tap != null && tap.pointerId === event.pointerId
+              ? Math.hypot(event.clientX - tap.x, event.clientY - tap.y)
+              : 0
           releaseCapture(event)
           tapStartRef.current = null
           skipNextClickRef.current = true
 
-          if (phase === 'dragging_p2') {
-            const p1 = draftRef.current
-            const p2 = clickToPoint(handle, localPoint(event), candlesRef.current)
-            const dragStart = touchShapeDragStartRef.current
+          const p1 = draftRef.current
+          const mappedP2 = clickToPoint(handle, localPoint(event), candlesRef.current)
+          const p2 = mappedP2 ?? shapePreviewP2Ref.current
+          const kind = shapeTool
+
+          if (phase === 'preview_drag' && p1 && p2) {
             touchShapeDragStartRef.current = null
-            if (p1 && p2 && dragStart) {
-              const moved = Math.hypot(
-                event.clientX - dragStart.x,
-                event.clientY - dragStart.y,
-              )
-              if (moved >= MIN_SHAPE_COMMIT_PX) {
-                const kind = shapeTool
-                clearDrafts()
-                onCompleteRef.current?.({ kind, p1, p2 })
-              } else {
-                touchShapePhaseRef.current = 'has_p1'
-                setActiveDraft({ p1 })
-              }
-            }
+            touchShapePhaseRef.current = 'has_p1'
+            setShapeDraftRef.current(p1, p2)
             syncInteractionLock()
             return
           }
 
-          if (phase === 'has_p1') {
+          if (phase === 'has_p1' && p1 && p2) {
+            if (shapeP1GestureRef.current) {
+              shapeP1GestureRef.current = false
+              setShapeDraftRef.current(p1, p2)
+              syncInteractionLock()
+              return
+            }
+            if (gestureMoved < TAP_MOVE_THRESHOLD_PX) {
+              touchShapePhaseRef.current = 'idle'
+              clearDrafts()
+              onCompleteRef.current?.({ kind, p1, p2 })
+              syncInteractionLock()
+              return
+            }
+            setShapeDraftRef.current(p1, p2)
             syncInteractionLock()
             return
           }
+
+          syncInteractionLock()
+          return
         }
 
         releaseCapture(event)
@@ -784,11 +831,11 @@ export function PriceChart({
       const onDrawOverlayPointerCancel = (event: PointerEvent) => {
         if (!drawToolRef.current) return
         tapStartRef.current = null
-        if (touchShapePhaseRef.current === 'dragging_p2') {
+        if (touchShapePhaseRef.current === 'preview_drag') {
           touchShapePhaseRef.current = 'has_p1'
           touchShapeDragStartRef.current = null
           const p1 = draftRef.current
-          if (p1) setActiveDraft({ p1 })
+          if (p1) setShapeDraftRef.current(p1)
         }
         releaseCapture(event)
         syncInteractionLock()
