@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { IChartApi, ISeriesApi, SeriesType, Time } from 'lightweight-charts'
+import { Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import type { LightweightCandle } from '@/lib/ticks/candles'
 import {
   isPolylineArrowKind,
@@ -227,6 +229,10 @@ export function PriceChart({
   const onPolylineChangeEndRef = useRef(onPolylineChangeEnd)
   const onPolylineLabelEditRef = useRef(onPolylineLabelEdit)
   const [epoch, setEpoch] = useState(0)
+  const [shapeAwaitingP2, setShapeAwaitingP2] = useState(false)
+  const [showCoarseUi, setShowCoarseUi] = useState(false)
+  const setShapeAwaitingP2Ref = useRef(setShapeAwaitingP2)
+  setShapeAwaitingP2Ref.current = setShapeAwaitingP2
   candlesRef.current = candles ?? []
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
@@ -294,6 +300,7 @@ export function PriceChart({
     const mq = window.matchMedia('(pointer: coarse)')
     const update = () => {
       pointerCoarseRef.current = mq.matches
+      setShowCoarseUi(mq.matches)
     }
     update()
     mq.addEventListener('change', update)
@@ -338,6 +345,7 @@ export function PriceChart({
     touchShapeDragStartRef.current = null
     shapePreviewP2Ref.current = null
     shapeP1GestureRef.current = false
+    setShapeAwaitingP2Ref.current(false)
     const handle = handleRef.current
     handle?.trendlines.setDraft(null)
     handle?.rectangles.setDraft(null)
@@ -367,6 +375,16 @@ export function PriceChart({
   }
   const setShapeDraftRef = useRef(setShapeDraft)
   setShapeDraftRef.current = setShapeDraft
+
+  const commitShapeDraft = () => {
+    const tool = drawToolRef.current
+    if (!tool || !isShapeDrawTool(tool)) return
+    const p1 = draftRef.current
+    const p2 = shapePreviewP2Ref.current
+    if (!p1 || !p2) return
+    clearDrafts()
+    onCompleteRef.current?.({ kind: tool, p1, p2 })
+  }
 
   useEffect(() => {
     const el = ref.current
@@ -704,6 +722,7 @@ export function PriceChart({
               mapped,
               defaultShapePreviewP2(mapped, candlesRef.current),
             )
+            setShapeAwaitingP2Ref.current(true)
             skipNextClickRef.current = true
             return
           }
@@ -762,11 +781,6 @@ export function PriceChart({
 
         if (coarseShape) {
           const phase = touchShapePhaseRef.current
-          const tap = tapStartRef.current
-          const gestureMoved =
-            tap != null && tap.pointerId === event.pointerId
-              ? Math.hypot(event.clientX - tap.x, event.clientY - tap.y)
-              : 0
           releaseCapture(event)
           tapStartRef.current = null
           skipNextClickRef.current = true
@@ -774,7 +788,6 @@ export function PriceChart({
           const p1 = draftRef.current
           const mappedP2 = clickToPoint(handle, localPoint(event), candlesRef.current)
           const p2 = mappedP2 ?? shapePreviewP2Ref.current
-          const kind = shapeTool
 
           if (phase === 'preview_drag' && p1 && p2) {
             touchShapeDragStartRef.current = null
@@ -787,17 +800,8 @@ export function PriceChart({
           if (phase === 'has_p1' && p1 && p2) {
             if (shapeP1GestureRef.current) {
               shapeP1GestureRef.current = false
-              setShapeDraftRef.current(p1, p2)
-              syncInteractionLock()
-              return
             }
-            if (gestureMoved < TAP_MOVE_THRESHOLD_PX) {
-              touchShapePhaseRef.current = 'idle'
-              clearDrafts()
-              onCompleteRef.current?.({ kind, p1, p2 })
-              syncInteractionLock()
-              return
-            }
+            touchShapePhaseRef.current = 'has_p1'
             setShapeDraftRef.current(p1, p2)
             syncInteractionLock()
             return
@@ -1246,6 +1250,24 @@ export function PriceChart({
         style={{ pointerEvents: drawTool ? 'auto' : 'none' }}
         aria-hidden={!drawTool}
       />
+      {showCoarseUi &&
+        shapeAwaitingP2 &&
+        drawTool != null &&
+        isShapeDrawTool(drawTool) && (
+          <Button
+            type="button"
+            size="icon"
+            className="absolute bottom-3 right-3 z-20 size-11 touch-manipulation shadow-md"
+            aria-label="Confirm second point"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              commitShapeDraft()
+            }}
+          >
+            <Check className="size-5" />
+          </Button>
+        )}
     </div>
   )
 }

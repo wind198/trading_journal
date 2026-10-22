@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { NotesSidebar } from '../notes/notes-sidebar'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import {
   Dialog,
@@ -68,6 +69,7 @@ import {
   Maximize2,
   Minimize2,
   Minus,
+  NotebookPen,
   Shrink,
   MapPin,
   Spline,
@@ -142,6 +144,7 @@ export function TradingDashboard() {
 function Dashboard() {
   const [expanded, setExpanded] = useState<PaneId | null>(null)
   const [fullScreen, setFullScreen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
   const router = useRouter()
@@ -161,6 +164,15 @@ function Dashboard() {
               Sign out
             </Button>
             <Button
+              variant={notesOpen ? 'secondary' : 'ghost'}
+              size="icon-sm"
+              aria-label={notesOpen ? 'Close notes' : 'Open notes'}
+              aria-pressed={notesOpen}
+              onClick={() => setNotesOpen((open) => !open)}
+            >
+              <NotebookPen />
+            </Button>
+            <Button
               variant="ghost"
               size="icon-sm"
               aria-label="Enter fullscreen"
@@ -171,13 +183,14 @@ function Dashboard() {
           </div>
         </header>
       )}
-      <div
-        className={
-          expanded
-            ? 'flex min-h-0 flex-1 overflow-hidden p-2'
-            : 'grid min-h-0 flex-1 grid-cols-1 grid-rows-4 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2'
-        }
-      >
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          className={
+            expanded
+              ? 'flex h-full min-h-0 overflow-hidden p-2'
+              : 'grid h-full min-h-0 grid-cols-1 grid-rows-4 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2'
+          }
+        >
         {PANES.map((pane) => {
           const isExpanded = expanded === pane.id
           if (expanded && !isExpanded) return null
@@ -205,6 +218,8 @@ function Dashboard() {
             />
           )
         })}
+        </div>
+        {notesOpen && <NotesSidebar symbol={SYMBOL} onClose={() => setNotesOpen(false)} />}
       </div>
       {fullScreen && (
         <Button
