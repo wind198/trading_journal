@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { AppLoadingScreen } from '@/app/(app)/_components/app-loading-screen'
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -24,11 +25,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [router, supabase])
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        Loading…
-      </div>
-    )
+    return <AppLoadingScreen />
   }
 
   return children
