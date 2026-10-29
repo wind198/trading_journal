@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { NotesSidebar } from '../notes/notes-sidebar'
+import { GuidesSidebar } from '../guides/guides-sidebar'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import {
   Dialog,
@@ -71,6 +72,7 @@ import {
   Maximize2,
   Minimize2,
   Minus,
+  ListChecks,
   NotebookPen,
   Shrink,
   MapPin,
@@ -147,6 +149,7 @@ function Dashboard() {
   const [expanded, setExpanded] = useState<PaneId | null>(null)
   const [fullScreen, setFullScreen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
+  const [guidesOpen, setGuidesOpen] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
   const router = useRouter()
@@ -170,9 +173,30 @@ function Dashboard() {
               size="icon-sm"
               aria-label={notesOpen ? 'Close notes' : 'Open notes'}
               aria-pressed={notesOpen}
-              onClick={() => setNotesOpen((open) => !open)}
+              onClick={() => {
+                setNotesOpen((open) => {
+                  const next = !open
+                  if (next) setGuidesOpen(false)
+                  return next
+                })
+              }}
             >
               <NotebookPen />
+            </Button>
+            <Button
+              variant={guidesOpen ? 'secondary' : 'ghost'}
+              size="icon-sm"
+              aria-label={guidesOpen ? 'Close guides' : 'Open guides'}
+              aria-pressed={guidesOpen}
+              onClick={() => {
+                setGuidesOpen((open) => {
+                  const next = !open
+                  if (next) setNotesOpen(false)
+                  return next
+                })
+              }}
+            >
+              <ListChecks />
             </Button>
             <Button
               variant="ghost"
@@ -222,6 +246,7 @@ function Dashboard() {
         })}
         </div>
         {notesOpen && <NotesSidebar symbol={SYMBOL} onClose={() => setNotesOpen(false)} />}
+        {guidesOpen && <GuidesSidebar onClose={() => setGuidesOpen(false)} />}
       </div>
       {fullScreen && (
         <Button
