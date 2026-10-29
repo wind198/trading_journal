@@ -38,7 +38,12 @@ import {
   PolylineArrowPrimitive,
   type PolylineArrowDrawing,
 } from './primitives/polyline-arrow-primitive'
+import { SessionVerticalLinesPrimitive } from './primitives/session-vertical-lines-primitive'
 import { TrendlinePrimitive, type TrendlineDrawing } from './primitives/trendline-primitive'
+
+function usesSessionVerticalGrid(timeframe: string): boolean {
+  return timeframe === '3m' || timeframe === '15m'
+}
 
 export type { ChartType }
 export type DrawTool = ChartDrawingKind | null
@@ -126,6 +131,7 @@ function clickToPoint(
 export function PriceChart({
   candles,
   chartType,
+  timeframe,
   onLoadOlder,
   axesVisible,
   trendlines = [],
@@ -148,6 +154,7 @@ export function PriceChart({
 }: {
   candles: LightweightCandle[]
   chartType: ChartType
+  timeframe: string
   onLoadOlder?: () => void
   axesVisible: boolean
   trendlines?: readonly TrendlineDrawing[]
@@ -397,6 +404,8 @@ export function PriceChart({
     void import('lightweight-charts').then((lwc) => {
       if (cancelled || !ref.current) return
 
+      const sessionGrid = usesSessionVerticalGrid(timeframe)
+
       const created = lwc.createChart(ref.current, {
         autoSize: true,
         layout: {
@@ -404,7 +413,7 @@ export function PriceChart({
           textColor: CHART_THEME.text,
         },
         grid: {
-          vertLines: { color: CHART_THEME.grid },
+          vertLines: { color: CHART_THEME.grid, visible: !sessionGrid },
           horzLines: { color: CHART_THEME.grid },
         },
         localization: {
@@ -477,6 +486,10 @@ export function PriceChart({
       price.attachPrimitive(polylineArrowPrimitive)
       price.attachPrimitive(forceOverlayPrimitive)
       price.attachPrimitive(engulfingOverlayPrimitive)
+
+      if (sessionGrid) {
+        created.panes()[0].attachPrimitive(new SessionVerticalLinesPrimitive())
+      }
 
       let adjusting = false
       created.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -1101,7 +1114,7 @@ export function PriceChart({
       selectedIdRef.current = null
       createdChart?.remove()
     }
-  }, [chartType])
+  }, [chartType, timeframe])
 
   useEffect(() => {
     handleRef.current?.chart.applyOptions({

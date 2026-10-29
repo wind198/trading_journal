@@ -654,6 +654,7 @@ function DashboardPane({
           <PriceChart
             candles={candles}
             chartType={chartType}
+            timeframe={pane.id}
             onLoadOlder={loadOlder}
             axesVisible={axesVisible}
             trendlines={trendlineDrawings}

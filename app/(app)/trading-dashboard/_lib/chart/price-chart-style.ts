@@ -22,6 +22,10 @@ export const BOLLINGER = {
   bandLower: '#00897B',
 } as const
 
+export const SESSION_GRID = {
+  line: '#0052FF',
+} as const
+
 export const CHART_THEME = {
   text: '#050F1A',
   grid: 'rgba(5, 15, 26, 0.06)',
