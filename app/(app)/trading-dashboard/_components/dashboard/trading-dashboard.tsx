@@ -61,7 +61,9 @@ import type { LightweightCandle } from '@/lib/ticks/candles'
 import {
   marketHistoryInfiniteOptions,
   marketRecentQueryOptions,
+  volumeProfileQueryOptions,
 } from '../../_lib/market-queries'
+import { buildVolumeProfile } from '../../_lib/chart/volume-profile'
 import {
   ArrowDown,
   ArrowUp,
@@ -256,6 +258,10 @@ function DashboardPane({
 }) {
   const history = useInfiniteQuery(marketHistoryInfiniteOptions(pane.id))
   const recent = useQuery(marketRecentQueryOptions(pane.id))
+  const volumeProfileQuery = useQuery({
+    ...volumeProfileQueryOptions(),
+    enabled: pane.id === '15m',
+  })
   const loadingOlder = useRef(false)
   const historyBars = useMemo(
     () =>
@@ -293,6 +299,11 @@ function DashboardPane({
     if (!isExpanded || candles.length === 0) return []
     return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
   }, [isExpanded, candles])
+
+  const volumeProfile = useMemo(
+    () => (pane.id === '15m' ? buildVolumeProfile(volumeProfileQuery.data ?? []) : null),
+    [pane.id, volumeProfileQuery.data],
+  )
 
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
@@ -663,6 +674,7 @@ function DashboardPane({
             polylines={polylineDrawings}
             forceEvents={forceEvents}
             engulfingEvents={engulfingEvents}
+            volumeProfile={volumeProfile}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}
             onDrawingChange={onDrawingChange}

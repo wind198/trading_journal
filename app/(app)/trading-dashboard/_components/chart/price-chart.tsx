@@ -1,141 +1,41 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { IChartApi, ISeriesApi, SeriesType, Time } from 'lightweight-charts'
+import type { IChartApi, Time } from 'lightweight-charts'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
-import {
-  isPolylineArrowKind,
-  type ChartDrawingKind,
-  type DrawingPoint,
-} from '../../_lib/chart/chart-drawings'
+import type { ChartDrawingKind, DrawingPoint } from '../../_lib/chart/chart-drawings'
 import { isChartIconKind } from '../../_lib/chart/chart-icons'
-import {
-  barIntervalSec,
-  timeAtChartX,
-  type BarTimeSeries,
-} from '../../_lib/chart/chart-coordinates'
+import type { BarTimeSeries } from '../../_lib/chart/chart-coordinates'
 import {
   chartCoordinateBars,
   futureBarTimesUntilChartZoneEod,
 } from '../../_lib/chart/extend-candles-to-chart-eod'
-import {
-  formatChartCrosshairTime,
-  formatChartTickMark,
-} from '../../_lib/chart/chart-timezone'
-import {
-  BOLLINGER,
-  CANDLE,
-  CHART_THEME,
-  PRICE_FORMAT,
-  VIEWPORT,
-} from '../../_lib/chart/price-chart-style'
+import { VIEWPORT } from '../../_lib/chart/price-chart-style'
 import { bollinger, pricePoint, type ChartType } from '../../_lib/chart/price-chart-series'
+import type { EngulfingOverlayEvent } from './primitives/engulfing-overlay-primitive'
+import type { ForceOverlayEvent } from './primitives/force-overlay-primitive'
+import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
+import type { IconMarkerDrawing } from './primitives/icon-marker-primitive'
+import type { RectangleDrawing } from './primitives/rectangle-primitive'
+import type { PolylineArrowDrawing } from './primitives/polyline-arrow-primitive'
+import type { TrendlineDrawing } from './primitives/trendline-primitive'
 import {
-  EngulfingOverlayPrimitive,
-  type EngulfingOverlayEvent,
-} from './primitives/engulfing-overlay-primitive'
+  bindPriceChartInteraction,
+  isShapeDrawTool,
+  type DrawingDragState,
+  type PolylineDragState,
+  type TouchShapePhase,
+} from './bind-price-chart-interaction'
 import {
-  ForceOverlayPrimitive,
-  type ForceOverlayEvent,
-} from './primitives/force-overlay-primitive'
-import { IconMarkerPrimitive, type IconMarkerDrawing } from './primitives/icon-marker-primitive'
-import { RectanglePrimitive, type RectangleDrawing } from './primitives/rectangle-primitive'
-import {
-  PolylineArrowPrimitive,
-  type PolylineArrowDrawing,
-} from './primitives/polyline-arrow-primitive'
-import { SessionVerticalLinesPrimitive } from './primitives/session-vertical-lines-primitive'
-import { TrendlinePrimitive, type TrendlineDrawing } from './primitives/trendline-primitive'
-
-function usesSessionVerticalGrid(timeframe: string): boolean {
-  return timeframe === '3m' || timeframe === '15m'
-}
+  initPriceChart,
+  syncDrawingBars,
+  type ChartHandle,
+} from './price-chart-handle'
 
 export type { ChartType }
 export type DrawTool = ChartDrawingKind | null
-
-type AnyPrimitive =
-  | TrendlinePrimitive
-  | RectanglePrimitive
-  | IconMarkerPrimitive
-  | PolylineArrowPrimitive
-  | ForceOverlayPrimitive
-  | EngulfingOverlayPrimitive
-
-type PriceSeries = {
-  setData: (data: readonly object[]) => void
-  attachPrimitive: (primitive: AnyPrimitive) => void
-}
-
-type LineSeries = {
-  setData: (data: { time: Time; value: number }[]) => void
-}
-
-type LogicalRange = { from: number; to: number }
-
-const TAP_MOVE_THRESHOLD_PX = 12
-const TOUCH_HIT_BOOST = 1.75
-const DOUBLE_TAP_MS = 350
-const DOUBLE_TAP_PX = 24
-
-type ShapeDrawTool = 'trendline' | 'rectangle'
-type TouchShapePhase = 'idle' | 'has_p1' | 'preview_drag'
-
-function isShapeDrawTool(tool: ChartDrawingKind | null): tool is ShapeDrawTool {
-  return tool === 'trendline' || tool === 'rectangle'
-}
-
-function defaultShapePreviewP2(
-  p1: DrawingPoint,
-  bars: readonly { time: number }[],
-): DrawingPoint {
-  const dt = barIntervalSec(bars) ?? 60
-  return { time: p1.time + dt, price: p1.price }
-}
-
-type ChartHandle = {
-  chart: IChartApi
-  price: PriceSeries & ISeriesApi<SeriesType, Time>
-  upper: LineSeries
-  middle: LineSeries
-  lower: LineSeries
-  trendlines: TrendlinePrimitive
-  rectangles: RectanglePrimitive
-  icons: IconMarkerPrimitive
-  polylines: PolylineArrowPrimitive
-  forceOverlay: ForceOverlayPrimitive
-  engulfingOverlay: EngulfingOverlayPrimitive
-  sessionVerticalLines: SessionVerticalLinesPrimitive | null
-  fitted: boolean
-  firstTime: number | null
-}
-
-function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
-  handle.trendlines.setBars(candles)
-  handle.rectangles.setBars(candles)
-  handle.icons.setBars(candles)
-  handle.polylines.setBars(candles)
-}
-
-/** Resolve click → time/price at cursor (no series or bar-center snap). */
-function clickToPoint(
-  handle: ChartHandle,
-  point: { x: number; y: number },
-  candles: BarTimeSeries | null | undefined,
-): DrawingPoint | null {
-  try {
-    const bars = candles ?? []
-    const timeSec = timeAtChartX(handle.chart, point.x, bars)
-    if (timeSec == null) return null
-    const priceRaw = handle.price.coordinateToPrice(point.y)
-    if (priceRaw == null) return null
-    return { time: timeSec, price: Number(priceRaw) }
-  } catch {
-    return null
-  }
-}
 
 export function PriceChart({
   candles,
@@ -149,6 +49,7 @@ export function PriceChart({
   polylines = [],
   forceEvents = [],
   engulfingEvents = [],
+  volumeProfile = null,
   drawTool = null,
   onDrawingComplete,
   onDrawingChange,
@@ -172,6 +73,7 @@ export function PriceChart({
   polylines?: readonly PolylineArrowDrawing[]
   forceEvents?: readonly ForceOverlayEvent[]
   engulfingEvents?: readonly EngulfingOverlayEvent[]
+  volumeProfile?: VolumeProfileFrame | null
   drawTool?: DrawTool
   onDrawingComplete?: (input: {
     kind: ChartDrawingKind
@@ -197,18 +99,8 @@ export function PriceChart({
   const axesVisibleRef = useRef(axesVisible)
   const drawToolRef = useRef(drawTool)
   const draftRef = useRef<DrawingPoint | null>(null)
-  const dragRef = useRef<{
-    id: string
-    endpoint: 'p1' | 'p2'
-    p1: DrawingPoint
-    p2: DrawingPoint
-    moveWhole: boolean
-  } | null>(null)
-  const polylineDragRef = useRef<{
-    id: string
-    vertexIndex: number
-    points: DrawingPoint[]
-  } | null>(null)
+  const dragRef = useRef<DrawingDragState | null>(null)
+  const polylineDragRef = useRef<PolylineDragState | null>(null)
   const didDragRef = useRef(false)
   const skipNextClickRef = useRef(false)
   const tapStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
@@ -267,15 +159,6 @@ export function PriceChart({
   onPolylineChangeEndRef.current = onPolylineChangeEnd
   onPolylineLabelEditRef.current = onPolylineLabelEdit
 
-  const syncDrawingHitGeometry = () => {
-    const handle = handleRef.current
-    if (!handle) return
-    handle.trendlines.updateAllViews()
-    handle.rectangles.updateAllViews()
-    handle.icons.updateAllViews()
-    handle.polylines.updateAllViews()
-  }
-
   const setPolylineDraft = (
     points: DrawingPoint[],
     previewPoint?: DrawingPoint | null,
@@ -321,24 +204,6 @@ export function PriceChart({
     mq.addEventListener('change', update)
     return () => mq.removeEventListener('change', update)
   }, [])
-
-  const drawingPoints = (id: string): { p1: DrawingPoint; p2: DrawingPoint } | null => {
-    const fromTrend = trendlinesRef.current.find((d) => d.id === id)
-    if (fromTrend) return { p1: fromTrend.p1, p2: fromTrend.p2 }
-    const fromRect = rectanglesRef.current.find((d) => d.id === id)
-    if (fromRect) return { p1: fromRect.p1, p2: fromRect.p2 }
-    const fromIcon = iconsRef.current.find((d) => d.id === id)
-    if (fromIcon) return { p1: fromIcon.p1, p2: fromIcon.p1 }
-    const handle = handleRef.current
-    if (!handle) return null
-    const line = handle.trendlines.getDrawing(id)
-    if (line) return { p1: line.p1, p2: line.p2 }
-    const rect = handle.rectangles.getDrawing(id)
-    if (rect) return { p1: rect.p1, p2: rect.p2 }
-    const icon = handle.icons.getDrawing(id)
-    if (icon) return { p1: icon.p1, p2: icon.p1 }
-    return null
-  }
 
   const selectDrawing = (id: string | null) => {
     const changed = selectedIdRef.current !== id
@@ -412,702 +277,72 @@ export function PriceChart({
     void import('lightweight-charts').then((lwc) => {
       if (cancelled || !ref.current) return
 
-      const sessionGrid = usesSessionVerticalGrid(timeframe)
-
-      const created = lwc.createChart(ref.current, {
-        autoSize: true,
-        layout: {
-          background: { type: lwc.ColorType.Solid, color: 'transparent' },
-          textColor: CHART_THEME.text,
-        },
-        grid: {
-          vertLines: { color: CHART_THEME.grid, visible: !sessionGrid },
-          horzLines: { color: CHART_THEME.grid },
-        },
-        localization: {
-          timeFormatter: (time: Time) => formatChartCrosshairTime(time),
-        },
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-          visible: axesVisibleRef.current,
-          tickMarkFormatter: (time: Time, tickMarkType: number) =>
-            formatChartTickMark(time, tickMarkType),
-        },
-        rightPriceScale: { borderVisible: false, visible: axesVisibleRef.current },
+      const { handle, chartEl } = initPriceChart(lwc, ref.current, {
+        chartType,
+        timeframe,
+        axesVisible: axesVisibleRef.current,
+        onLoadOlder: () => onLoadOlderRef.current?.(),
       })
-      createdChart = created
-
-      const price =
-        chartType === 'candlestick'
-          ? created.addSeries(lwc.CandlestickSeries, {
-              priceFormat: PRICE_FORMAT,
-              upColor: CANDLE.up,
-              downColor: CANDLE.down,
-              borderUpColor: CANDLE.borderUp,
-              borderDownColor: CANDLE.borderDown,
-              wickUpColor: CANDLE.wickUp,
-              wickDownColor: CANDLE.wickDown,
-            })
-          : chartType === 'bar'
-            ? created.addSeries(lwc.BarSeries, {
-                priceFormat: PRICE_FORMAT,
-                upColor: CANDLE.up,
-                downColor: CANDLE.down,
-              })
-            : chartType === 'area'
-              ? created.addSeries(lwc.AreaSeries, {
-                  priceFormat: PRICE_FORMAT,
-                  lineColor: CHART_THEME.priceLine,
-                  topColor: CHART_THEME.areaTop,
-                  bottomColor: CHART_THEME.areaBottom,
-                })
-              : created.addSeries(lwc.LineSeries, {
-                  priceFormat: PRICE_FORMAT,
-                  color: CHART_THEME.priceLine,
-                  lineWidth: 2,
-                })
-
-      const line = (color: string) =>
-        created.addSeries(lwc.LineSeries, {
-          color,
-          lineWidth: 1,
-          priceFormat: PRICE_FORMAT,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        })
+      createdChart = handle.chart
 
       if (cancelled) {
-        created.remove()
+        handle.chart.remove()
         return
       }
 
-      const trendlinePrimitive = new TrendlinePrimitive([])
-      const rectanglePrimitive = new RectanglePrimitive([])
-      const iconMarkerPrimitive = new IconMarkerPrimitive([])
-      const polylineArrowPrimitive = new PolylineArrowPrimitive([])
-      const forceOverlayPrimitive = new ForceOverlayPrimitive([])
-      const engulfingOverlayPrimitive = new EngulfingOverlayPrimitive([])
-      price.attachPrimitive(trendlinePrimitive)
-      price.attachPrimitive(rectanglePrimitive)
-      price.attachPrimitive(iconMarkerPrimitive)
-      price.attachPrimitive(polylineArrowPrimitive)
-      price.attachPrimitive(forceOverlayPrimitive)
-      price.attachPrimitive(engulfingOverlayPrimitive)
-
-      const sessionVerticalLinesPrimitive = sessionGrid
-        ? new SessionVerticalLinesPrimitive()
-        : null
-      if (sessionVerticalLinesPrimitive) {
-        created.panes()[0].attachPrimitive(sessionVerticalLinesPrimitive)
-      }
-
-      let adjusting = false
-      created.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (!range || adjusting) return
-        if (range.to - range.from > VIEWPORT.maxVisibleBars) {
-          adjusting = true
-          created.timeScale().setVisibleLogicalRange({
-            from: range.to - VIEWPORT.maxVisibleBars,
-            to: range.to,
-          })
-          adjusting = false
-          return
-        }
-        if (range.from < VIEWPORT.loadEdge) onLoadOlderRef.current?.()
-      })
-
-      const handle: ChartHandle = {
-        chart: created,
-        price: price as unknown as PriceSeries & ISeriesApi<SeriesType, Time>,
-        upper: line(BOLLINGER.bandUpper) as LineSeries,
-        middle: line(BOLLINGER.bandMiddle) as LineSeries,
-        lower: line(BOLLINGER.bandLower) as LineSeries,
-        trendlines: trendlinePrimitive,
-        rectangles: rectanglePrimitive,
-        icons: iconMarkerPrimitive,
-        polylines: polylineArrowPrimitive,
-        forceOverlay: forceOverlayPrimitive,
-        engulfingOverlay: engulfingOverlayPrimitive,
-        sessionVerticalLines: sessionVerticalLinesPrimitive,
-        fitted: false,
-        firstTime: null,
-      }
       handleRef.current = handle
       syncDrawingBars(handle, candlesRef.current)
-
-      const pointFromEvent = (param: { point?: { x: number; y: number } }) => {
-        if (!param.point) return null
-        return clickToPoint(handle, param.point, candlesRef.current)
-      }
-
-      const applyPointerHitBoost = (event: PointerEvent) => {
-        const boost =
-          event.pointerType === 'touch' || pointerCoarseRef.current ? TOUCH_HIT_BOOST : 1
-        handle.trendlines.setHitBoost(boost)
-        handle.rectangles.setHitBoost(boost)
-        handle.icons.setHitBoost(boost)
-        handle.polylines.setHitBoost(boost)
-      }
-
-      const isCoarsePointer = (event: PointerEvent) =>
-        event.pointerType === 'touch' || pointerCoarseRef.current
-
-      const shapePreviewFollowsPointer = (event?: PointerEvent) => {
-        if (event) return !isCoarsePointer(event)
-        return !pointerCoarseRef.current
-      }
-
-      const isDoubleTapAt = (clientX: number, clientY: number) => {
-        const prev = lastPolyTapRef.current
-        if (!prev) return false
-        const dt = Date.now() - prev.time
-        const dist = Math.hypot(clientX - prev.x, clientY - prev.y)
-        return dt <= DOUBLE_TAP_MS && dist <= DOUBLE_TAP_PX
-      }
-
-      const tryOpenLabelEditor = (
-        clientX: number,
-        clientY: number,
-        polylineId: string,
-      ) => {
-        const prev = lastLabelTapRef.current
-        const now = Date.now()
-        if (
-          prev &&
-          prev.id === polylineId &&
-          now - prev.time <= DOUBLE_TAP_MS &&
-          Math.hypot(clientX - prev.x, clientY - prev.y) <= DOUBLE_TAP_PX
-        ) {
-          lastLabelTapRef.current = null
-          onPolylineLabelEditRef.current?.(polylineId)
-          return true
-        }
-        lastLabelTapRef.current = { id: polylineId, time: now, x: clientX, y: clientY }
-        return false
-      }
-
-      const handlePolylinePlacement = (
-        point: { x: number; y: number },
-        clientX: number,
-        clientY: number,
-      ) => {
-        const mapped = clickToPoint(handle, point, candlesRef.current)
-        if (!mapped) return
-
-        if (isDoubleTapAt(clientX, clientY)) {
-          lastPolyTapRef.current = null
-          const points = [...polylineDraftRef.current, mapped]
-          if (points.length >= 2) {
-            onPolylineCompleteRef.current?.({ points })
-            clearDrafts()
-          }
-          return
-        }
-
-        polylineDraftRef.current = [...polylineDraftRef.current, mapped]
-        setPolylineDraft(polylineDraftRef.current)
-        lastPolyTapRef.current = { time: Date.now(), x: clientX, y: clientY }
-      }
-
-      const handleChartTap = (
-        point: { x: number; y: number },
-        clientX?: number,
-        clientY?: number,
-      ) => {
-        syncDrawingHitGeometry()
-        const tool = drawToolRef.current
-        if (tool) {
-          if (isShapeDrawTool(tool) && pointerCoarseRef.current) return
-          const mapped = clickToPoint(handle, point, candlesRef.current)
-          if (!mapped) return
-          if (isChartIconKind(tool)) {
-            clearDrafts()
-            onCompleteRef.current?.({ kind: tool, p1: mapped, p2: mapped })
-            return
-          }
-          if (isPolylineArrowKind(tool)) {
-            if (clientX == null || clientY == null) return
-            handlePolylinePlacement(point, clientX, clientY)
-            return
-          }
-          const first = draftRef.current
-          if (!first) {
-            draftRef.current = mapped
-            setShapeDraft(mapped)
-            return
-          }
-          clearDrafts()
-          onCompleteRef.current?.({ kind: tool, p1: first, p2: mapped })
-          return
-        }
-        const lineHit = handle.trendlines.hitTest(point.x, point.y)
-        const rectHit = handle.rectangles.hitTest(point.x, point.y)
-        const iconHit = handle.icons.hitTest(point.x, point.y)
-        const polyHit = handle.polylines.hitTest(point.x, point.y)
-        const hit = [lineHit, rectHit, iconHit, polyHit]
-          .filter((item): item is NonNullable<typeof item> => item != null)
-          .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))[0]
-        const hitId = hit?.externalId ?? null
-        if (
-          hitId &&
-          polyHit?.externalId === hitId &&
-          clientX != null &&
-          clientY != null &&
-          tryOpenLabelEditor(clientX, clientY, hitId)
-        ) {
-          selectDrawing(hitId)
-          return
-        }
-        selectDrawing(hitId)
-      }
-
-      created.subscribeClick((param) => {
-        if (!param.point) return
-        if (drawToolRef.current) return
-        if (skipNextClickRef.current) {
-          skipNextClickRef.current = false
-          return
-        }
-        if (didDragRef.current) {
-          didDragRef.current = false
-          return
-        }
-        handleChartTap(param.point, param.point.x, param.point.y)
+      removePointerHandlers = bindPriceChartInteraction({
+        handle,
+        chartEl,
+        overlayEl: drawOverlayRef.current,
+        refs: {
+          drawToolRef,
+          draftRef,
+          dragRef,
+          polylineDragRef,
+          didDragRef,
+          skipNextClickRef,
+          tapStartRef,
+          iconPressRef,
+          touchShapePhaseRef,
+          touchShapeDragStartRef,
+          shapePreviewP2Ref,
+          shapeP1GestureRef,
+          polylineDraftRef,
+          lastPolyTapRef,
+          lastLabelTapRef,
+          pointerCoarseRef,
+          pointerCaptureElRef,
+          chartElRef,
+          selectedIdRef,
+          candlesRef,
+          trendlinesRef,
+          rectanglesRef,
+          iconsRef,
+          setShapeAwaitingP2Ref,
+          setShapeDraftRef,
+          onCompleteRef,
+          onChangeRef,
+          onChangeEndRef,
+          onPolylineCompleteRef,
+          onPolylineChangeRef,
+          onPolylineChangeEndRef,
+          onPolylineLabelEditRef,
+        },
+        helpers: {
+          clearDrafts,
+          selectDrawing,
+          setShapeDraft,
+          syncInteractionLock,
+          setPolylineDraft,
+          syncDrawOverlay,
+        },
       })
 
-      const updateDraftPreview = (param: { point?: { x: number; y: number } }) => {
-        const tool = drawToolRef.current
-        if (tool && isPolylineArrowKind(tool)) return
-        if (!tool) return
-        const first = draftRef.current
-        if (!first) return
-        if (tool && isShapeDrawTool(tool) && !shapePreviewFollowsPointer()) return
-        if (!param.point) {
-          setShapeDraft(first)
-          return
-        }
-        const hover = pointFromEvent(param)
-        if (!hover) return
-        setShapeDraft(first, hover)
-      }
-
-      // Live preview: after p1, rubber-band to cursor/touch.
-      created.subscribeCrosshairMove(updateDraftPreview)
-
-      const chartEl = created.chartElement()
-      chartElRef.current = chartEl
-      chartEl.style.touchAction = 'manipulation'
-
-      const localPoint = (event: PointerEvent) => {
-        const rect = chartEl.getBoundingClientRect()
-        return { x: event.clientX - rect.left, y: event.clientY - rect.top }
-      }
-
-      const drawOverlayEl = drawOverlayRef.current
-
-      const setCapture = (event: PointerEvent, el: HTMLElement) => {
-        el.setPointerCapture(event.pointerId)
-        pointerCaptureElRef.current = el
-      }
-
-      const releaseCapture = (event: PointerEvent) => {
-        const el = pointerCaptureElRef.current ?? chartEl
-        pointerCaptureElRef.current = null
-        try {
-          el.releasePointerCapture(event.pointerId)
-        } catch {
-          /* lost capture */
-        }
-      }
-
-      const onDrawOverlayPointerDown = (event: PointerEvent) => {
-        if (!drawToolRef.current) return
-        applyPointerHitBoost(event)
-        tapStartRef.current = {
-          x: event.clientX,
-          y: event.clientY,
-          pointerId: event.pointerId,
-        }
-        event.preventDefault()
-        if (drawOverlayEl) setCapture(event, drawOverlayEl)
-        syncInteractionLock()
-
-        const tool = drawToolRef.current
-        if (tool && isPolylineArrowKind(tool)) return
-        if (isCoarsePointer(event) && tool && isShapeDrawTool(tool)) {
-          const mapped = clickToPoint(handle, localPoint(event), candlesRef.current)
-          if (!mapped) return
-
-          if (touchShapePhaseRef.current === 'idle' || !draftRef.current) {
-            draftRef.current = mapped
-            touchShapePhaseRef.current = 'has_p1'
-            shapeP1GestureRef.current = true
-            setShapeDraftRef.current(
-              mapped,
-              defaultShapePreviewP2(mapped, candlesRef.current),
-            )
-            setShapeAwaitingP2Ref.current(true)
-            skipNextClickRef.current = true
-            return
-          }
-          if (touchShapePhaseRef.current === 'has_p1') {
-            shapeP1GestureRef.current = false
-            touchShapePhaseRef.current = 'preview_drag'
-            touchShapeDragStartRef.current = {
-              x: event.clientX,
-              y: event.clientY,
-            }
-            setShapeDraftRef.current(draftRef.current, mapped)
-            skipNextClickRef.current = true
-          }
-        }
-      }
-
-      const onDrawOverlayPointerMove = (event: PointerEvent) => {
-        if (!drawToolRef.current) return
-        const point = localPoint(event)
-        const tool = drawToolRef.current
-
-        if (tool && isPolylineArrowKind(tool)) {
-          const pts = polylineDraftRef.current
-          if (pts.length === 0) return
-          const hover = clickToPoint(handle, point, candlesRef.current)
-          if (!hover) return
-          setPolylineDraft(pts, hover)
-          return
-        }
-
-        if (
-          tool &&
-          isShapeDrawTool(tool) &&
-          isCoarsePointer(event) &&
-          draftRef.current &&
-          (touchShapePhaseRef.current === 'preview_drag' ||
-            (touchShapePhaseRef.current === 'has_p1' && shapeP1GestureRef.current))
-        ) {
-          const mapped = clickToPoint(handle, point, candlesRef.current)
-          if (mapped) setShapeDraftRef.current(draftRef.current, mapped)
-          return
-        }
-
-        if (draftRef.current) {
-          if (tool && isShapeDrawTool(tool) && !shapePreviewFollowsPointer(event)) return
-          updateDraftPreview({ point })
-        }
-      }
-
-      const onDrawOverlayPointerUp = (event: PointerEvent) => {
-        if (!drawToolRef.current) return
-
-        const shapeTool = drawToolRef.current
-        const coarseShape =
-          shapeTool && isShapeDrawTool(shapeTool) && isCoarsePointer(event)
-
-        if (coarseShape) {
-          const phase = touchShapePhaseRef.current
-          releaseCapture(event)
-          tapStartRef.current = null
-          skipNextClickRef.current = true
-
-          const p1 = draftRef.current
-          const mappedP2 = clickToPoint(handle, localPoint(event), candlesRef.current)
-          const p2 = mappedP2 ?? shapePreviewP2Ref.current
-
-          if (phase === 'preview_drag' && p1 && p2) {
-            touchShapeDragStartRef.current = null
-            touchShapePhaseRef.current = 'has_p1'
-            setShapeDraftRef.current(p1, p2)
-            syncInteractionLock()
-            return
-          }
-
-          if (phase === 'has_p1' && p1 && p2) {
-            if (shapeP1GestureRef.current) {
-              shapeP1GestureRef.current = false
-            }
-            touchShapePhaseRef.current = 'has_p1'
-            setShapeDraftRef.current(p1, p2)
-            syncInteractionLock()
-            return
-          }
-
-          syncInteractionLock()
-          return
-        }
-
-        releaseCapture(event)
-
-        const tap = tapStartRef.current
-        tapStartRef.current = null
-        if (!tap || tap.pointerId !== event.pointerId) return
-
-        const moved = Math.hypot(event.clientX - tap.x, event.clientY - tap.y)
-        const tool = drawToolRef.current
-        if (tool && isPolylineArrowKind(tool)) {
-          skipNextClickRef.current = true
-          handleChartTap(localPoint(event), event.clientX, event.clientY)
-          syncInteractionLock()
-          return
-        }
-        if (moved > TAP_MOVE_THRESHOLD_PX) return
-
-        skipNextClickRef.current = true
-        handleChartTap(localPoint(event), event.clientX, event.clientY)
-        syncInteractionLock()
-      }
-
-      const onDrawOverlayPointerCancel = (event: PointerEvent) => {
-        if (!drawToolRef.current) return
-        tapStartRef.current = null
-        if (touchShapePhaseRef.current === 'preview_drag') {
-          touchShapePhaseRef.current = 'has_p1'
-          touchShapeDragStartRef.current = null
-          const p1 = draftRef.current
-          if (p1) setShapeDraftRef.current(p1)
-        }
-        releaseCapture(event)
-        syncInteractionLock()
-      }
-
-      const onChartPointerDown = (event: PointerEvent) => {
-        if (drawToolRef.current) return
-        applyPointerHitBoost(event)
-        tapStartRef.current = {
-          x: event.clientX,
-          y: event.clientY,
-          pointerId: event.pointerId,
-        }
-
-        syncDrawingHitGeometry()
-        const point = localPoint(event)
-        const iconHit = handle.icons.hitTest(point.x, point.y)
-        if (iconHit?.externalId && !iconHit.externalId.startsWith('temp-')) {
-          selectDrawing(iconHit.externalId)
-          iconPressRef.current = {
-            id: iconHit.externalId,
-            x: event.clientX,
-            y: event.clientY,
-            pointerId: event.pointerId,
-          }
-          return
-        }
-
-        const selectedId = selectedIdRef.current
-        if (!selectedId || selectedId.startsWith('temp-')) return
-        const polyAnchor = handle.polylines.hitTestAnchor(point.x, point.y)
-        if (polyAnchor && polyAnchor.id === selectedId) {
-          const poly = handle.polylines.getDrawing(selectedId)
-          if (poly && poly.points.length >= 2) {
-            event.preventDefault()
-            polylineDragRef.current = {
-              id: selectedId,
-              vertexIndex: polyAnchor.vertexIndex,
-              points: poly.points.map((p) => ({ ...p })),
-            }
-            setCapture(event, chartEl)
-            syncInteractionLock()
-            return
-          }
-        }
-
-        let anchor =
-          handle.trendlines.hitTestAnchor(point.x, point.y) ??
-          handle.rectangles.hitTestAnchor(point.x, point.y) ??
-          handle.icons.hitTestAnchor(point.x, point.y)
-        if (!anchor || anchor.id !== selectedId) return
-        const points = drawingPoints(anchor.id)
-        if (!points) return
-        const moveWhole = handle.icons.getDrawing(anchor.id) != null
-        event.preventDefault()
-        dragRef.current = {
-          id: anchor.id,
-          endpoint: anchor.endpoint,
-          p1: points.p1,
-          p2: points.p2,
-          moveWhole,
-        }
-        setCapture(event, chartEl)
-        syncInteractionLock()
-      }
-
-      const onChartPointerMove = (event: PointerEvent) => {
-        if (drawToolRef.current) return
-        const point = localPoint(event)
-        const press = iconPressRef.current
-        if (
-          !dragRef.current &&
-          press &&
-          press.pointerId === event.pointerId
-        ) {
-          const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y)
-          if (moved > TAP_MOVE_THRESHOLD_PX) {
-            const points = drawingPoints(press.id)
-            if (points) {
-              didDragRef.current = true
-              dragRef.current = {
-                id: press.id,
-                endpoint: 'p1',
-                p1: points.p1,
-                p2: points.p2,
-                moveWhole: true,
-              }
-              iconPressRef.current = null
-              setCapture(event, chartEl)
-              syncInteractionLock()
-            }
-          }
-        }
-
-        const polyDrag = polylineDragRef.current
-        if (polyDrag) {
-          const next = clickToPoint(handle, point, candlesRef.current)
-          if (!next) return
-          didDragRef.current = true
-          const points = polyDrag.points.map((p) => ({ ...p }))
-          points[polyDrag.vertexIndex] = next
-          polyDrag.points = points
-          onPolylineChangeRef.current?.(polyDrag.id, points)
-          return
-        }
-
-        const drag = dragRef.current
-        if (drag) {
-          const next = clickToPoint(handle, point, candlesRef.current)
-          if (!next) return
-          didDragRef.current = true
-          if (drag.moveWhole) {
-            drag.p1 = next
-            drag.p2 = next
-            onChangeRef.current?.(drag.id, next, next)
-          } else {
-            const p1 = drag.endpoint === 'p1' ? next : drag.p1
-            const p2 = drag.endpoint === 'p2' ? next : drag.p2
-            drag.p1 = p1
-            drag.p2 = p2
-            onChangeRef.current?.(drag.id, p1, p2)
-          }
-          return
-        }
-      }
-
-      const onChartPointerUp = (event: PointerEvent) => {
-        if (drawToolRef.current) return
-        iconPressRef.current = null
-        const polyDrag = polylineDragRef.current
-        if (polyDrag) {
-          const id = polyDrag.id
-          polylineDragRef.current = null
-          releaseCapture(event)
-          syncInteractionLock()
-          onPolylineChangeEndRef.current?.(id)
-          tapStartRef.current = null
-          return
-        }
-        const drag = dragRef.current
-        if (drag) {
-          const id = drag.id
-          dragRef.current = null
-          releaseCapture(event)
-          syncInteractionLock()
-          onChangeEndRef.current?.(id)
-          tapStartRef.current = null
-          return
-        }
-
-        releaseCapture(event)
-
-        const tap = tapStartRef.current
-        tapStartRef.current = null
-        if (!tap || tap.pointerId !== event.pointerId) return
-
-        const moved = Math.hypot(event.clientX - tap.x, event.clientY - tap.y)
-        if (moved > TAP_MOVE_THRESHOLD_PX) return
-
-        skipNextClickRef.current = true
-        handleChartTap(localPoint(event), event.clientX, event.clientY)
-        syncInteractionLock()
-      }
-
-      const onDoubleClick = (event: MouseEvent) => {
-        if (drawToolRef.current) return
-        const target = event.target as HTMLElement | null
-        if (
-          target &&
-          (target.tagName === 'INPUT' ||
-            target.tagName === 'TEXTAREA' ||
-            target.isContentEditable)
-        ) {
-          return
-        }
-        syncDrawingHitGeometry()
-        const point = localPoint(event as unknown as PointerEvent)
-        const polyHit = handle.polylines.hitTest(point.x, point.y)
-        if (!polyHit?.externalId) return
-        event.preventDefault()
-        selectDrawing(polyHit.externalId)
-        onPolylineLabelEditRef.current?.(polyHit.externalId)
-      }
-
-      const onChartPointerCancel = (event: PointerEvent) => {
-        if (drawToolRef.current) return
-        tapStartRef.current = null
-        iconPressRef.current = null
-        if (polylineDragRef.current) {
-          const id = polylineDragRef.current.id
-          polylineDragRef.current = null
-          releaseCapture(event)
-          syncInteractionLock()
-          onPolylineChangeEndRef.current?.(id)
-          return
-        }
-        if (!dragRef.current) {
-          releaseCapture(event)
-          syncInteractionLock()
-          return
-        }
-        const id = dragRef.current.id
-        dragRef.current = null
-        releaseCapture(event)
-        syncInteractionLock()
-        onChangeEndRef.current?.(id)
-      }
-
-      const pointerOpts: AddEventListenerOptions = { passive: false }
-      chartEl.addEventListener('pointerdown', onChartPointerDown, pointerOpts)
-      chartEl.addEventListener('pointermove', onChartPointerMove)
-      chartEl.addEventListener('pointerup', onChartPointerUp, pointerOpts)
-      chartEl.addEventListener('pointercancel', onChartPointerCancel, pointerOpts)
-      chartEl.addEventListener('dblclick', onDoubleClick)
-      if (drawOverlayEl) {
-        drawOverlayEl.addEventListener('pointerdown', onDrawOverlayPointerDown, pointerOpts)
-        drawOverlayEl.addEventListener('pointermove', onDrawOverlayPointerMove)
-        drawOverlayEl.addEventListener('pointerup', onDrawOverlayPointerUp, pointerOpts)
-        drawOverlayEl.addEventListener('pointercancel', onDrawOverlayPointerCancel, pointerOpts)
-      }
-      syncDrawOverlay()
-      removePointerHandlers = () => {
-        chartElRef.current = null
-        pointerCaptureElRef.current = null
-        chartEl.removeEventListener('pointerdown', onChartPointerDown, pointerOpts)
-        chartEl.removeEventListener('pointermove', onChartPointerMove)
-        chartEl.removeEventListener('pointerup', onChartPointerUp, pointerOpts)
-        chartEl.removeEventListener('pointercancel', onChartPointerCancel, pointerOpts)
-        chartEl.removeEventListener('dblclick', onDoubleClick)
-        if (drawOverlayEl) {
-          drawOverlayEl.removeEventListener('pointerdown', onDrawOverlayPointerDown, pointerOpts)
-          drawOverlayEl.removeEventListener('pointermove', onDrawOverlayPointerMove)
-          drawOverlayEl.removeEventListener('pointerup', onDrawOverlayPointerUp, pointerOpts)
-          drawOverlayEl.removeEventListener(
-            'pointercancel',
-            onDrawOverlayPointerCancel,
-            pointerOpts,
-          )
-        }
-      }
       if (cancelled) {
         removePointerHandlers()
-        created.remove()
+        handle.chart.remove()
         return
       }
 
@@ -1172,11 +407,16 @@ export function PriceChart({
   }, [engulfingEvents, epoch])
 
   useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.volumeProfile?.setProfile(volumeProfile)
+  }, [volumeProfile, epoch])
+
+  useEffect(() => {
     clearDrafts()
     if (drawTool) selectDrawing(null)
   }, [drawTool, epoch])
 
-  // Freeze pan/zoom/crosshair while placing or dragging endpoints.
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
@@ -1255,9 +495,9 @@ export function PriceChart({
     handle.upper.setData(bands.upper)
     handle.middle.setData(bands.middle)
     handle.lower.setData(bands.lower)
-    // Re-apply after setData so overlay coords resolve on first paint.
     handle.forceOverlay.setEvents(forceEvents)
     handle.engulfingOverlay.setEvents(engulfingEvents)
+    handle.volumeProfile?.setProfile(volumeProfile)
     syncDrawingBars(handle, coordBars)
     handle.sessionVerticalLines?.setBars(coordBars)
     handle.firstTime = coordBars[0].time
@@ -1273,7 +513,7 @@ export function PriceChart({
         scale.setVisibleLogicalRange(range)
       })
     }
-  }, [candles, timeframe, chartType, epoch, forceEvents, engulfingEvents])
+  }, [candles, timeframe, chartType, epoch, forceEvents, engulfingEvents, volumeProfile])
 
   return (
     <div className="relative h-full min-h-0 w-full">
