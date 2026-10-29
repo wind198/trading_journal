@@ -99,6 +99,7 @@ type ChartHandle = {
   polylines: PolylineArrowPrimitive
   forceOverlay: ForceOverlayPrimitive
   engulfingOverlay: EngulfingOverlayPrimitive
+  sessionVerticalLines: SessionVerticalLinesPrimitive | null
   fitted: boolean
   firstTime: number | null
 }
@@ -130,6 +131,7 @@ function clickToPoint(
 
 export function PriceChart({
   candles,
+  realCandles,
   chartType,
   timeframe,
   onLoadOlder,
@@ -153,6 +155,8 @@ export function PriceChart({
   onPolylineLabelEdit,
 }: {
   candles: LightweightCandle[]
+  /** Bars without EOD stubs; defaults to `candles`. Used for Bollinger only. */
+  realCandles?: LightweightCandle[]
   chartType: ChartType
   timeframe: string
   onLoadOlder?: () => void
@@ -184,6 +188,7 @@ export function PriceChart({
   const pointerCaptureElRef = useRef<HTMLElement | null>(null)
   const handleRef = useRef<ChartHandle | null>(null)
   const candlesRef = useRef<readonly LightweightCandle[]>(candles ?? [])
+  const realCandlesRef = useRef<readonly LightweightCandle[]>(real ?? [])
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
   const drawToolRef = useRef(drawTool)
@@ -241,6 +246,7 @@ export function PriceChart({
   const setShapeAwaitingP2Ref = useRef(setShapeAwaitingP2)
   setShapeAwaitingP2Ref.current = setShapeAwaitingP2
   candlesRef.current = candles ?? []
+  realCandlesRef.current = realCandles ?? candles ?? []
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
   iconsRef.current = icons
@@ -487,8 +493,11 @@ export function PriceChart({
       price.attachPrimitive(forceOverlayPrimitive)
       price.attachPrimitive(engulfingOverlayPrimitive)
 
-      if (sessionGrid) {
-        created.panes()[0].attachPrimitive(new SessionVerticalLinesPrimitive())
+      const sessionVerticalLinesPrimitive = sessionGrid
+        ? new SessionVerticalLinesPrimitive()
+        : null
+      if (sessionVerticalLinesPrimitive) {
+        created.panes()[0].attachPrimitive(sessionVerticalLinesPrimitive)
       }
 
       let adjusting = false
@@ -518,6 +527,7 @@ export function PriceChart({
         polylines: polylineArrowPrimitive,
         forceOverlay: forceOverlayPrimitive,
         engulfingOverlay: engulfingOverlayPrimitive,
+        sessionVerticalLines: sessionVerticalLinesPrimitive,
         fitted: false,
         firstTime: null,
       }
@@ -1224,26 +1234,47 @@ export function PriceChart({
     const handle = handleRef.current
     if (!handle || candles.length === 0) return
 
+    const display = candles
+    const realBars = realCandlesRef.current
+    const realLen = realBars.length
+    if (realLen === 0) return
+
     const scale = handle.chart.timeScale()
     const keep = handle.fitted ? scale.getVisibleLogicalRange() : null
     const previousFirst = handle.firstTime
     const prepended =
-      previousFirst == null ? 0 : candles.filter((bar) => bar.time < previousFirst).length
+      previousFirst == null ? 0 : display.filter((bar) => bar.time < previousFirst).length
 
-    const bands = bollinger(candles)
-    handle.price.setData(candles.map((bar, index) => pricePoint(bar, bands.levels[index], chartType)))
-    handle.upper.setData(bands.upper)
-    handle.middle.setData(bands.middle)
-    handle.lower.setData(bands.lower)
+    const bands = bollinger(realBars)
+    const lastLevel = bands.levels[realLen - 1] ?? null
+    handle.price.setData(
+      display.map((bar, index) =>
+        pricePoint(bar, index < realLen ? bands.levels[index] : lastLevel, chartType),
+      ),
+    )
+
+    const padBand = (series: { time: Time; value: number }[]) => {
+      if (display.length <= realLen || series.length === 0) return series
+      const last = series[series.length - 1]
+      const out = [...series]
+      for (let i = realLen; i < display.length; i++) {
+        out.push({ time: display[i].time as Time, value: last.value })
+      }
+      return out
+    }
+    handle.upper.setData(padBand(bands.upper))
+    handle.middle.setData(padBand(bands.middle))
+    handle.lower.setData(padBand(bands.lower))
     // Re-apply after setData so overlay coords resolve on first paint.
     handle.forceOverlay.setEvents(forceEvents)
     handle.engulfingOverlay.setEvents(engulfingEvents)
-    syncDrawingBars(handle, candles)
-    handle.firstTime = candles[0].time
+    syncDrawingBars(handle, display)
+    handle.sessionVerticalLines?.setBars(display)
+    handle.firstTime = display[0].time
     if (keep) {
       scale.setVisibleLogicalRange({ from: keep.from + prepended, to: keep.to + prepended })
     } else {
-      const to = candles.length + VIEWPORT.futureLogicalBars
+      const to = display.length
       const range = { from: Math.max(0, to - VIEWPORT.visibleBars), to }
       scale.setVisibleLogicalRange(range)
       handle.fitted = true
@@ -1252,7 +1283,7 @@ export function PriceChart({
         scale.setVisibleLogicalRange(range)
       })
     }
-  }, [candles, chartType, epoch, forceEvents, engulfingEvents])
+  }, [candles, realCandles, chartType, epoch, forceEvents, engulfingEvents])
 
   return (
     <div className="relative h-full min-h-0 w-full">

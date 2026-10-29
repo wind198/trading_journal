@@ -2,12 +2,17 @@
 
 ## Layout
 
+- Repo root layout (no `src/`): `app/`, `components/`, `lib/`, `hooks/`.
 - `app/` — routes only. The `(app)` group is the signed-in area and does not appear in the URL.
 - Journal screens live under `app/(app)/journal/`. New journal pages go there, not beside it.
+- Route-owned UI and logic: `app/<route>/_components/`, `_hooks/`, `_lib/`, `_actions/` as needed (ownership over file type).
 - `components/` — shared UI. `components/ui/` is the local component set.
-- `lib/<feature>/` — domain logic for that feature.
+- `lib/<feature>/` — shared domain or infrastructure (e.g. `lib/supabase/`, `lib/ticks/`). Prefer semantic folders over a global `utils/` dump.
+- `features/<domain>/` — only when a real domain boundary exists (not created yet in this repo).
 - `migrations/NNN_*.sql` — schema, applied in numeric order.
 - `docs/` — project-level only (this folder).
+
+Full frontend placement rules: [.cursor/rules/frontend-architecture.mdc](../.cursor/rules/frontend-architecture.mdc).
 
 ## Docs
 

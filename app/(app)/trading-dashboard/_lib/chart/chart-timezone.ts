@@ -128,10 +128,21 @@ const SESSION_LINE_SLOTS = [
 
 const SESSION_DAY_OFFSETS = [-2, -1, 0, 1] as const
 
-function chartZoneTodayYmd(): { year: number; month: number; day: number } {
-  const nowSec = Math.floor(Date.now() / 1000)
+function chartZoneYmdFromDate(date: Date): { year: number; month: number; day: number } {
+  const nowSec = Math.floor(date.getTime() / 1000)
   const p = partMap(nowSec, { year: 'numeric', month: '2-digit', day: '2-digit' })
   return { year: Number(p.year), month: Number(p.month), day: Number(p.day) }
+}
+
+function chartZoneTodayYmd(): { year: number; month: number; day: number } {
+  return chartZoneYmdFromDate(new Date())
+}
+
+/** Start of next calendar day in CHART_TIME_ZONE (exclusive end of “today”). */
+export function chartZoneStartOfNextDayUnix(fromDate: Date = new Date()): number {
+  const today = chartZoneYmdFromDate(fromDate)
+  const next = addCalendarDays(today.year, today.month, today.day, 1)
+  return unixAtChartZone(next.year, next.month, next.day, 0, 0)
 }
 
 function addCalendarDays(year: number, month: number, day: number, deltaDays: number) {

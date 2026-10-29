@@ -20,11 +20,14 @@ Do not create global `utils/`, `helpers/`, `types/`, `constants/`, or similar di
 ## This repository
 
 - Paths are **at the repo root** (no `src/`): `app/`, `components/`, `lib/`, `hooks/`.
-- There is **no** `features/` tree yet. Add `features/<domain>/` only when a real domain boundary exists (multiple routes, coherent business capability).
-- Examples today: `app/(app)/trading-dashboard/` (`_components/dashboard|chart/`, `_lib/chart|overlays|bias/`), shared UI in `components/ui/`, market API pipeline in `lib/ticks/`, auth in `lib/supabase/`.
-- **Do not mass-reorganize** existing files for style alone (see §20). Apply these rules to **new** code and low-risk colocation when you are already modifying an area.
-
-Import aliases use `@/` (e.g. `@/components/...`, `@/lib/...`).
+- Import alias: `@/` → repo root (e.g. `@/components/ui/button`, `@/lib/supabase/server`).
+- Route groups: `(app)` is signed-in shell; URLs omit the group name (e.g. `/journal`, `/trading-dashboard`).
+- Journal routes: `app/(app)/journal/` — new journal pages go there, not as siblings of `(app)`.
+- There is **no** `features/` tree yet. Add `features/<domain>/` only when a real domain boundary exists.
+- Route-owned logic often lives under **`_lib/`** on heavy routes (not only `_components/`), e.g. `app/(app)/trading-dashboard/_lib/chart/`, `_lib/overlays/`, `_lib/bias/`.
+- Shared UI: `components/ui/` (shadcn). Cross-route infra: `lib/supabase/`, `lib/ticks/`. Generic React hooks: `hooks/` when they exist; today some generic patterns use `usehooks-ts` instead of new global hooks.
+- **Naming:** route segments and files kebab-case; React components PascalCase ([docs/conventions.md](../../docs/conventions.md)).
+- **Do not mass-reorganize** for style alone (see §20). Apply these rules to **new** code and low-risk colocation when you are already modifying an area.
 
 ---
 
@@ -32,7 +35,7 @@ Import aliases use `@/` (e.g. `@/components/...`, `@/lib/...`).
 
 Use the Next.js App Router.
 
-A representative structure (this repo uses root-level `app/`, not `src/app/`):
+Representative structure (**this repo uses root-level `app/`, not `src/app/`**):
 
 ```text
 app/
@@ -45,13 +48,19 @@ app/
 │       ├── page.tsx
 │       └── _components/
 │           └── RegisterForm.tsx
-├── dashboard/
-│   ├── page.tsx
-│   ├── loading.tsx
+├── (app)/
+│   ├── journal/
+│   │   ├── page.tsx
+│   │   └── _components/
+│   ├── trading-dashboard/
+│   │   ├── page.tsx
+│   │   ├── _components/
+│   │   ├── _hooks/
+│   │   └── _lib/
 │   ├── _components/
-│   ├── _hooks/
-│   ├── types.ts
-│   └── constants.ts
+│   │   └── providers/
+│   └── layout.tsx
+├── api/
 ├── layout.tsx
 └── globals.css
 
@@ -67,7 +76,7 @@ providers/
 types/
 ```
 
-This is a **reference**, not a requirement to create every directory. Do not create empty directories or placeholders.
+This is a **reference**, not a requirement to create every directory. Do not create empty directories or placeholder files.
 
 ---
 
@@ -82,14 +91,17 @@ Always start with the narrowest scope.
 ### Decision tree
 
 ```text
-Only needed by one route/page? → app/<route>/
+Only needed by one route/page?
+    → app/<route>/  (_components, _hooks, _lib, _actions, types.ts, constants.ts)
 
-Shared by multiple pages in one domain? → features/<domain>/
+Shared by multiple pages in one business/domain area?
+    → features/<domain>/
 
-Genuinely generic/application-wide? → components/, hooks/, lib/, stores/, providers/, types/, etc.
+Genuinely generic / application-wide?
+    → components/, hooks/, lib/, stores/, providers/, types/, etc.
 ```
 
-Do not move code global because it might be reused someday.
+Do not move code to global scope because it might be reused someday.
 
 ---
 
@@ -107,7 +119,7 @@ app/users/
 
 over `components/users/...` when those components are only for `/users`.
 
-`_` prefix = private route implementation. Promote upward only when ownership genuinely broadens.
+The `_` prefix indicates private route implementation. Promote upward only when ownership genuinely broadens.
 
 ---
 
@@ -118,6 +130,8 @@ Route-only hooks live with the route:
 ```text
 app/users/_hooks/useUserFilters.ts
 ```
+
+Do **not** put page-specific hooks in global `hooks/`.
 
 Global `hooks/` is for **generic** React behavior only (`useDebounce`, `useMediaQuery`, `usePrevious`, etc.).
 
@@ -131,7 +145,7 @@ Page-specific types beside the page:
 app/users/types.ts
 ```
 
-Avoid `app/users/_types/` unless complexity warrants a directory. Avoid `types/` at root for page-only types.
+Avoid `app/users/_types/` unless complexity warrants a directory. Avoid root `types/` for page-only types.
 
 ---
 
@@ -141,7 +155,9 @@ Use `features/<domain>/` only for a **real domain boundary** (coherent business 
 
 Good: `user`, `billing`, `orders`, `notifications`, `authentication`.
 
-Do not invent domains to avoid global files. Before creating a domain, ask: business ownership? multiple behaviors? shared routes? understandable boundary?
+Before creating a domain, ask: meaningful business ownership? multiple related behaviors? shared routes? understandable boundary?
+
+Do not invent domains to avoid global files.
 
 ---
 
@@ -157,13 +173,15 @@ A **route** is not automatically a **domain** (`features/dashboard/` just becaus
 
 ## 8. Shared UI
 
-Generic UI in `components/ui/` with minimal domain knowledge.
+Generic UI in `components/ui/` with minimal domain knowledge (`Button`, `Dialog`, `Input`, etc. must not encode user/billing/order rules).
 
 ---
 
 ## 9. Shared hooks
 
 Global `hooks/` = generic React only. Domain/page hooks stay page- or feature-scoped.
+
+Bad in global `hooks/`: `useUserFilters.ts`, `useDashboardStats.ts`.
 
 ---
 
@@ -175,21 +193,29 @@ Avoid a giant global `utils/` dump. Organize shared code by semantic purpose und
 lib/date/
 lib/validation/
 lib/api/
+lib/supabase/
+lib/ticks/
 ```
 
 Prefer `@/lib/date/formatDateTime` over `@/utils`. Avoid `helpers/` without strong reason.
+
+This repo has `lib/utils.ts` for **`cn()`** (tailwind-merge) only — not a junk drawer.
 
 ---
 
 ## 11. Shared constants
 
-Global only when application-wide (`constants/routes.ts`). Domain constants in `features/<domain>/constants.ts`. Page constants in `app/<route>/constants.ts`.
+Global only when application-wide (`constants/routes.ts`). Domain → `features/<domain>/constants.ts`. Page → `app/<route>/constants.ts`.
+
+Do not create a global constants dump for every constant in the app.
 
 ---
 
 ## 12. Validation rules
 
-Generic validation → `lib/validation/`. Business limits (e.g. max username length) → domain or page constants/schema. Ask: technical, domain, or page-specific?
+Generic validation → `lib/validation/`. Business limits (max username length, etc.) → domain or page constants/schema.
+
+Ask: technical utility, domain rule, or page-specific rule?
 
 ---
 
@@ -213,19 +239,25 @@ Page-specific → `app/<route>/_actions/`. Domain → `features/<domain>/actions
 
 ## 16. Avoid premature abstraction
 
-Do not promote to shared scope because it might be reused, looks generic, or two files use it today. Progression: inline in page → `_components/` → `features/<domain>/` → generic `components/ui/` only with evidence.
+Do not promote to shared scope because it might be reused, looks generic, or two files use it today.
+
+Progression: inline in page → `_components/` / `_lib/` → `features/<domain>/` → `components/ui/` only with evidence.
 
 ---
 
 ## 17. Avoid junk drawer directories
 
-Be careful with `utils/`, `helpers/`, `misc/`, `common/`, `shared/`, undifferentiated `types/`, `constants/`. Ask: **What owns this?** Never use `common/` or `shared/` as a dump.
+Be careful with `utils/`, `helpers/`, `misc/`, `common/`, `shared/`, undifferentiated `types/`, `constants/`.
+
+Ask: **What owns this?** Never use `common/` or `shared/` as a dump.
 
 ---
 
 ## 18. Prefer semantic directories
 
 Prefer `lib/date/`, `lib/validation/`, `lib/api/` over `lib/utils/`, `lib/helpers/`, `lib/common/`.
+
+Directory names should explain responsibility.
 
 ---
 
@@ -256,7 +288,7 @@ Preserve coherent existing layout. No large moves for style alone. New code foll
                           │
                      PAGE / ROUTE
                     app/<route>/
-                 _components / _hooks / _utils / _actions
+         _components / _hooks / _lib / _utils / _actions
 ```
 
 When uncertain, prefer the **narrower** scope. Do not create abstractions without evidence of real ownership.

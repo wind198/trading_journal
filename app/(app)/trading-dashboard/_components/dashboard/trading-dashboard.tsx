@@ -57,7 +57,8 @@ import {
   DEFAULT_BASE_LINE_BIAS_CONFIG,
 } from '../../_lib/bias/base-line-bias'
 import { mergeCandles } from '@/lib/ticks/merge'
-import type { LightweightCandle } from '@/lib/ticks/candles'
+import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
+import { extendCandlesToChartZoneEod } from '../../_lib/chart/extend-candles-to-chart-eod'
 import {
   marketHistoryInfiniteOptions,
   marketRecentQueryOptions,
@@ -268,6 +269,10 @@ function DashboardPane({
   const candles = useMemo(
     () => mergeCandles(historyBars, recent.data ?? []),
     [historyBars, recent.data],
+  )
+  const displayCandles = useMemo(
+    () => extendCandlesToChartZoneEod(candles, pane.id as CandleTimeframe),
+    [candles, pane.id],
   )
   const loadOlder = () => {
     if (loadingOlder.current || !history.hasNextPage || history.isFetchingNextPage) return
@@ -652,7 +657,8 @@ function DashboardPane({
           </p>
         ) : (
           <PriceChart
-            candles={candles}
+            candles={displayCandles}
+            realCandles={candles}
             chartType={chartType}
             timeframe={pane.id}
             onLoadOlder={loadOlder}

@@ -8,6 +8,7 @@ import type {
   PaneAttachedParameter,
   Time,
 } from 'lightweight-charts'
+import { chartXAtTime, type BarTimeSeries } from '../../../_lib/chart/chart-coordinates'
 import { sessionVerticalLineTimes } from '../../../_lib/chart/chart-timezone'
 import { SESSION_GRID } from '../../../_lib/chart/price-chart-style'
 
@@ -53,8 +54,9 @@ class SessionVerticalLinesPaneView implements IPanePrimitivePaneView {
       return
     }
     const xs: number[] = []
+    const bars = this.source.bars
     for (const unix of sessionVerticalLineTimes()) {
-      const x = chart.timeScale().timeToCoordinate(unix as Time)
+      const x = chartXAtTime(chart, unix, bars)
       if (x != null) xs.push(Number(x))
     }
     this.rendererObj = xs.length > 0 ? new SessionVerticalLinesRenderer(xs) : null
@@ -63,6 +65,7 @@ class SessionVerticalLinesPaneView implements IPanePrimitivePaneView {
 
 export class SessionVerticalLinesPrimitive implements IPanePrimitive<Time> {
   chart: IChartApi | null = null
+  bars: BarTimeSeries = []
   private requestUpdate: (() => void) | null = null
   private readonly paneView: SessionVerticalLinesPaneView
   private readonly views: SessionVerticalLinesPaneView[]
@@ -71,6 +74,11 @@ export class SessionVerticalLinesPrimitive implements IPanePrimitive<Time> {
   constructor() {
     this.paneView = new SessionVerticalLinesPaneView(this)
     this.views = [this.paneView]
+  }
+
+  setBars(bars: BarTimeSeries): void {
+    this.bars = bars
+    this.requestUpdate?.()
   }
 
   attached(param: PaneAttachedParameter<Time>): void {
