@@ -104,6 +104,12 @@ const CHART_TYPES: { id: ChartType; label: string }[] = [
   { id: 'bar', label: 'Bar' },
 ]
 
+const GLOBAL_CHART_TYPES = [
+  { id: 'line', label: 'Line' },
+  { id: 'area', label: 'Area' },
+  { id: 'candlestick', label: 'Candle' },
+] as const satisfies readonly { id: ChartType; label: string }[]
+
 const PANES = [
   { id: '4h', label: '4h' },
   { id: '1h', label: '1h' },
@@ -152,6 +158,7 @@ function Dashboard() {
   const [guidesOpen, setGuidesOpen] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
+  const [globalChartType, setGlobalChartType] = useState<ChartType>('line')
   const router = useRouter()
 
   const signOut = async () => {
@@ -168,6 +175,18 @@ function Dashboard() {
             <Button variant="ghost" size="sm" onClick={() => void signOut()}>
               Sign out
             </Button>
+            {expanded == null &&
+              GLOBAL_CHART_TYPES.map((type) => (
+                <Button
+                  key={type.id}
+                  size="sm"
+                  variant={globalChartType === type.id ? 'default' : 'outline'}
+                  aria-pressed={globalChartType === type.id}
+                  onClick={() => setGlobalChartType(type.id)}
+                >
+                  {type.label}
+                </Button>
+              ))}
             <Button
               variant={notesOpen ? 'secondary' : 'ghost'}
               size="icon-sm"
@@ -220,7 +239,10 @@ function Dashboard() {
         {PANES.map((pane) => {
           const isExpanded = expanded === pane.id
           if (expanded && !isExpanded) return null
-          const chartType = isExpanded ? (chartTypes[pane.id] ?? 'candlestick') : 'line'
+          const chartType = isExpanded
+            ? (chartTypes[pane.id] ?? 'candlestick')
+            : globalChartType
+
           const compact = !isExpanded && !tablet
           return (
             <DashboardPane
