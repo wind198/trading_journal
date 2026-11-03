@@ -158,7 +158,7 @@ function Dashboard() {
   const [guidesOpen, setGuidesOpen] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
-  const [globalChartType, setGlobalChartType] = useState<ChartType>('line')
+  const [globalChartType, setGlobalChartType] = useState<ChartType>('candlestick')
   const router = useRouter()
 
   const signOut = async () => {
