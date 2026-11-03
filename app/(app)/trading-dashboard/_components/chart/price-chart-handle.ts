@@ -35,11 +35,13 @@ type AnyPrimitive =
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
+  update: (bar: object, historicalUpdate?: boolean) => void
   attachPrimitive: (primitive: AnyPrimitive) => void
 }
 
 type LineSeries = {
   setData: (data: { time: Time; value: number }[]) => void
+  update: (bar: { time: Time; value: number }, historicalUpdate?: boolean) => void
 }
 
 export type ChartHandle = {

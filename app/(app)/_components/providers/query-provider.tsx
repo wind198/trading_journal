@@ -1,9 +1,13 @@
 'use client'
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { useState, type ReactNode } from 'react'
 
 const GC_TIME_MS = 30 * 60 * 1000
+const PERSIST_KEY = 'tj-rq'
+const PERSIST_BUSTER = 'market-v1'
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -18,7 +22,33 @@ export function makeQueryClient() {
   })
 }
 
+function isMarketQueryKey(queryKey: readonly unknown[]): boolean {
+  return queryKey[0] === 'market'
+}
+
 export function QueryProvider({ children }: { children: ReactNode }) {
   const [client] = useState(() => makeQueryClient())
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  const [persister] = useState(() =>
+    createSyncStoragePersister({
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      key: PERSIST_KEY,
+    }),
+  )
+
+  return (
+    <PersistQueryClientProvider
+      client={client}
+      persistOptions={{
+        persister,
+        maxAge: GC_TIME_MS,
+        buster: PERSIST_BUSTER,
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) =>
+            query.state.status === 'success' && isMarketQueryKey(query.queryKey),
+        },
+      }}
+    >
+      {children}
+    </PersistQueryClientProvider>
+  )
 }

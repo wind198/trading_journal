@@ -56,7 +56,7 @@ export function marketRecentQueryOptions(timeframe: string) {
     gcTime: MARKET_GC_TIME_MS,
     refetchInterval: MARKET_RECENT_REFETCH_MS,
     refetchIntervalInBackground: false,
-    refetchOnMount: true,
+    refetchOnMount: 'always',
     placeholderData: (previous) => previous,
   })
 }
@@ -78,7 +78,7 @@ export function volumeProfileQueryOptions() {
     gcTime: MARKET_GC_TIME_MS,
     refetchInterval: MARKET_RECENT_REFETCH_MS,
     refetchIntervalInBackground: false,
-    refetchOnMount: true,
+    refetchOnMount: 'always',
     placeholderData: (previous) => previous,
   })
 }

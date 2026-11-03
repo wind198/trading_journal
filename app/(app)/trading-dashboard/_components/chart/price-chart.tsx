@@ -12,6 +12,7 @@ import {
   chartCoordinateBars,
   futureBarTimesUntilChartZoneEod,
 } from '../../_lib/chart/extend-candles-to-chart-eod'
+import { diffCandles } from '../../_lib/chart/candle-sync-diff'
 import { VIEWPORT } from '../../_lib/chart/price-chart-style'
 import { bollinger, pricePoint, type ChartType } from '../../_lib/chart/price-chart-series'
 import type { EngulfingOverlayEvent } from './primitives/engulfing-overlay-primitive'
@@ -95,6 +96,8 @@ export function PriceChart({
   const pointerCaptureElRef = useRef<HTMLElement | null>(null)
   const handleRef = useRef<ChartHandle | null>(null)
   const candlesRef = useRef<BarTimeSeries>(candles ?? [])
+  const appliedCandlesRef = useRef<LightweightCandle[]>([])
+  const appliedEpochRef = useRef(-1)
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
   const drawToolRef = useRef(drawTool)
@@ -476,18 +479,53 @@ export function PriceChart({
     const handle = handleRef.current
     if (!handle || candles.length === 0) return
 
+    // Chart remount (chartType/timeframe) bumps epoch — clear applied OHLC so we full-sync.
+    if (appliedEpochRef.current !== epoch) {
+      appliedEpochRef.current = epoch
+      appliedCandlesRef.current = []
+    }
+
+    const diff = diffCandles(appliedCandlesRef.current, candles)
+
     const tf = timeframe as CandleTimeframe
-    const futureTimes = futureBarTimesUntilChartZoneEod(candles, tf)
     const coordBars = chartCoordinateBars(candles, tf)
     candlesRef.current = coordBars
+    syncDrawingBars(handle, coordBars)
+    handle.sessionVerticalLines?.setBars(coordBars)
 
+    if (diff.kind === 'unchanged') return
+
+    const bands = bollinger(candles)
+
+    // Hot path: poll updates last bar only. historicalUpdate skips trailing whitespace.
+    if (diff.kind === 'lastUpdated') {
+      const lastIndex = candles.length - 1
+      const bar = candles[lastIndex]
+      const level = bands.levels[lastIndex]
+      handle.price.update(pricePoint(bar, level, chartType), true)
+      if (level) {
+        const time = bar.time as Time
+        handle.upper.update({ time, value: level.upper }, true)
+        handle.middle.update({ time, value: level.middle }, true)
+        handle.lower.update({ time, value: level.lower }, true)
+      }
+      appliedCandlesRef.current = candles
+      handle.firstTime = coordBars[0]?.time ?? null
+      return
+    }
+
+    // Appended bars sit before EOD whitespace → full setData. Same for prepend/replace.
+    const futureTimes = futureBarTimesUntilChartZoneEod(candles, tf)
     const scale = handle.chart.timeScale()
     const keep = handle.fitted ? scale.getVisibleLogicalRange() : null
     const previousFirst = handle.firstTime
     const prepended =
-      previousFirst == null ? 0 : coordBars.filter((bar) => bar.time < previousFirst).length
+      diff.kind === 'prepended'
+        ? diff.count
+        : previousFirst == null
+          ? 0
+          : coordBars.filter((bar) => bar.time < previousFirst).length
 
-    const bands = bollinger(candles)
     handle.price.setData([
       ...candles.map((bar, index) => pricePoint(bar, bands.levels[index], chartType)),
       ...futureTimes.map((t) => ({ time: t as Time })),
@@ -495,14 +533,13 @@ export function PriceChart({
     handle.upper.setData(bands.upper)
     handle.middle.setData(bands.middle)
     handle.lower.setData(bands.lower)
-    handle.forceOverlay.setEvents(forceEvents)
-    handle.engulfingOverlay.setEvents(engulfingEvents)
-    handle.volumeProfile?.setProfile(volumeProfile)
-    syncDrawingBars(handle, coordBars)
-    handle.sessionVerticalLines?.setBars(coordBars)
+    appliedCandlesRef.current = candles
     handle.firstTime = coordBars[0].time
+
     if (keep) {
-      scale.setVisibleLogicalRange({ from: keep.from + prepended, to: keep.to + prepended })
+      if (prepended !== 0) {
+        scale.setVisibleLogicalRange({ from: keep.from + prepended, to: keep.to + prepended })
+      }
     } else {
       const to = candles.length + futureTimes.length
       const range = { from: Math.max(0, to - VIEWPORT.visibleBars), to }
@@ -513,7 +550,7 @@ export function PriceChart({
         scale.setVisibleLogicalRange(range)
       })
     }
-  }, [candles, timeframe, chartType, epoch, forceEvents, engulfingEvents, volumeProfile])
+  }, [candles, timeframe, chartType, epoch])
 
   return (
     <div className="relative h-full min-h-0 w-full">

@@ -7,13 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:ticks": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test lib/ticks/ichimoku.test.ts lib/ticks/merge.test.ts lib/ticks/fetch.integration.test.ts lib/ticks/candle-color.integration.test.ts \"app/(app)/trading-dashboard/_lib/overlays/force-candles.test.ts\" \"app/(app)/trading-dashboard/_lib/overlays/engulfing.test.ts\" \"app/(app)/trading-dashboard/_lib/bias/base-line-bias.test.ts\" \"app/(app)/trading-dashboard/_lib/chart/volume-profile.test.ts\""
+    "test:ticks": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test lib/ticks/ichimoku.test.ts lib/ticks/merge.test.ts lib/ticks/fetch.integration.test.ts lib/ticks/candle-color.integration.test.ts \"app/(app)/trading-dashboard/_lib/overlays/force-candles.test.ts\" \"app/(app)/trading-dashboard/_lib/overlays/engulfing.test.ts\" \"app/(app)/trading-dashboard/_lib/bias/base-line-bias.test.ts\" \"app/(app)/trading-dashboard/_lib/chart/volume-profile.test.ts\" \"app/(app)/trading-dashboard/_lib/chart/candle-sync-diff.test.ts\""
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
-    "@tanstack/react-query": "^5.104.0",
+    "@tanstack/query-sync-storage-persister": "^5.105.3",
+    "@tanstack/react-query": "^5.105.3",
+    "@tanstack/react-query-persist-client": "^5.105.3",
     "@vercel/analytics": "1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
