@@ -20,12 +20,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Bad symbol' }, { status: 400 })
   }
 
-  const fromMsc = Date.now() - VOLUME_PROFILE_WINDOW_MS
+  const toMsc = Date.now()
+  const fromMsc = toMsc - VOLUME_PROFILE_WINDOW_MS
 
   try {
     const data = await fetchVolumeProfileTickCounts({
       symbol,
       fromMsc,
+      toMsc,
       binSize: VOLUME_PROFILE_BIN_SIZE,
     })
     return NextResponse.json({ data })

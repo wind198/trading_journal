@@ -11,10 +11,16 @@ export type VolumeProfileTickBin = {
 export async function fetchVolumeProfileTickCounts(options: {
   symbol: string
   fromMsc: number
+  toMsc: number
   binSize?: number
 }): Promise<VolumeProfileTickBin[]> {
   const binSize = options.binSize ?? VOLUME_PROFILE_BIN_SIZE
-  if (!(binSize > 0) || !Number.isFinite(options.fromMsc)) {
+  if (
+    !(binSize > 0) ||
+    !Number.isFinite(options.fromMsc) ||
+    !Number.isFinite(options.toMsc) ||
+    !(options.toMsc > options.fromMsc)
+  ) {
     throw new Error('volume profile args')
   }
 
@@ -22,6 +28,7 @@ export async function fetchVolumeProfileTickCounts(options: {
   const { data, error } = await supabase.rpc('volume_profile_tick_counts', {
     p_symbol: options.symbol,
     p_from_msc: options.fromMsc,
+    p_to_msc: options.toMsc,
     p_bin_size: binSize,
   })
   if (error) throw new Error(error.message)
