@@ -64,7 +64,7 @@ export const ENGULFING = {
   bearish: '#4F46E5',
 } as const
 
-/** Rolling 24h volume profile (15m). */
+/** Rolling 24h volume profile (15m / 3m). */
 export const VOLUME_PROFILE = {
   bar: 'rgba(5, 15, 26, 0.16)',
   pocBar: 'rgba(0, 82, 255, 0.38)',

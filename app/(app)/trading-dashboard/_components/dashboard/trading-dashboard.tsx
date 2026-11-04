@@ -307,7 +307,7 @@ function DashboardPane({
   const recent = useQuery(marketRecentQueryOptions(pane.id))
   const volumeProfileQuery = useQuery({
     ...volumeProfileQueryOptions(),
-    enabled: pane.id === '15m',
+    enabled: pane.id === '15m' || pane.id === '3m',
   })
   const loadingOlder = useRef(false)
   const historyBars = useMemo(

@@ -67,7 +67,7 @@ export function usesSessionVerticalGrid(timeframe: string): boolean {
 }
 
 export function usesVolumeProfile(timeframe: string): boolean {
-  return timeframe === '15m'
+  return timeframe === '15m' || timeframe === '3m'
 }
 
 export function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
