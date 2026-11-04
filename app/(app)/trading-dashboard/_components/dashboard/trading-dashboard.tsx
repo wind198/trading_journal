@@ -348,7 +348,7 @@ function DashboardPane({
   }, [isExpanded, candles])
 
   const volumeProfile = useMemo(
-    () => (pane.id === '15m' ? buildVolumeProfile(volumeProfileQuery.data ?? []) : null),
+    () => (pane.id === '15m' || pane.id === '3m' ? buildVolumeProfile(volumeProfileQuery.data ?? []) : null),
     [pane.id, volumeProfileQuery.data],
   )
 
