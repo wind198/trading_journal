@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import {
   isPolylineArrowKind,
+  isTextAnchorKind,
   type ChartDrawingKind,
   type DrawingPoint,
 } from '../../_lib/chart/chart-drawings'
@@ -8,6 +9,7 @@ import { isChartIconKind } from '../../_lib/chart/chart-icons'
 import { barIntervalSec, type BarTimeSeries } from '../../_lib/chart/chart-coordinates'
 import type { IconMarkerDrawing } from './primitives/icon-marker-primitive'
 import type { RectangleDrawing } from './primitives/rectangle-primitive'
+import type { TextAnchorDrawing } from './primitives/text-anchor-primitive'
 import type { TrendlineDrawing } from './primitives/trendline-primitive'
 import { clickToPoint, type ChartHandle } from './price-chart-handle'
 
@@ -74,6 +76,7 @@ export type PriceChartInteractionRefs = {
   trendlinesRef: RefObject<readonly TrendlineDrawing[]>
   rectanglesRef: RefObject<readonly RectangleDrawing[]>
   iconsRef: RefObject<readonly IconMarkerDrawing[]>
+  textAnchorsRef: RefObject<readonly TextAnchorDrawing[]>
   setShapeAwaitingP2Ref: RefObject<(value: boolean) => void>
   setShapeDraftRef: RefObject<(p1: DrawingPoint, p2?: DrawingPoint) => void>
   onCompleteRef: RefObject<
@@ -123,6 +126,7 @@ export function bindPriceChartInteraction(input: {
     handle.rectangles.updateAllViews()
     handle.icons.updateAllViews()
     handle.polylines.updateAllViews()
+    handle.textAnchors.updateAllViews()
   }
 
   const drawingPoints = (id: string): { p1: DrawingPoint; p2: DrawingPoint } | null => {
@@ -132,12 +136,16 @@ export function bindPriceChartInteraction(input: {
     if (fromRect) return { p1: fromRect.p1, p2: fromRect.p2 }
     const fromIcon = refs.iconsRef.current.find((d) => d.id === id)
     if (fromIcon) return { p1: fromIcon.p1, p2: fromIcon.p1 }
+    const fromText = refs.textAnchorsRef.current.find((d) => d.id === id)
+    if (fromText) return { p1: fromText.p1, p2: fromText.p1 }
     const line = handle.trendlines.getDrawing(id)
     if (line) return { p1: line.p1, p2: line.p2 }
     const rect = handle.rectangles.getDrawing(id)
     if (rect) return { p1: rect.p1, p2: rect.p2 }
     const icon = handle.icons.getDrawing(id)
     if (icon) return { p1: icon.p1, p2: icon.p1 }
+    const text = handle.textAnchors.getDrawing(id)
+    if (text) return { p1: text.p1, p2: text.p1 }
     return null
   }
 
@@ -153,6 +161,7 @@ export function bindPriceChartInteraction(input: {
     handle.rectangles.setHitBoost(boost)
     handle.icons.setHitBoost(boost)
     handle.polylines.setHitBoost(boost)
+    handle.textAnchors.setHitBoost(boost)
   }
 
   const isCoarsePointer = (event: PointerEvent) =>
@@ -222,7 +231,7 @@ export function bindPriceChartInteraction(input: {
       if (isShapeDrawTool(tool) && refs.pointerCoarseRef.current) return
       const mapped = clickToPoint(handle, point, refs.candlesRef.current)
       if (!mapped) return
-      if (isChartIconKind(tool)) {
+      if (isChartIconKind(tool) || isTextAnchorKind(tool)) {
         clearDrafts()
         refs.onCompleteRef.current?.({ kind: tool, p1: mapped, p2: mapped })
         return
@@ -246,13 +255,14 @@ export function bindPriceChartInteraction(input: {
     const rectHit = handle.rectangles.hitTest(point.x, point.y)
     const iconHit = handle.icons.hitTest(point.x, point.y)
     const polyHit = handle.polylines.hitTest(point.x, point.y)
-    const hit = [lineHit, rectHit, iconHit, polyHit]
+    const textHit = handle.textAnchors.hitTest(point.x, point.y)
+    const hit = [lineHit, rectHit, iconHit, polyHit, textHit]
       .filter((item): item is NonNullable<typeof item> => item != null)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))[0]
     const hitId = hit?.externalId ?? null
     if (
       hitId &&
-      polyHit?.externalId === hitId &&
+      (polyHit?.externalId === hitId || textHit?.externalId === hitId) &&
       clientX != null &&
       clientY != null &&
       tryOpenLabelEditor(clientX, clientY, hitId)
@@ -485,6 +495,17 @@ export function bindPriceChartInteraction(input: {
       }
       return
     }
+    const textHit = handle.textAnchors.hitTest(point.x, point.y)
+    if (textHit?.externalId && !textHit.externalId.startsWith('temp-')) {
+      selectDrawing(textHit.externalId)
+      refs.iconPressRef.current = {
+        id: textHit.externalId,
+        x: event.clientX,
+        y: event.clientY,
+        pointerId: event.pointerId,
+      }
+      return
+    }
 
     const selectedId = refs.selectedIdRef.current
     if (!selectedId || selectedId.startsWith('temp-')) return
@@ -507,11 +528,14 @@ export function bindPriceChartInteraction(input: {
     const anchor =
       handle.trendlines.hitTestAnchor(point.x, point.y) ??
       handle.rectangles.hitTestAnchor(point.x, point.y) ??
-      handle.icons.hitTestAnchor(point.x, point.y)
+      handle.icons.hitTestAnchor(point.x, point.y) ??
+      handle.textAnchors.hitTestAnchor(point.x, point.y)
     if (!anchor || anchor.id !== selectedId) return
     const points = drawingPoints(anchor.id)
     if (!points) return
-    const moveWhole = handle.icons.getDrawing(anchor.id) != null
+    const moveWhole =
+      handle.icons.getDrawing(anchor.id) != null ||
+      handle.textAnchors.getDrawing(anchor.id) != null
     event.preventDefault()
     refs.dragRef.current = {
       id: anchor.id,
@@ -631,10 +655,12 @@ export function bindPriceChartInteraction(input: {
     syncDrawingHitGeometry()
     const point = localPoint(event as unknown as PointerEvent)
     const polyHit = handle.polylines.hitTest(point.x, point.y)
-    if (!polyHit?.externalId) return
+    const textHit = handle.textAnchors.hitTest(point.x, point.y)
+    const labelHit = polyHit?.externalId ?? textHit?.externalId
+    if (!labelHit) return
     event.preventDefault()
-    selectDrawing(polyHit.externalId)
-    refs.onPolylineLabelEditRef.current?.(polyHit.externalId)
+    selectDrawing(labelHit)
+    refs.onPolylineLabelEditRef.current?.(labelHit)
   }
 
   const onChartPointerCancel = (event: PointerEvent) => {

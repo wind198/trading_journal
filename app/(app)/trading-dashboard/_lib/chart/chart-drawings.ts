@@ -4,12 +4,18 @@ import { CHART_ICON_KINDS, type ChartIconKind } from './chart-icons'
 export type { ChartIconKind }
 export type ShapeDrawingKind = 'trendline' | 'rectangle'
 export type PolylineArrowKind = 'polyline_arrow'
-export type ChartDrawingKind = ShapeDrawingKind | ChartIconKind | PolylineArrowKind
+export type TextAnchorKind = 'text_anchor'
+export type ChartDrawingKind =
+  | ShapeDrawingKind
+  | ChartIconKind
+  | PolylineArrowKind
+  | TextAnchorKind
 
 const LOADABLE_KINDS = [
   'trendline',
   'rectangle',
   'polyline_arrow',
+  'text_anchor',
   ...CHART_ICON_KINDS,
 ] as const
 
@@ -87,6 +93,10 @@ export function isPolylineArrowKind(kind: string): kind is PolylineArrowKind {
   return kind === 'polyline_arrow'
 }
 
+export function isTextAnchorKind(kind: string): kind is TextAnchorKind {
+  return kind === 'text_anchor'
+}
+
 export async function loadChartDrawings(
   symbol: string,
   timeframe: string,
@@ -109,6 +119,7 @@ export async function insertDrawing(input: {
   kind: ChartDrawingKind
   p1: DrawingPoint
   p2: DrawingPoint
+  label?: string
 }): Promise<ChartDrawing> {
   const supabase = createClient()
   const {
@@ -128,12 +139,35 @@ export async function insertDrawing(input: {
         p1_price: input.p1.price,
         p2_time: Math.round(input.p2.time),
         p2_price: input.p2.price,
+        ...(input.label !== undefined ? { label: input.label } : {}),
       },
     ])
     .select(DRAWING_SELECT)
     .single()
   if (error) throw error
   return rowToDrawing(data as ChartDrawingRow)
+}
+
+export async function insertTextAnchor(input: {
+  symbol: string
+  timeframe: string
+  p1: DrawingPoint
+  label?: string
+}): Promise<ChartDrawing> {
+  return insertDrawing({
+    symbol: input.symbol,
+    timeframe: input.timeframe,
+    kind: 'text_anchor',
+    p1: input.p1,
+    p2: input.p1,
+    label: input.label ?? '',
+  })
+}
+
+export async function updateChartDrawingLabel(id: string, label: string): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase.from('chart_drawings').update({ label }).eq('id', id)
+  if (error) throw error
 }
 
 export async function insertPolylineArrow(input: {

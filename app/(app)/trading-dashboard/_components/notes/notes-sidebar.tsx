@@ -4,11 +4,12 @@ import { useCallback, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDebounceCallback } from 'usehooks-ts'
 import { toast } from 'sonner'
-import { ChevronDown, Plus, X } from 'lucide-react'
+import { ChevronDown, Plus, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
+  deleteDashboardNote,
   insertDashboardNote,
   loadDashboardNotes,
   updateDashboardNote,
@@ -74,6 +75,19 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
     persistBody(id, body)
   }
 
+  const onDeleteNote = (id: string) => {
+    let previous: DashboardNote[] = []
+    setNotesCache((prev) => {
+      previous = prev
+      return prev.filter((n) => n.id !== id)
+    })
+    setExpandedNoteId((current) => (current === id ? null : current))
+    void deleteDashboardNote(id).catch(() => {
+      setNotesCache(() => previous)
+      toast.error('Failed to delete note')
+    })
+  }
+
   const toggleExpanded = (id: string) => {
     setExpandedNoteId((current) => (current === id ? null : id))
   }
@@ -117,25 +131,40 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
               const open = expandedNoteId === note.id
               return (
                 <li key={note.id} className="rounded-lg border border-border bg-background/80">
-                  <button
-                    type="button"
-                    className="flex w-full items-start gap-2 px-2.5 py-2 text-left"
-                    aria-expanded={open}
-                    onClick={() => toggleExpanded(note.id)}
-                  >
-                    <ChevronDown
-                      className={cn(
-                        'mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform',
-                        !open && '-rotate-90',
-                      )}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{note.title}</span>
-                      <Badge variant="secondary" className="mt-1 text-[10px] font-normal">
-                        {note.symbol}
-                      </Badge>
-                    </span>
-                  </button>
+                  <div className="flex items-start gap-0.5 px-1 py-1">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-start gap-2 px-1.5 py-1 text-left"
+                      aria-expanded={open}
+                      onClick={() => toggleExpanded(note.id)}
+                    >
+                      <ChevronDown
+                        className={cn(
+                          'mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform',
+                          !open && '-rotate-90',
+                        )}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{note.title}</span>
+                        <Badge variant="secondary" className="mt-1 text-[10px] font-normal">
+                          {note.symbol}
+                        </Badge>
+                      </span>
+                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="mt-0.5 shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label={`Delete note ${note.title}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeleteNote(note.id)
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
                   {open && (
                     <div className="border-t border-border px-2.5 pb-2.5 pt-1">
                       <textarea

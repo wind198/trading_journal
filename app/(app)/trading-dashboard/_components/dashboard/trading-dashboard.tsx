@@ -29,8 +29,11 @@ import {
   deleteChartDrawing,
   insertDrawing,
   insertPolylineArrow,
+  insertTextAnchor,
   isPolylineArrowKind,
+  isTextAnchorKind,
   loadChartDrawings,
+  updateChartDrawingLabel,
   updatePolylineArrow,
   type ChartDrawing,
   type ChartDrawingKind,
@@ -81,6 +84,7 @@ import {
   Square,
   Trash2,
   TrendingUp,
+  Type,
 } from 'lucide-react'
 
 const SYMBOL = 'EURUSD'
@@ -430,8 +434,19 @@ function DashboardPane({
         })),
     [drawings],
   )
+  const textAnchorDrawings = useMemo(
+    () =>
+      drawings
+        .filter((d) => isTextAnchorKind(d.kind))
+        .map((d) => ({ id: d.id, p1: d.p1, label: d.label })),
+    [drawings],
+  )
 
   const iconToolActive = drawTool != null && isChartIconKind(drawTool)
+  const labelEditDrawing = labelEditDrawingId
+    ? drawings.find((d) => d.id === labelEditDrawingId)
+    : null
+  const labelEditIsText = labelEditDrawing != null && isTextAnchorKind(labelEditDrawing.kind)
 
   const toggleTool = (tool: ChartDrawingKind) => {
     setDrawTool((current) => (current === tool ? null : tool))
@@ -446,29 +461,48 @@ function DashboardPane({
     p1: DrawingPoint
     p2: DrawingPoint
   }) => {
-    if (!isChartIconKind(input.kind) && !isPolylineArrowKind(input.kind)) {
+    if (
+      !isChartIconKind(input.kind) &&
+      !isPolylineArrowKind(input.kind) &&
+      !isTextAnchorKind(input.kind)
+    ) {
       setDrawTool(null)
     }
     const anchor = input.p1
     const tempId = `temp-${Date.now()}`
+    const pointAnchor =
+      isChartIconKind(input.kind) || isTextAnchorKind(input.kind) ? anchor : input.p2
     const optimistic: ChartDrawing = {
       id: tempId,
       symbol: SYMBOL,
       timeframe: pane.id,
       kind: input.kind,
       p1: anchor,
-      p2: isChartIconKind(input.kind) ? anchor : input.p2,
+      p2: pointAnchor,
+      ...(isTextAnchorKind(input.kind) ? { label: '' } : {}),
     }
     setDrawings((current) => [...current, optimistic])
-    void insertDrawing({
-      symbol: SYMBOL,
-      timeframe: pane.id,
-      kind: input.kind,
-      p1: anchor,
-      p2: isChartIconKind(input.kind) ? anchor : input.p2,
-    })
+    const persist = isTextAnchorKind(input.kind)
+      ? insertTextAnchor({
+          symbol: SYMBOL,
+          timeframe: pane.id,
+          p1: anchor,
+          label: '',
+        })
+      : insertDrawing({
+          symbol: SYMBOL,
+          timeframe: pane.id,
+          kind: input.kind,
+          p1: anchor,
+          p2: pointAnchor,
+        })
+    void persist
       .then((saved) => {
         setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
+        if (isTextAnchorKind(input.kind)) {
+          setLabelEditDrawingId(saved.id)
+          setLabelDraft(saved.label ?? '')
+        }
       })
       .catch(() => {
         setDrawings((current) => current.filter((d) => d.id !== tempId))
@@ -552,16 +586,20 @@ function DashboardPane({
     setLabelDraft(drawing?.label ?? '')
   }
 
-  const savePolylineLabel = () => {
+  const saveDrawingLabel = () => {
     if (!labelEditDrawingId) return
     const id = labelEditDrawingId
     const label = labelDraft
+    const drawing = drawings.find((d) => d.id === id)
     setDrawings((current) =>
       current.map((d) => (d.id === id ? { ...d, label } : d)),
     )
     setLabelEditDrawingId(null)
     if (id.startsWith('temp-')) return
-    void updatePolylineArrow(id, { label }).catch(() => {
+    const persist = drawing && isTextAnchorKind(drawing.kind)
+      ? updateChartDrawingLabel(id, label)
+      : updatePolylineArrow(id, { label })
+    void persist.catch(() => {
       toast.error('Failed to save label')
       void loadChartDrawings(SYMBOL, pane.id)
         .then((rows) => setDrawings(rows))
@@ -643,10 +681,22 @@ function DashboardPane({
               >
                 <Spline />
               </Button>
+              <Button
+                variant={drawTool === 'text_anchor' ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={drawTool === 'text_anchor' ? 'Cancel text anchor' : 'Place text anchor'}
+                aria-pressed={drawTool === 'text_anchor'}
+                onClick={() => toggleTool('text_anchor')}
+              >
+                <Type />
+              </Button>
               {drawTool === 'polyline_arrow' && (
                 <span className="text-xs text-muted-foreground">
                   Tap points · double-tap final point
                 </span>
+              )}
+              {drawTool === 'text_anchor' && (
+                <span className="text-xs text-muted-foreground">Tap to place text</span>
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -726,6 +776,7 @@ function DashboardPane({
             rectangles={rectangleDrawings}
             icons={iconDrawings}
             polylines={polylineDrawings}
+            textAnchors={textAnchorDrawings}
             forceEvents={forceEvents}
             engulfingEvents={engulfingEvents}
             volumeProfile={volumeProfile}
@@ -751,21 +802,21 @@ function DashboardPane({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Arrow label</DialogTitle>
+            <DialogTitle>{labelEditIsText ? 'Text anchor' : 'Arrow label'}</DialogTitle>
           </DialogHeader>
           <Input
             value={labelDraft}
             onChange={(e) => setLabelDraft(e.target.value)}
-            placeholder="Label at arrow head"
+            placeholder={labelEditIsText ? 'Text at anchor' : 'Label at arrow head'}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') savePolylineLabel()
+              if (e.key === 'Enter') saveDrawingLabel()
             }}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setLabelEditDrawingId(null)}>
               Cancel
             </Button>
-            <Button onClick={savePolylineLabel}>Save</Button>
+            <Button onClick={saveDrawingLabel}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

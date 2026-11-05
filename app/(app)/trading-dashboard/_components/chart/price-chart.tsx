@@ -5,7 +5,11 @@ import type { IChartApi, Time } from 'lightweight-charts'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
-import type { ChartDrawingKind, DrawingPoint } from '../../_lib/chart/chart-drawings'
+import {
+  isTextAnchorKind,
+  type ChartDrawingKind,
+  type DrawingPoint,
+} from '../../_lib/chart/chart-drawings'
 import { isChartIconKind } from '../../_lib/chart/chart-icons'
 import type { BarTimeSeries } from '../../_lib/chart/chart-coordinates'
 import {
@@ -21,6 +25,7 @@ import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
 import type { IconMarkerDrawing } from './primitives/icon-marker-primitive'
 import type { RectangleDrawing } from './primitives/rectangle-primitive'
 import type { PolylineArrowDrawing } from './primitives/polyline-arrow-primitive'
+import type { TextAnchorDrawing } from './primitives/text-anchor-primitive'
 import type { TrendlineDrawing } from './primitives/trendline-primitive'
 import {
   bindPriceChartInteraction,
@@ -48,6 +53,7 @@ export function PriceChart({
   rectangles = [],
   icons = [],
   polylines = [],
+  textAnchors = [],
   forceEvents = [],
   engulfingEvents = [],
   volumeProfile = null,
@@ -72,6 +78,7 @@ export function PriceChart({
   rectangles?: readonly RectangleDrawing[]
   icons?: readonly IconMarkerDrawing[]
   polylines?: readonly PolylineArrowDrawing[]
+  textAnchors?: readonly TextAnchorDrawing[]
   forceEvents?: readonly ForceOverlayEvent[]
   engulfingEvents?: readonly EngulfingOverlayEvent[]
   volumeProfile?: VolumeProfileFrame | null
@@ -129,6 +136,7 @@ export function PriceChart({
   const rectanglesRef = useRef(rectangles)
   const iconsRef = useRef(icons)
   const polylinesRef = useRef(polylines)
+  const textAnchorsRef = useRef(textAnchors)
   const onCompleteRef = useRef(onDrawingComplete)
   const onChangeRef = useRef(onDrawingChange)
   const onChangeEndRef = useRef(onDrawingChangeEnd)
@@ -148,6 +156,7 @@ export function PriceChart({
   rectanglesRef.current = rectangles
   iconsRef.current = icons
   polylinesRef.current = polylines
+  textAnchorsRef.current = textAnchors
   onLoadOlderRef.current = onLoadOlder
   axesVisibleRef.current = axesVisible
   drawToolRef.current = drawTool
@@ -216,6 +225,7 @@ export function PriceChart({
     handle?.rectangles.setSelectedId(id)
     handle?.icons.setSelectedId(id)
     handle?.polylines.setSelectedId(id)
+    handle?.textAnchors.setSelectedId(id)
     if (changed) onSelectionChangeRef.current?.(id)
   }
 
@@ -234,20 +244,23 @@ export function PriceChart({
     handle?.rectangles.setDraft(null)
     handle?.icons.setDraft(null)
     handle?.polylines.setDraft(null)
+    handle?.textAnchors.setDraft(null)
   }
 
   const setActiveDraft = (draft: { p1: DrawingPoint; p2?: DrawingPoint } | null) => {
     const tool = drawToolRef.current
     const handle = handleRef.current
-    if (!handle || !tool || isChartIconKind(tool)) return
+    if (!handle || !tool || isChartIconKind(tool) || isTextAnchorKind(tool)) return
     if (tool === 'trendline') {
       handle.trendlines.setDraft(draft)
       handle.rectangles.setDraft(null)
       handle.icons.setDraft(null)
+      handle.textAnchors.setDraft(null)
     } else if (tool === 'rectangle') {
       handle.rectangles.setDraft(draft)
       handle.trendlines.setDraft(null)
       handle.icons.setDraft(null)
+      handle.textAnchors.setDraft(null)
     }
   }
 
@@ -323,6 +336,7 @@ export function PriceChart({
           trendlinesRef,
           rectanglesRef,
           iconsRef,
+          textAnchorsRef,
           setShapeAwaitingP2Ref,
           setShapeDraftRef,
           onCompleteRef,
@@ -400,6 +414,12 @@ export function PriceChart({
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
+    handle.textAnchors.setAnchors(textAnchors)
+  }, [textAnchors, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
     handle.forceOverlay.setEvents(forceEvents)
   }, [forceEvents, epoch])
 
@@ -429,6 +449,7 @@ export function PriceChart({
     handle.rectangles.setSelectionEnabled(!drawing)
     handle.icons.setSelectionEnabled(!drawing)
     handle.polylines.setSelectionEnabled(!drawing)
+    handle.textAnchors.setSelectionEnabled(!drawing)
   }, [drawTool, epoch])
 
   useEffect(() => {
@@ -441,9 +462,10 @@ export function PriceChart({
       trendlines.some((d) => d.id === selectedIdRef.current) ||
       rectangles.some((d) => d.id === selectedIdRef.current) ||
       icons.some((d) => d.id === selectedIdRef.current) ||
-      polylines.some((d) => d.id === selectedIdRef.current)
+      polylines.some((d) => d.id === selectedIdRef.current) ||
+      textAnchors.some((d) => d.id === selectedIdRef.current)
     if (!exists) selectDrawing(null)
-  }, [trendlines, rectangles, icons, polylines, epoch])
+  }, [trendlines, rectangles, icons, polylines, textAnchors, epoch])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
