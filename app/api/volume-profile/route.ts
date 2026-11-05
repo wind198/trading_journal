@@ -1,10 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import {
-  VOLUME_PROFILE_BIN_SIZE,
-  VOLUME_PROFILE_WINDOW_MS,
-  fetchVolumeProfileTickCounts,
-} from '@/lib/ticks/volume-profile'
+import { VOLUME_PROFILE_BIN_SIZE, fetchVolumeProfileTickCounts } from '@/lib/ticks/volume-profile'
 
 const SYMBOL = 'EURUSD'
 
@@ -20,8 +16,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Bad symbol' }, { status: 400 })
   }
 
-  const toMsc = Date.now()
-  const fromMsc = toMsc - VOLUME_PROFILE_WINDOW_MS
+  const fromRaw = request.nextUrl.searchParams.get('from_msc')
+  const toRaw = request.nextUrl.searchParams.get('to_msc')
+  const fromMsc = fromRaw == null ? Number.NaN : Number(fromRaw)
+  const toMsc = toRaw == null ? Number.NaN : Number(toRaw)
+  if (!Number.isFinite(fromMsc) || !Number.isFinite(toMsc) || !(toMsc > fromMsc)) {
+    return NextResponse.json({ error: 'Bad window' }, { status: 400 })
+  }
 
   try {
     const data = await fetchVolumeProfileTickCounts({

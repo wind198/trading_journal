@@ -61,15 +61,20 @@ export function marketRecentQueryOptions(timeframe: string) {
   })
 }
 
-export function volumeProfileKey() {
-  return ['market', 'volume-profile', MARKET_SYMBOL] as const
+export function volumeProfileKey(fromMsc: number, toMsc: number) {
+  return ['market', 'volume-profile', MARKET_SYMBOL, fromMsc, toMsc] as const
 }
 
-export function volumeProfileQueryOptions() {
+export function volumeProfileQueryOptions(fromMsc: number, toMsc: number) {
   return queryOptions({
-    queryKey: volumeProfileKey(),
+    queryKey: volumeProfileKey(fromMsc, toMsc),
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/volume-profile?symbol=${MARKET_SYMBOL}`, { signal })
+      const params = new URLSearchParams({
+        symbol: MARKET_SYMBOL,
+        from_msc: String(fromMsc),
+        to_msc: String(toMsc),
+      })
+      const response = await fetch(`/api/volume-profile?${params}`, { signal })
       if (!response.ok) throw new Error('volume-profile')
       const body = (await response.json()) as { data?: VolumeProfileTickBin[] }
       return body.data ?? []

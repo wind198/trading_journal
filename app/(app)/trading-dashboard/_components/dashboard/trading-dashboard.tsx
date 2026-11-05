@@ -58,7 +58,8 @@ import {
   DEFAULT_BASE_LINE_BIAS_CONFIG,
 } from '../../_lib/bias/base-line-bias'
 import { mergeCandles } from '@/lib/ticks/merge'
-import type { LightweightCandle } from '@/lib/ticks/candles'
+import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
+import { volumeProfileWindowFromCandles } from '@/lib/ticks/volume-profile'
 import {
   marketHistoryInfiniteOptions,
   marketRecentQueryOptions,
@@ -305,10 +306,6 @@ function DashboardPane({
 }) {
   const history = useInfiniteQuery(marketHistoryInfiniteOptions(pane.id))
   const recent = useQuery(marketRecentQueryOptions(pane.id))
-  const volumeProfileQuery = useQuery({
-    ...volumeProfileQueryOptions(),
-    enabled: pane.id === '15m' || pane.id === '3m',
-  })
   const loadingOlder = useRef(false)
   const historyBars = useMemo(
     () =>
@@ -322,6 +319,16 @@ function DashboardPane({
     () => mergeCandles(historyBars, recent.data ?? []),
     [historyBars, recent.data],
   )
+  const volumeProfileWindow = useMemo(() => {
+    if (pane.id !== '15m' && pane.id !== '3m') return null
+    return volumeProfileWindowFromCandles(candles, pane.id as CandleTimeframe)
+  }, [candles, pane.id])
+  const volumeProfileQuery = useQuery({
+    ...(volumeProfileWindow
+      ? volumeProfileQueryOptions(volumeProfileWindow.fromMsc, volumeProfileWindow.toMsc)
+      : volumeProfileQueryOptions(0, 1)),
+    enabled: volumeProfileWindow != null,
+  })
   const loadOlder = () => {
     if (loadingOlder.current || !history.hasNextPage || history.isFetchingNextPage) return
     loadingOlder.current = true

@@ -124,6 +124,7 @@ const SESSION_LINE_SLOTS = [
   { hour: 7, minute: 0 },
   { hour: 14, minute: 0 },
   { hour: 19, minute: 30 },
+  { hour: 23, minute: 0 },
 ] as const
 
 const SESSION_DAY_OFFSETS = [-2, -1, 0, 1] as const

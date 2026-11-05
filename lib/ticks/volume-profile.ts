@@ -1,7 +1,30 @@
+import { CANDLE_TIMEFRAMES, type CandleTimeframe, type LightweightCandle } from './candles'
 import { createServiceClient } from '../supabase/admin'
 
-export const VOLUME_PROFILE_WINDOW_MS = 24 * 60 * 60 * 1000
+/** Last N bars on 3m / 15m panes (not wall-clock 24h). */
+export const VOLUME_PROFILE_CANDLE_COUNT = 96
 export const VOLUME_PROFILE_BIN_SIZE = 0.0001
+
+export type VolumeProfileWindow = {
+  fromMsc: number
+  toMsc: number
+}
+
+/** Tick range covering the last `candleCount` bars (inclusive of bar buckets). */
+export function volumeProfileWindowFromCandles(
+  candles: readonly LightweightCandle[],
+  timeframe: CandleTimeframe,
+  candleCount = VOLUME_PROFILE_CANDLE_COUNT,
+): VolumeProfileWindow | null {
+  if (candles.length === 0) return null
+  const intervalSec = CANDLE_TIMEFRAMES[timeframe]
+  const slice = candles.slice(-Math.min(candleCount, candles.length))
+  const fromMsc = slice[0].time * 1000
+  const last = slice[slice.length - 1]
+  const toMsc = (last.time + intervalSec) * 1000 - 1
+  if (!(toMsc > fromMsc)) return null
+  return { fromMsc, toMsc }
+}
 
 export type VolumeProfileTickBin = {
   price: number
