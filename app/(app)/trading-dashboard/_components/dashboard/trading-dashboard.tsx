@@ -84,7 +84,7 @@ import {
 } from 'lucide-react'
 
 const SYMBOL = 'EURUSD'
-const SMALL_SCREEN_QUERY = '(min-width: 1280px)'
+const SMALL_SCREEN_QUERY = '(min-width: 1600px)'
 
 function useTabletUp() {
   const [tablet, setTablet] = useState(false)
