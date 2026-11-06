@@ -11,6 +11,7 @@ import type { IconMarkerDrawing } from './primitives/icon-marker-primitive'
 import type { RectangleDrawing } from './primitives/rectangle-primitive'
 import type { TextAnchorDrawing } from './primitives/text-anchor-primitive'
 import type { TrendlineDrawing } from './primitives/trendline-primitive'
+import type { WarningCircleDrawing } from './primitives/warning-circle-primitive'
 import { clickToPoint, type ChartHandle } from './price-chart-handle'
 
 const TAP_MOVE_THRESHOLD_PX = 12
@@ -18,11 +19,11 @@ const TOUCH_HIT_BOOST = 1.75
 const DOUBLE_TAP_MS = 350
 const DOUBLE_TAP_PX = 24
 
-type ShapeDrawTool = 'trendline' | 'rectangle'
+type ShapeDrawTool = 'trendline' | 'rectangle' | 'warning_circle'
 export type TouchShapePhase = 'idle' | 'has_p1' | 'preview_drag'
 
 export function isShapeDrawTool(tool: ChartDrawingKind | null): tool is ShapeDrawTool {
-  return tool === 'trendline' || tool === 'rectangle'
+  return tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
 }
 
 function defaultShapePreviewP2(
@@ -77,6 +78,7 @@ export type PriceChartInteractionRefs = {
   rectanglesRef: RefObject<readonly RectangleDrawing[]>
   iconsRef: RefObject<readonly IconMarkerDrawing[]>
   textAnchorsRef: RefObject<readonly TextAnchorDrawing[]>
+  warningCirclesRef: RefObject<readonly WarningCircleDrawing[]>
   setShapeAwaitingP2Ref: RefObject<(value: boolean) => void>
   setShapeDraftRef: RefObject<(p1: DrawingPoint, p2?: DrawingPoint) => void>
   onCompleteRef: RefObject<
@@ -127,6 +129,7 @@ export function bindPriceChartInteraction(input: {
     handle.icons.updateAllViews()
     handle.polylines.updateAllViews()
     handle.textAnchors.updateAllViews()
+    handle.warningCircles.updateAllViews()
   }
 
   const drawingPoints = (id: string): { p1: DrawingPoint; p2: DrawingPoint } | null => {
@@ -134,6 +137,8 @@ export function bindPriceChartInteraction(input: {
     if (fromTrend) return { p1: fromTrend.p1, p2: fromTrend.p2 }
     const fromRect = refs.rectanglesRef.current.find((d) => d.id === id)
     if (fromRect) return { p1: fromRect.p1, p2: fromRect.p2 }
+    const fromCircle = refs.warningCirclesRef.current.find((d) => d.id === id)
+    if (fromCircle) return { p1: fromCircle.p1, p2: fromCircle.p2 }
     const fromIcon = refs.iconsRef.current.find((d) => d.id === id)
     if (fromIcon) return { p1: fromIcon.p1, p2: fromIcon.p1 }
     const fromText = refs.textAnchorsRef.current.find((d) => d.id === id)
@@ -142,6 +147,8 @@ export function bindPriceChartInteraction(input: {
     if (line) return { p1: line.p1, p2: line.p2 }
     const rect = handle.rectangles.getDrawing(id)
     if (rect) return { p1: rect.p1, p2: rect.p2 }
+    const circle = handle.warningCircles.getDrawing(id)
+    if (circle) return { p1: circle.p1, p2: circle.p2 }
     const icon = handle.icons.getDrawing(id)
     if (icon) return { p1: icon.p1, p2: icon.p1 }
     const text = handle.textAnchors.getDrawing(id)
@@ -162,6 +169,7 @@ export function bindPriceChartInteraction(input: {
     handle.icons.setHitBoost(boost)
     handle.polylines.setHitBoost(boost)
     handle.textAnchors.setHitBoost(boost)
+    handle.warningCircles.setHitBoost(boost)
   }
 
   const isCoarsePointer = (event: PointerEvent) =>
@@ -253,10 +261,11 @@ export function bindPriceChartInteraction(input: {
     }
     const lineHit = handle.trendlines.hitTest(point.x, point.y)
     const rectHit = handle.rectangles.hitTest(point.x, point.y)
+    const circleHit = handle.warningCircles.hitTest(point.x, point.y)
     const iconHit = handle.icons.hitTest(point.x, point.y)
     const polyHit = handle.polylines.hitTest(point.x, point.y)
     const textHit = handle.textAnchors.hitTest(point.x, point.y)
-    const hit = [lineHit, rectHit, iconHit, polyHit, textHit]
+    const hit = [lineHit, rectHit, circleHit, iconHit, polyHit, textHit]
       .filter((item): item is NonNullable<typeof item> => item != null)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))[0]
     const hitId = hit?.externalId ?? null
@@ -528,6 +537,7 @@ export function bindPriceChartInteraction(input: {
     const anchor =
       handle.trendlines.hitTestAnchor(point.x, point.y) ??
       handle.rectangles.hitTestAnchor(point.x, point.y) ??
+      handle.warningCircles.hitTestAnchor(point.x, point.y) ??
       handle.icons.hitTestAnchor(point.x, point.y) ??
       handle.textAnchors.hitTestAnchor(point.x, point.y)
     if (!anchor || anchor.id !== selectedId) return
@@ -593,6 +603,18 @@ export function bindPriceChartInteraction(input: {
         drag.p1 = next
         drag.p2 = next
         refs.onChangeRef.current?.(drag.id, next, next)
+      } else if (
+        drag.endpoint === 'p1' &&
+        handle.warningCircles.getDrawing(drag.id) != null
+      ) {
+        // Move center; keep rim offset so radius stays stable in data space.
+        const dTime = next.time - drag.p1.time
+        const dPrice = next.price - drag.p1.price
+        const p1 = next
+        const p2 = { time: drag.p2.time + dTime, price: drag.p2.price + dPrice }
+        drag.p1 = p1
+        drag.p2 = p2
+        refs.onChangeRef.current?.(drag.id, p1, p2)
       } else {
         const p1 = drag.endpoint === 'p1' ? next : drag.p1
         const p2 = drag.endpoint === 'p2' ? next : drag.p2

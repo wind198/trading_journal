@@ -27,6 +27,7 @@ import type { RectangleDrawing } from './primitives/rectangle-primitive'
 import type { PolylineArrowDrawing } from './primitives/polyline-arrow-primitive'
 import type { TextAnchorDrawing } from './primitives/text-anchor-primitive'
 import type { TrendlineDrawing } from './primitives/trendline-primitive'
+import type { WarningCircleDrawing } from './primitives/warning-circle-primitive'
 import {
   bindPriceChartInteraction,
   isShapeDrawTool,
@@ -51,6 +52,7 @@ export function PriceChart({
   axesVisible,
   trendlines = [],
   rectangles = [],
+  warningCircles = [],
   icons = [],
   polylines = [],
   textAnchors = [],
@@ -76,6 +78,7 @@ export function PriceChart({
   axesVisible: boolean
   trendlines?: readonly TrendlineDrawing[]
   rectangles?: readonly RectangleDrawing[]
+  warningCircles?: readonly WarningCircleDrawing[]
   icons?: readonly IconMarkerDrawing[]
   polylines?: readonly PolylineArrowDrawing[]
   textAnchors?: readonly TextAnchorDrawing[]
@@ -134,6 +137,7 @@ export function PriceChart({
   const selectedIdRef = useRef<string | null>(null)
   const trendlinesRef = useRef(trendlines)
   const rectanglesRef = useRef(rectangles)
+  const warningCirclesRef = useRef(warningCircles)
   const iconsRef = useRef(icons)
   const polylinesRef = useRef(polylines)
   const textAnchorsRef = useRef(textAnchors)
@@ -154,6 +158,7 @@ export function PriceChart({
   setShapeAwaitingP2Ref.current = setShapeAwaitingP2
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
+  warningCirclesRef.current = warningCircles
   iconsRef.current = icons
   polylinesRef.current = polylines
   textAnchorsRef.current = textAnchors
@@ -223,6 +228,7 @@ export function PriceChart({
     const handle = handleRef.current
     handle?.trendlines.setSelectedId(id)
     handle?.rectangles.setSelectedId(id)
+    handle?.warningCircles.setSelectedId(id)
     handle?.icons.setSelectedId(id)
     handle?.polylines.setSelectedId(id)
     handle?.textAnchors.setSelectedId(id)
@@ -242,6 +248,7 @@ export function PriceChart({
     const handle = handleRef.current
     handle?.trendlines.setDraft(null)
     handle?.rectangles.setDraft(null)
+    handle?.warningCircles.setDraft(null)
     handle?.icons.setDraft(null)
     handle?.polylines.setDraft(null)
     handle?.textAnchors.setDraft(null)
@@ -251,16 +258,17 @@ export function PriceChart({
     const tool = drawToolRef.current
     const handle = handleRef.current
     if (!handle || !tool || isChartIconKind(tool) || isTextAnchorKind(tool)) return
+    handle.trendlines.setDraft(null)
+    handle.rectangles.setDraft(null)
+    handle.warningCircles.setDraft(null)
+    handle.icons.setDraft(null)
+    handle.textAnchors.setDraft(null)
     if (tool === 'trendline') {
       handle.trendlines.setDraft(draft)
-      handle.rectangles.setDraft(null)
-      handle.icons.setDraft(null)
-      handle.textAnchors.setDraft(null)
     } else if (tool === 'rectangle') {
       handle.rectangles.setDraft(draft)
-      handle.trendlines.setDraft(null)
-      handle.icons.setDraft(null)
-      handle.textAnchors.setDraft(null)
+    } else if (tool === 'warning_circle') {
+      handle.warningCircles.setDraft(draft)
     }
   }
 
@@ -337,6 +345,7 @@ export function PriceChart({
           rectanglesRef,
           iconsRef,
           textAnchorsRef,
+          warningCirclesRef,
           setShapeAwaitingP2Ref,
           setShapeDraftRef,
           onCompleteRef,
@@ -402,6 +411,12 @@ export function PriceChart({
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
+    handle.warningCircles.setCircles(warningCircles)
+  }, [warningCircles, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
     handle.icons.setIcons(icons)
   }, [icons, epoch])
 
@@ -447,6 +462,7 @@ export function PriceChart({
     const drawing = drawTool != null
     handle.trendlines.setSelectionEnabled(!drawing)
     handle.rectangles.setSelectionEnabled(!drawing)
+    handle.warningCircles.setSelectionEnabled(!drawing)
     handle.icons.setSelectionEnabled(!drawing)
     handle.polylines.setSelectionEnabled(!drawing)
     handle.textAnchors.setSelectionEnabled(!drawing)
@@ -461,11 +477,12 @@ export function PriceChart({
     const exists =
       trendlines.some((d) => d.id === selectedIdRef.current) ||
       rectangles.some((d) => d.id === selectedIdRef.current) ||
+      warningCircles.some((d) => d.id === selectedIdRef.current) ||
       icons.some((d) => d.id === selectedIdRef.current) ||
       polylines.some((d) => d.id === selectedIdRef.current) ||
       textAnchors.some((d) => d.id === selectedIdRef.current)
     if (!exists) selectDrawing(null)
-  }, [trendlines, rectangles, icons, polylines, textAnchors, epoch])
+  }, [trendlines, rectangles, warningCircles, icons, polylines, textAnchors, epoch])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

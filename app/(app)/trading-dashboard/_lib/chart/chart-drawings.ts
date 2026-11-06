@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/client'
 import { CHART_ICON_KINDS, type ChartIconKind } from './chart-icons'
 
 export type { ChartIconKind }
-export type ShapeDrawingKind = 'trendline' | 'rectangle'
+export type ShapeDrawingKind = 'trendline' | 'rectangle' | 'warning_circle'
 export type PolylineArrowKind = 'polyline_arrow'
 export type TextAnchorKind = 'text_anchor'
 export type ChartDrawingKind =
@@ -14,6 +14,7 @@ export type ChartDrawingKind =
 const LOADABLE_KINDS = [
   'trendline',
   'rectangle',
+  'warning_circle',
   'polyline_arrow',
   'text_anchor',
   ...CHART_ICON_KINDS,
@@ -95,6 +96,10 @@ export function isPolylineArrowKind(kind: string): kind is PolylineArrowKind {
 
 export function isTextAnchorKind(kind: string): kind is TextAnchorKind {
   return kind === 'text_anchor'
+}
+
+export function isWarningCircleKind(kind: string): kind is 'warning_circle' {
+  return kind === 'warning_circle'
 }
 
 export async function loadChartDrawings(

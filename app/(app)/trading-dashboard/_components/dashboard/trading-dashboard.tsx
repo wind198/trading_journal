@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { NotesSidebar } from '../notes/notes-sidebar'
 import { GuidesSidebar } from '../guides/guides-sidebar'
+import { NonTradeWarningBanner } from './non-trade-warning-banner'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import {
   Dialog,
@@ -81,6 +82,7 @@ import {
   Shrink,
   MapPin,
   Spline,
+  Circle,
   Square,
   Trash2,
   TrendingUp,
@@ -233,6 +235,7 @@ function Dashboard() {
           </div>
         </header>
       )}
+      {!fullScreen && <NonTradeWarningBanner />}
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <div
           className={
@@ -413,6 +416,13 @@ function DashboardPane({
     () =>
       drawings
         .filter((d) => d.kind === 'rectangle')
+        .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
+    [drawings],
+  )
+  const warningCircleDrawings = useMemo(
+    () =>
+      drawings
+        .filter((d) => d.kind === 'warning_circle')
         .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
     [drawings],
   )
@@ -671,6 +681,17 @@ function DashboardPane({
                 <Square />
               </Button>
               <Button
+                variant={drawTool === 'warning_circle' ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={
+                  drawTool === 'warning_circle' ? 'Cancel warning circle' : 'Draw warning circle'
+                }
+                aria-pressed={drawTool === 'warning_circle'}
+                onClick={() => toggleTool('warning_circle')}
+              >
+                <Circle />
+              </Button>
+              <Button
                 variant={drawTool === 'polyline_arrow' ? 'default' : 'ghost'}
                 size="icon"
                 aria-label={
@@ -774,6 +795,7 @@ function DashboardPane({
             axesVisible={axesVisible}
             trendlines={trendlineDrawings}
             rectangles={rectangleDrawings}
+            warningCircles={warningCircleDrawings}
             icons={iconDrawings}
             polylines={polylineDrawings}
             textAnchors={textAnchorDrawings}

@@ -22,6 +22,7 @@ import { SessionVerticalLinesPrimitive } from './primitives/session-vertical-lin
 import { TextAnchorPrimitive } from './primitives/text-anchor-primitive'
 import { TrendlinePrimitive } from './primitives/trendline-primitive'
 import { VolumeProfilePrimitive } from './primitives/volume-profile-primitive'
+import { WarningCirclePrimitive } from './primitives/warning-circle-primitive'
 
 type LwcModule = typeof import('lightweight-charts')
 
@@ -31,6 +32,7 @@ type AnyPrimitive =
   | IconMarkerPrimitive
   | PolylineArrowPrimitive
   | TextAnchorPrimitive
+  | WarningCirclePrimitive
   | ForceOverlayPrimitive
   | EngulfingOverlayPrimitive
   | VolumeProfilePrimitive
@@ -57,6 +59,7 @@ export type ChartHandle = {
   icons: IconMarkerPrimitive
   polylines: PolylineArrowPrimitive
   textAnchors: TextAnchorPrimitive
+  warningCircles: WarningCirclePrimitive
   forceOverlay: ForceOverlayPrimitive
   engulfingOverlay: EngulfingOverlayPrimitive
   sessionVerticalLines: SessionVerticalLinesPrimitive | null
@@ -79,6 +82,7 @@ export function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
   handle.icons.setBars(candles)
   handle.polylines.setBars(candles)
   handle.textAnchors.setBars(candles)
+  handle.warningCircles.setBars(candles)
 }
 
 /** Resolve click → time/price at cursor (no series or bar-center snap). */
@@ -179,10 +183,12 @@ export function initPriceChart(
   const iconMarkerPrimitive = new IconMarkerPrimitive([])
   const polylineArrowPrimitive = new PolylineArrowPrimitive([])
   const textAnchorPrimitive = new TextAnchorPrimitive([])
+  const warningCirclePrimitive = new WarningCirclePrimitive([])
   const forceOverlayPrimitive = new ForceOverlayPrimitive([])
   const engulfingOverlayPrimitive = new EngulfingOverlayPrimitive([])
   price.attachPrimitive(trendlinePrimitive)
   price.attachPrimitive(rectanglePrimitive)
+  price.attachPrimitive(warningCirclePrimitive)
   price.attachPrimitive(iconMarkerPrimitive)
   price.attachPrimitive(polylineArrowPrimitive)
   price.attachPrimitive(textAnchorPrimitive)
@@ -227,6 +233,7 @@ export function initPriceChart(
     icons: iconMarkerPrimitive,
     polylines: polylineArrowPrimitive,
     textAnchors: textAnchorPrimitive,
+    warningCircles: warningCirclePrimitive,
     forceOverlay: forceOverlayPrimitive,
     engulfingOverlay: engulfingOverlayPrimitive,
     sessionVerticalLines: sessionVerticalLinesPrimitive,
