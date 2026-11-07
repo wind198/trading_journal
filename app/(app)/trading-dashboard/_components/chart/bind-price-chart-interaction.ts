@@ -271,7 +271,9 @@ export function bindPriceChartInteraction(input: {
     const hitId = hit?.externalId ?? null
     if (
       hitId &&
-      (polyHit?.externalId === hitId || textHit?.externalId === hitId) &&
+      (polyHit?.externalId === hitId ||
+        textHit?.externalId === hitId ||
+        circleHit?.externalId === hitId) &&
       clientX != null &&
       clientY != null &&
       tryOpenLabelEditor(clientX, clientY, hitId)
@@ -678,7 +680,8 @@ export function bindPriceChartInteraction(input: {
     const point = localPoint(event as unknown as PointerEvent)
     const polyHit = handle.polylines.hitTest(point.x, point.y)
     const textHit = handle.textAnchors.hitTest(point.x, point.y)
-    const labelHit = polyHit?.externalId ?? textHit?.externalId
+    const circleHit = handle.warningCircles.hitTest(point.x, point.y)
+    const labelHit = polyHit?.externalId ?? textHit?.externalId ?? circleHit?.externalId
     if (!labelHit) return
     event.preventDefault()
     selectDrawing(labelHit)

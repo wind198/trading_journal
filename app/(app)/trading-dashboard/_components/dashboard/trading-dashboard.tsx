@@ -33,6 +33,7 @@ import {
   insertTextAnchor,
   isPolylineArrowKind,
   isTextAnchorKind,
+  isWarningCircleKind,
   loadChartDrawings,
   updateChartDrawingLabel,
   updatePolylineArrow,
@@ -423,7 +424,7 @@ function DashboardPane({
     () =>
       drawings
         .filter((d) => d.kind === 'warning_circle')
-        .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
+        .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2, label: d.label })),
     [drawings],
   )
   const iconDrawings = useMemo(
@@ -457,6 +458,8 @@ function DashboardPane({
     ? drawings.find((d) => d.id === labelEditDrawingId)
     : null
   const labelEditIsText = labelEditDrawing != null && isTextAnchorKind(labelEditDrawing.kind)
+  const labelEditIsCircle =
+    labelEditDrawing != null && isWarningCircleKind(labelEditDrawing.kind)
 
   const toggleTool = (tool: ChartDrawingKind) => {
     setDrawTool((current) => (current === tool ? null : tool))
@@ -606,9 +609,11 @@ function DashboardPane({
     )
     setLabelEditDrawingId(null)
     if (id.startsWith('temp-')) return
-    const persist = drawing && isTextAnchorKind(drawing.kind)
-      ? updateChartDrawingLabel(id, label)
-      : updatePolylineArrow(id, { label })
+    const persist =
+      drawing &&
+      (isTextAnchorKind(drawing.kind) || isWarningCircleKind(drawing.kind))
+        ? updateChartDrawingLabel(id, label)
+        : updatePolylineArrow(id, { label })
     void persist.catch(() => {
       toast.error('Failed to save label')
       void loadChartDrawings(SYMBOL, pane.id)
@@ -824,12 +829,24 @@ function DashboardPane({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{labelEditIsText ? 'Text anchor' : 'Arrow label'}</DialogTitle>
+            <DialogTitle>
+              {labelEditIsText
+                ? 'Text anchor'
+                : labelEditIsCircle
+                  ? 'Warning circle label'
+                  : 'Arrow label'}
+            </DialogTitle>
           </DialogHeader>
           <Input
             value={labelDraft}
             onChange={(e) => setLabelDraft(e.target.value)}
-            placeholder={labelEditIsText ? 'Text at anchor' : 'Label at arrow head'}
+            placeholder={
+              labelEditIsText
+                ? 'Text at anchor'
+                : labelEditIsCircle
+                  ? 'Label at circle center'
+                  : 'Label at arrow head'
+            }
             onKeyDown={(e) => {
               if (e.key === 'Enter') saveDrawingLabel()
             }}

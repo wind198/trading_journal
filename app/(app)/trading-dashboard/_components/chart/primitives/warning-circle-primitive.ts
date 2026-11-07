@@ -10,6 +10,7 @@ import type {
 } from 'lightweight-charts'
 import { chartXAtTime, type BarTimeSeries } from '../../../_lib/chart/chart-coordinates'
 import type { DrawingPoint } from '../../../_lib/chart/chart-drawings'
+import { CHART_THEME } from '../../../_lib/chart/price-chart-style'
 
 export type WarningCircleDrawing = {
   id: string
@@ -17,6 +18,7 @@ export type WarningCircleDrawing = {
   p1: DrawingPoint
   /** Rim point — radius is screen distance from center */
   p2: DrawingPoint
+  label?: string
 }
 
 const FILL = 'rgba(245, 158, 11, 0.28)'
@@ -27,6 +29,7 @@ const DRAFT_STROKE = 'rgba(245, 158, 11, 0.5)'
 const HIT_TOLERANCE = 6
 const ANCHOR_HIT_RADIUS = 8
 const MIN_RADIUS = 4
+const LABEL_FONT = '11px system-ui, sans-serif'
 
 type CircleGeom = {
   id: string
@@ -37,6 +40,7 @@ type CircleGeom = {
   radius: number
   draft: boolean
   selected: boolean
+  label?: string
 }
 
 class WarningCircleRenderer {
@@ -59,6 +63,16 @@ class WarningCircleRenderer {
         context.setLineDash(circle.draft ? [4, 3] : [])
         context.stroke()
         context.setLineDash([])
+
+        const label = circle.label?.trim()
+        if (label) {
+          context.font = LABEL_FONT
+          context.fillStyle = CHART_THEME.text
+          context.textBaseline = 'middle'
+          context.textAlign = 'center'
+          context.fillText(label, circle.cx, circle.cy)
+        }
+
         if (circle.selected && !circle.draft) {
           for (const [ax, ay] of [
             [circle.cx, circle.cy],
@@ -141,6 +155,7 @@ class WarningCirclePaneView {
       p2: DrawingPoint,
       draft: boolean,
       selected: boolean,
+      label?: string,
     ) => {
       const bars = this.source.bars
       const x1 = chartXAtTime(chart, p1.time, bars)
@@ -161,15 +176,23 @@ class WarningCirclePaneView {
         radius: Math.max(MIN_RADIUS, Math.hypot(rx - cx, ry - cy)),
         draft,
         selected,
+        label,
       })
     }
 
     for (const circle of this.source.circles) {
-      push(circle.id, circle.p1, circle.p2, false, circle.id === this.source.selectedId)
+      push(
+        circle.id,
+        circle.p1,
+        circle.p2,
+        false,
+        circle.id === this.source.selectedId,
+        circle.label,
+      )
     }
     const draft = this.source.draft
     if (draft?.p1 && draft.p2) {
-      push('draft', draft.p1, draft.p2, true, false)
+      push('draft', draft.p1, draft.p2, true, false, draft.label)
     } else if (draft?.p1) {
       const x = chartXAtTime(chart, draft.p1.time, this.source.bars)
       const y = series.priceToCoordinate(draft.p1.price)
@@ -185,6 +208,7 @@ class WarningCirclePaneView {
           radius: MIN_RADIUS,
           draft: true,
           selected: false,
+          label: draft.label,
         })
       }
     }
@@ -199,7 +223,7 @@ export class WarningCirclePrimitive implements ISeriesPrimitive<Time> {
   series: ISeriesApi<SeriesType, Time> | null = null
   circles: readonly WarningCircleDrawing[] = []
   bars: BarTimeSeries = []
-  draft: { p1: DrawingPoint; p2?: DrawingPoint } | null = null
+  draft: { p1: DrawingPoint; p2?: DrawingPoint; label?: string } | null = null
   selectedId: string | null = null
   selectionEnabled = true
   hitBoost = 1
@@ -223,7 +247,7 @@ export class WarningCirclePrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate?.()
   }
 
-  setDraft(draft: { p1: DrawingPoint; p2?: DrawingPoint } | null): void {
+  setDraft(draft: { p1: DrawingPoint; p2?: DrawingPoint; label?: string } | null): void {
     this.draft = draft
     this.requestUpdate?.()
   }
