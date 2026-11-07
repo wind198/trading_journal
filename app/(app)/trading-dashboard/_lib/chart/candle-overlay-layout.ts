@@ -14,12 +14,12 @@ export type CandleOverlayStackKey = keyof typeof CANDLE_OVERLAY_STACK
 export const CANDLE_BODY_WIDTH_FRAC = 0.7
 
 /** Marker diameter/side as fraction of candle body width (1.5×). */
-export const OVERLAY_MARKER_SIZE_FRAC = 1.5
+export const OVERLAY_MARKER_SIZE_FRAC = 1.7
 
 /** Gap between wick tip and marker edge (and between stacked markers). */
 export const OVERLAY_MARKER_GAP_FRAC = 0.15
 
-const MIN_MARKER_PX = 5
+const MIN_MARKER_PX = 7
 const MIN_GAP_PX = 2
 
 /**

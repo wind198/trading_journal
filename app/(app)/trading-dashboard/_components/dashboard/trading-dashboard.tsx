@@ -351,13 +351,13 @@ function DashboardPane({
   // Lazy + cached: skip work when collapsed; memoized by candles identity when expanded.
   // Calc keeps all events; display drops consecutive force candles after the first.
   const forceEvents = useMemo((): ForceEvent[] => {
-    if (!isExpanded || candles.length === 0) return []
+    if (candles.length === 0) return []
     const { activeEvents } = calculateForceDecay(candles, DEFAULT_FORCE_DECAY_CONFIG)
     return filterConsecutiveForceDisplay(activeEvents)
   }, [isExpanded, candles])
 
   const engulfingEvents = useMemo((): EngulfingEvent[] => {
-    if (!isExpanded || candles.length === 0) return []
+    if (candles.length === 0) return []
     return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
   }, [isExpanded, candles])
 
