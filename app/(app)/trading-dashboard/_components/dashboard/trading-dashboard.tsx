@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
 import { NotesSidebar } from '../notes/notes-sidebar'
 import { GuidesSidebar } from '../guides/guides-sidebar'
 import { NonTradeWarningBanner } from './non-trade-warning-banner'
@@ -178,7 +179,10 @@ function Dashboard() {
     <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
       {!fullScreen && (
         <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-2 py-1.5 sm:gap-2 sm:px-3">
-          <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1>
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <AppNavLinks className="shrink-0" />
+            <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1>
+          </div>
           <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
             <Button variant="ghost" size="sm" onClick={() => void signOut()}>
               Sign out

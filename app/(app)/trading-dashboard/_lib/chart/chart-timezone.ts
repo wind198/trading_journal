@@ -5,6 +5,23 @@
 export const CHART_TIME_ZONE =
   process.env.NEXT_PUBLIC_CHART_TIME_ZONE?.trim() || 'Asia/Ho_Chi_Minh'
 
+/** Minutes from midnight in CHART_TIME_ZONE. */
+export function minutesOfDayInChartZone(nowMs = Date.now()): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: CHART_TIME_ZONE,
+    hour: 'numeric',
+    minute: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(nowMs))
+  let hour = 0
+  let minute = 0
+  for (const part of parts) {
+    if (part.type === 'hour') hour = Number(part.value)
+    if (part.type === 'minute') minute = Number(part.value)
+  }
+  return hour * 60 + minute
+}
+
 /** Matches lightweight-charts TickMarkType numeric values. */
 export const ChartTickMarkType = {
   Year: 0,

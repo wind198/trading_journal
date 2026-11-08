@@ -25,6 +25,36 @@ type NotesSidebarProps = {
   onClose: () => void
 }
 
+function NoteBodyEditor({
+  noteId,
+  initialBody,
+  onPersist,
+}: {
+  noteId: string
+  initialBody: string
+  onPersist: (id: string, body: string) => void
+}) {
+  const [draftBody, setDraftBody] = useState(initialBody)
+
+  return (
+    <textarea
+      value={draftBody}
+      onChange={(e) => {
+        const body = e.target.value
+        setDraftBody(body)
+        onPersist(noteId, body)
+      }}
+      placeholder="Write your note…"
+      rows={6}
+      className={cn(
+        'w-full min-w-0 resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm',
+        'outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+        'dark:bg-input/30',
+      )}
+    />
+  )
+}
+
 export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
   const queryClient = useQueryClient()
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
@@ -37,13 +67,6 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
 
   const notes = notesQuery.data ?? []
 
-  const persistBody = useDebounceCallback((id: string, body: string) => {
-    void updateDashboardNote(id, { body }).catch(() => {
-      toast.error('Failed to save note')
-      void queryClient.invalidateQueries({ queryKey: DASHBOARD_NOTES_QUERY_KEY })
-    })
-  }, NOTE_BODY_DEBOUNCE_MS)
-
   const setNotesCache = useCallback(
     (updater: (prev: DashboardNote[]) => DashboardNote[]) => {
       queryClient.setQueryData<DashboardNote[]>(DASHBOARD_NOTES_QUERY_KEY, (prev) =>
@@ -52,6 +75,14 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
     },
     [queryClient],
   )
+
+  const persistBody = useDebounceCallback((id: string, body: string) => {
+    setNotesCache((prev) => prev.map((n) => (n.id === id ? { ...n, body } : n)))
+    void updateDashboardNote(id, { body }).catch(() => {
+      toast.error('Failed to save note')
+      void queryClient.invalidateQueries({ queryKey: DASHBOARD_NOTES_QUERY_KEY })
+    })
+  }, NOTE_BODY_DEBOUNCE_MS)
 
   const onCreateNote = () => {
     if (creating) return
@@ -68,11 +99,6 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
       .finally(() => {
         setCreating(false)
       })
-  }
-
-  const onBodyChange = (id: string, body: string) => {
-    setNotesCache((prev) => prev.map((n) => (n.id === id ? { ...n, body } : n)))
-    persistBody(id, body)
   }
 
   const onDeleteNote = (id: string) => {
@@ -167,16 +193,11 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
                   </div>
                   {open && (
                     <div className="border-t border-border px-2.5 pb-2.5 pt-1">
-                      <textarea
-                        value={note.body}
-                        onChange={(e) => onBodyChange(note.id, e.target.value)}
-                        placeholder="Write your note…"
-                        rows={6}
-                        className={cn(
-                          'w-full min-w-0 resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm',
-                          'outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-                          'dark:bg-input/30',
-                        )}
+                      <NoteBodyEditor
+                        key={note.id}
+                        noteId={note.id}
+                        initialBody={note.body}
+                        onPersist={persistBody}
                       />
                     </div>
                   )}
