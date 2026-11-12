@@ -68,8 +68,8 @@ class RectangleRenderer {
         context.setLineDash(rect.draft ? [4, 3] : [])
         context.stroke()
         context.setLineDash([])
-        if (rect.selected && !rect.draft) {
-          const stroke = SELECTED_STROKE
+        if (rect.selected || rect.draft) {
+          const stroke = rect.draft ? DRAFT_STROKE : SELECTED_STROKE
           for (const [cx, cy] of [
             [rect.ax1, rect.ay1],
             [rect.ax2, rect.ay2],

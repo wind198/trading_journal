@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -67,6 +67,7 @@ import { mergeCandles } from '@/lib/ticks/merge'
 import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
 import { volumeProfileWindowFromCandles } from '@/lib/ticks/volume-profile'
 import {
+  hardReloadMarketQueries,
   marketHistoryInfiniteOptions,
   marketRecentQueryOptions,
   volumeProfileQueryOptions,
@@ -81,6 +82,7 @@ import {
   Minus,
   ListChecks,
   NotebookPen,
+  RefreshCw,
   Shrink,
   MapPin,
   Spline,
@@ -165,9 +167,11 @@ function Dashboard() {
   const [fullScreen, setFullScreen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [guidesOpen, setGuidesOpen] = useState(false)
+  const [marketReloading, setMarketReloading] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
   const [globalChartType, setGlobalChartType] = useState<ChartType>('candlestick')
+  const queryClient = useQueryClient()
   const router = useRouter()
 
   const signOut = async () => {
@@ -175,17 +179,38 @@ function Dashboard() {
     router.push('/login')
   }
 
+  const reloadMarketData = async () => {
+    if (marketReloading) return
+    setMarketReloading(true)
+    try {
+      await hardReloadMarketQueries(queryClient)
+    } catch {
+      toast.error('Failed to reload market data')
+    } finally {
+      setMarketReloading(false)
+    }
+  }
+
   return (
-    <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
+    <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-background">
       {!fullScreen && (
         <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-2 py-1.5 sm:gap-2 sm:px-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <AppNavLinks className="shrink-0" />
-            <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1>
+            {/* <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1> */}
           </div>
           <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
             <Button variant="ghost" size="sm" onClick={() => void signOut()}>
               Sign out
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Reload market data"
+              disabled={marketReloading}
+              onClick={() => void reloadMarketData()}
+            >
+              <RefreshCw className={marketReloading ? 'animate-spin' : undefined} />
             </Button>
             {expanded == null &&
               GLOBAL_CHART_TYPES.map((type) => (

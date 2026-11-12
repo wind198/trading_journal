@@ -103,6 +103,23 @@ export function clickToPoint(
   }
 }
 
+/** Mid of the visible chart pane — used to seed touch shape points. */
+export function viewportCenterPoint(
+  handle: ChartHandle,
+  candles: BarTimeSeries | null | undefined,
+): DrawingPoint | null {
+  try {
+    const el = handle.chart.chartElement()
+    return clickToPoint(
+      handle,
+      { x: el.clientWidth / 2, y: el.clientHeight / 2 },
+      candles,
+    )
+  } catch {
+    return null
+  }
+}
+
 export function initPriceChart(
   lwc: LwcModule,
   el: HTMLElement,

@@ -1,10 +1,27 @@
-import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
+import {
+  infiniteQueryOptions,
+  queryOptions,
+  type QueryClient,
+} from '@tanstack/react-query'
+import { RQ_PERSIST_KEY } from '@/app/(app)/_components/providers/query-provider'
 import {
   HISTORY_CANDLE_LIMIT,
   RECENT_CANDLE_LIMIT,
   type LightweightCandle,
 } from '@/lib/ticks/candles'
 import type { VolumeProfileTickBin } from '@/lib/ticks/volume-profile'
+
+const MARKET_QUERY_KEY = ['market'] as const
+
+/** Drop in-memory + localStorage market cache, then refetch active market queries. */
+export async function hardReloadMarketQueries(queryClient: QueryClient) {
+  await queryClient.cancelQueries({ queryKey: MARKET_QUERY_KEY })
+  queryClient.removeQueries({ queryKey: MARKET_QUERY_KEY })
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(RQ_PERSIST_KEY)
+  }
+  await queryClient.refetchQueries({ queryKey: MARKET_QUERY_KEY, type: 'active' })
+}
 
 export const MARKET_SYMBOL = 'EURUSD'
 export const MARKET_RECENT_REFETCH_MS = 30_000

@@ -81,14 +81,17 @@ class TrendlineRenderer {
         context.setLineDash(segment.draft ? [4, 3] : [])
         context.stroke()
         context.setLineDash([])
-        for (const [x, y] of [
-          [segment.mx1, segment.my1],
-          [segment.mx2, segment.my2],
-        ] as const) {
-          context.beginPath()
-          context.arc(x, y, segment.selected ? 4 : 3, 0, Math.PI * 2)
-          context.fillStyle = color
-          context.fill()
+        // Handles only while drafting or selected (edit mode).
+        if (segment.draft || segment.selected) {
+          for (const [x, y] of [
+            [segment.mx1, segment.my1],
+            [segment.mx2, segment.my2],
+          ] as const) {
+            context.beginPath()
+            context.arc(x, y, 4, 0, Math.PI * 2)
+            context.fillStyle = color
+            context.fill()
+          }
         }
       }
     })
@@ -158,28 +161,46 @@ class TrendlinePaneView {
       selected: boolean,
     ) => {
       const bars = this.source.bars
-      const { left, right, extended } = extendRight(p1, p2)
-      const lx = chartXAtTime(chart, left.time, bars)
-      const ly = series.priceToCoordinate(left.price)
-      const rx = chartXAtTime(chart, right.time, bars)
-      const ry = series.priceToCoordinate(right.price)
       const ax = chartXAtTime(chart, p1.time, bars)
       const ay = series.priceToCoordinate(p1.price)
       const bx = chartXAtTime(chart, p2.time, bars)
       const by = series.priceToCoordinate(p2.price)
-      if (lx == null || ly == null || rx == null || ry == null || ax == null || ay == null || bx == null || by == null) {
-        return
+      if (ax == null || ay == null || bx == null || by == null) return
+
+      // Draft: draw exact p1→p2 so the free handle sits on the visible tip.
+      // Committed: keep 2x rightward ray extension.
+      let x1: number
+      let y1: number
+      let x2: number
+      let y2: number
+      if (draft) {
+        x1 = Number(ax)
+        y1 = Number(ay)
+        x2 = Number(bx)
+        y2 = Number(by)
+      } else {
+        const { left, right, extended } = extendRight(p1, p2)
+        const lx = chartXAtTime(chart, left.time, bars)
+        const ly = series.priceToCoordinate(left.price)
+        const rx = chartXAtTime(chart, right.time, bars)
+        const ry = series.priceToCoordinate(right.price)
+        if (lx == null || ly == null || rx == null || ry == null) return
+        x1 = Number(lx)
+        y1 = Number(ly)
+        x2 =
+          chartXAtTime(chart, extended.time, bars) ??
+          Number(rx) + (Number(rx) - Number(lx))
+        y2 =
+          series.priceToCoordinate(extended.price) ??
+          Number(ry) + (Number(ry) - Number(ly))
       }
-      const ex =
-        chartXAtTime(chart, extended.time, bars) ??
-        Number(rx) + (Number(rx) - Number(lx))
-      const ey = series.priceToCoordinate(extended.price) ?? Number(ry) + (Number(ry) - Number(ly))
+
       segments.push({
         id,
-        x1: Number(lx),
-        y1: Number(ly),
-        x2: Number(ex),
-        y2: Number(ey),
+        x1,
+        y1,
+        x2,
+        y2,
         mx1: Number(ax),
         my1: Number(ay),
         mx2: Number(bx),

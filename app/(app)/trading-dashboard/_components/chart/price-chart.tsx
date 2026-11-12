@@ -31,6 +31,8 @@ import type { WarningCircleDrawing } from './primitives/warning-circle-primitive
 import {
   bindPriceChartInteraction,
   isShapeDrawTool,
+  isTouchSeedShapeTool,
+  seedTouchShapeDraft,
   type DrawingDragState,
   type PolylineDragState,
   type TouchShapePhase,
@@ -126,7 +128,6 @@ export function PriceChart({
   const touchShapePhaseRef = useRef<TouchShapePhase>('idle')
   const touchShapeDragStartRef = useRef<{ x: number; y: number } | null>(null)
   const shapePreviewP2Ref = useRef<DrawingPoint | null>(null)
-  const shapeP1GestureRef = useRef(false)
   const polylineDraftRef = useRef<DrawingPoint[]>([])
   const lastPolyTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
   const lastLabelTapRef = useRef<{ id: string; time: number; x: number; y: number } | null>(
@@ -243,7 +244,6 @@ export function PriceChart({
     touchShapePhaseRef.current = 'idle'
     touchShapeDragStartRef.current = null
     shapePreviewP2Ref.current = null
-    shapeP1GestureRef.current = false
     setShapeAwaitingP2Ref.current(false)
     const handle = handleRef.current
     handle?.trendlines.setDraft(null)
@@ -258,21 +258,39 @@ export function PriceChart({
     const tool = drawToolRef.current
     const handle = handleRef.current
     if (!handle || !tool || isChartIconKind(tool) || isTextAnchorKind(tool)) return
-    handle.trendlines.setDraft(null)
-    handle.rectangles.setDraft(null)
-    handle.warningCircles.setDraft(null)
-    handle.icons.setDraft(null)
-    handle.textAnchors.setDraft(null)
+    // Clear siblings only when they have a draft — never null-then-set the active tool.
     if (tool === 'trendline') {
+      if (handle.rectangles.draft) handle.rectangles.setDraft(null)
+      if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
+      if (handle.icons.draft) handle.icons.setDraft(null)
+      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
       handle.trendlines.setDraft(draft)
-    } else if (tool === 'rectangle') {
+      return
+    }
+    if (tool === 'rectangle') {
+      if (handle.trendlines.draft) handle.trendlines.setDraft(null)
+      if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
+      if (handle.icons.draft) handle.icons.setDraft(null)
+      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
       handle.rectangles.setDraft(draft)
-    } else if (tool === 'warning_circle') {
+      return
+    }
+    if (tool === 'warning_circle') {
+      if (handle.trendlines.draft) handle.trendlines.setDraft(null)
+      if (handle.rectangles.draft) handle.rectangles.setDraft(null)
+      if (handle.icons.draft) handle.icons.setDraft(null)
+      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
       handle.warningCircles.setDraft(draft)
     }
   }
 
-  const setShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint) => {
+  /** `p2: null` = single-point preview (placing_p1). Omit p2 to keep prior preview / desktop hover. */
+  const setShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint | null) => {
+    if (p2 === null) {
+      shapePreviewP2Ref.current = null
+      setActiveDraft({ p1 })
+      return
+    }
     const preview = p2 ?? shapePreviewP2Ref.current ?? p1
     shapePreviewP2Ref.current = preview
     setActiveDraft({ p1, p2: preview })
@@ -332,7 +350,6 @@ export function PriceChart({
           touchShapePhaseRef,
           touchShapeDragStartRef,
           shapePreviewP2Ref,
-          shapeP1GestureRef,
           polylineDraftRef,
           lastPolyTapRef,
           lastLabelTapRef,
@@ -453,6 +470,19 @@ export function PriceChart({
   useEffect(() => {
     clearDrafts()
     if (drawTool) selectDrawing(null)
+    if (
+      isTouchSeedShapeTool(drawTool) &&
+      pointerCoarseRef.current &&
+      handleRef.current
+    ) {
+      seedTouchShapeDraft({
+        handle: handleRef.current,
+        candles: candlesRef.current,
+        draftRef,
+        touchShapePhaseRef,
+        setShapeDraft,
+      })
+    }
   }, [drawTool, epoch])
 
   useEffect(() => {
@@ -592,18 +622,25 @@ export function PriceChart({
   }, [candles, timeframe, chartType, epoch])
 
   return (
-    <div className="relative h-full min-h-0 w-full">
+    <div
+      className="relative h-full min-h-0 w-full"
+      style={drawTool ? { overscrollBehavior: 'none' } : undefined}
+    >
       <div ref={ref} className="h-full min-h-0 w-full" />
       <div
         ref={drawOverlayRef}
         className={`absolute inset-0 z-10 touch-none${drawTool ? ' cursor-crosshair' : ''}`}
-        style={{ pointerEvents: drawTool ? 'auto' : 'none' }}
+        style={{
+          pointerEvents: drawTool ? 'auto' : 'none',
+          ...(drawTool ? { overscrollBehavior: 'none' as const, touchAction: 'none' as const } : null),
+        }}
         aria-hidden={!drawTool}
       />
       {showCoarseUi &&
         shapeAwaitingP2 &&
         drawTool != null &&
-        isShapeDrawTool(drawTool) && (
+        isShapeDrawTool(drawTool) &&
+        !isTouchSeedShapeTool(drawTool) && (
           <Button
             type="button"
             size="icon"

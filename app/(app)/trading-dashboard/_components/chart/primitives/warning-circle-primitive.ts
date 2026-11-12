@@ -73,14 +73,15 @@ class WarningCircleRenderer {
           context.fillText(label, circle.cx, circle.cy)
         }
 
-        if (circle.selected && !circle.draft) {
+        if (circle.selected || circle.draft) {
+          const handleColor = circle.draft ? DRAFT_STROKE : SELECTED_STROKE
           for (const [ax, ay] of [
             [circle.cx, circle.cy],
             [circle.rx, circle.ry],
           ] as const) {
             context.beginPath()
             context.arc(ax, ay, 4, 0, Math.PI * 2)
-            context.fillStyle = SELECTED_STROKE
+            context.fillStyle = handleColor
             context.fill()
           }
         }

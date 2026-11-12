@@ -6,7 +6,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import { useState, type ReactNode } from 'react'
 
 const GC_TIME_MS = 30 * 60 * 1000
-const PERSIST_KEY = 'tj-rq'
+export const RQ_PERSIST_KEY = 'tj-rq'
 const PERSIST_BUSTER = 'market-v1'
 
 export function makeQueryClient() {
@@ -31,7 +31,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
   const [persister] = useState(() =>
     createSyncStoragePersister({
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      key: PERSIST_KEY,
+      key: RQ_PERSIST_KEY,
     }),
   )
 
