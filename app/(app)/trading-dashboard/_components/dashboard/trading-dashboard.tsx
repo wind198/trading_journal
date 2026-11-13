@@ -17,6 +17,7 @@ import {
 import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
 import { NotesSidebar } from '../notes/notes-sidebar'
 import { GuidesSidebar } from '../guides/guides-sidebar'
+import { PeakTuningSidebar } from '../peaks/peak-tuning-sidebar'
 import { NonTradeWarningBanner } from './non-trade-warning-banner'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import {
@@ -60,12 +61,25 @@ import {
   type EngulfingEvent,
 } from '../../_lib/overlays/engulfing'
 import {
+  DEFAULT_PEAK_DETECTION_CONFIG,
+  detectPeaks,
+  type PeakDetectionConfig,
+  type PeakEvent,
+} from '../../_lib/overlays/peak-detection'
+import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
 } from '../../_lib/bias/base-line-bias'
 import { mergeCandles } from '@/lib/ticks/merge'
-import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
-import { volumeProfileWindowFromCandles } from '@/lib/ticks/volume-profile'
+import {
+  CANDLE_TIMEFRAMES,
+  type CandleTimeframe,
+  type LightweightCandle,
+} from '@/lib/ticks/candles'
+import {
+  alignTimeBinsToCandleOpens,
+  volumeProfileWindowFromCandles,
+} from '@/lib/ticks/volume-profile'
 import {
   hardReloadMarketQueries,
   marketHistoryInfiniteOptions,
@@ -80,6 +94,7 @@ import {
   Maximize2,
   Minimize2,
   Minus,
+  Activity,
   ListChecks,
   NotebookPen,
   RefreshCw,
@@ -167,6 +182,10 @@ function Dashboard() {
   const [fullScreen, setFullScreen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [guidesOpen, setGuidesOpen] = useState(false)
+  const [peaksOpen, setPeaksOpen] = useState(false)
+  const [peakConfig, setPeakConfig] = useState<PeakDetectionConfig>(
+    DEFAULT_PEAK_DETECTION_CONFIG,
+  )
   const [marketReloading, setMarketReloading] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
@@ -232,14 +251,17 @@ function Dashboard() {
               onClick={() => {
                 setNotesOpen((open) => {
                   const next = !open
-                  if (next) setGuidesOpen(false)
+                  if (next) {
+                    setGuidesOpen(false)
+                    setPeaksOpen(false)
+                  }
                   return next
                 })
               }}
             >
               <NotebookPen />
             </Button>
-            <Button
+            {/* <Button
               variant={guidesOpen ? 'secondary' : 'ghost'}
               size="icon-sm"
               aria-label={guidesOpen ? 'Close guides' : 'Open guides'}
@@ -247,13 +269,34 @@ function Dashboard() {
               onClick={() => {
                 setGuidesOpen((open) => {
                   const next = !open
-                  if (next) setNotesOpen(false)
+                  if (next) {
+                    setNotesOpen(false)
+                    setPeaksOpen(false)
+                  }
                   return next
                 })
               }}
             >
               <ListChecks />
-            </Button>
+            </Button> */}
+            {/* <Button
+              variant={peaksOpen ? 'secondary' : 'ghost'}
+              size="icon-sm"
+              aria-label={peaksOpen ? 'Close peak tuning' : 'Open peak tuning'}
+              aria-pressed={peaksOpen}
+              onClick={() => {
+                setPeaksOpen((open) => {
+                  const next = !open
+                  if (next) {
+                    setNotesOpen(false)
+                    setGuidesOpen(false)
+                  }
+                  return next
+                })
+              }}
+            >
+              <Activity />
+            </Button> */}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -293,6 +336,7 @@ function Dashboard() {
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
               }
+              peakConfig={peakConfig}
               onToggleExpand={() => {
                 if (isExpanded) {
                   setExpanded(null)
@@ -307,6 +351,13 @@ function Dashboard() {
         </div>
         {notesOpen && <NotesSidebar symbol={SYMBOL} onClose={() => setNotesOpen(false)} />}
         {guidesOpen && <GuidesSidebar onClose={() => setGuidesOpen(false)} />}
+        {peaksOpen && (
+          <PeakTuningSidebar
+            config={peakConfig}
+            onChange={setPeakConfig}
+            onClose={() => setPeaksOpen(false)}
+          />
+        )}
       </div>
       {fullScreen && (
         <Button
@@ -332,6 +383,7 @@ function DashboardPane({
   axesVisible,
   onChartType,
   onToggleExpand,
+  peakConfig,
 }: {
   pane: (typeof PANES)[number]
   isExpanded: boolean
@@ -340,6 +392,7 @@ function DashboardPane({
   axesVisible: boolean
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
+  peakConfig: PeakDetectionConfig
 }) {
   const history = useInfiniteQuery(marketHistoryInfiniteOptions(pane.id))
   const recent = useQuery(marketRecentQueryOptions(pane.id))
@@ -360,10 +413,18 @@ function DashboardPane({
     if (pane.id !== '15m' && pane.id !== '3m') return null
     return volumeProfileWindowFromCandles(candles, pane.id as CandleTimeframe)
   }, [candles, pane.id])
+  const vpIntervalSec =
+    volumeProfileWindow?.intervalSec ??
+    (pane.id === '15m' || pane.id === '3m' ? CANDLE_TIMEFRAMES[pane.id] : 900)
   const volumeProfileQuery = useQuery({
     ...(volumeProfileWindow
-      ? volumeProfileQueryOptions(volumeProfileWindow.fromMsc, volumeProfileWindow.toMsc)
-      : volumeProfileQueryOptions(0, 1)),
+      ? volumeProfileQueryOptions(
+          volumeProfileWindow.fromMsc,
+          volumeProfileWindow.toMsc,
+          vpIntervalSec,
+          pane.id,
+        )
+      : volumeProfileQueryOptions(0, 1, vpIntervalSec, pane.id)),
     enabled: volumeProfileWindow != null,
   })
   const loadOlder = () => {
@@ -391,10 +452,28 @@ function DashboardPane({
     return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
   }, [isExpanded, candles])
 
-  const volumeProfile = useMemo(
-    () => (pane.id === '15m' || pane.id === '3m' ? buildVolumeProfile(volumeProfileQuery.data ?? []) : null),
-    [pane.id, volumeProfileQuery.data],
-  )
+  // const peakEvents = useMemo((): PeakEvent[] => {
+  //   if (pane.id !== '15m' && pane.id !== '3m') return []
+  //   if (candles.length === 0) return []
+  //   return detectPeaks(candles, peakConfig)
+  // }, [pane.id, candles, peakConfig])
+
+  const volumeProfile = useMemo(() => {
+    if (pane.id !== '15m' && pane.id !== '3m') return null
+    const payload = volumeProfileQuery.data
+    const window = volumeProfileWindow
+    const timeBins = window
+      ? alignTimeBinsToCandleOpens(
+          payload?.time ?? [],
+          window.candleTimes,
+          window.intervalSec,
+        )
+      : (payload?.time ?? [])
+    return buildVolumeProfile(payload?.price ?? [], {
+      timeBins,
+      intervalSec: vpIntervalSec,
+    })
+  }, [pane.id, volumeProfileQuery.data, volumeProfileWindow, vpIntervalSec])
 
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
@@ -447,6 +526,19 @@ function DashboardPane({
       drawings
         .filter((d) => d.kind === 'rectangle')
         .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
+    [drawings],
+  )
+  const fibonacciRangeDrawings = useMemo(
+    () =>
+      drawings
+        .filter((d) => d.kind === 'fibonacci_range')
+        .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
+    [drawings],
+  )
+  const fibonacciExtensionDrawings = useMemo(
+    () => drawings
+      .filter((d) => d.kind === 'fibonacci_range_extension' && d.points?.length === 3)
+      .map((d) => ({ id: d.id, points: d.points as [DrawingPoint, DrawingPoint, DrawingPoint] })),
     [drawings],
   )
   const warningCircleDrawings = useMemo(
@@ -502,6 +594,7 @@ function DashboardPane({
     kind: ChartDrawingKind
     p1: DrawingPoint
     p2: DrawingPoint
+    points?: DrawingPoint[]
   }) => {
     if (
       !isChartIconKind(input.kind) &&
@@ -521,6 +614,7 @@ function DashboardPane({
       kind: input.kind,
       p1: anchor,
       p2: pointAnchor,
+      ...(input.points ? { points: input.points } : {}),
       ...(isTextAnchorKind(input.kind) ? { label: '' } : {}),
     }
     setDrawings((current) => [...current, optimistic])
@@ -537,6 +631,7 @@ function DashboardPane({
           kind: input.kind,
           p1: anchor,
           p2: pointAnchor,
+          points: input.points,
         })
     void persist
       .then((saved) => {
@@ -715,6 +810,24 @@ function DashboardPane({
                 <Square />
               </Button>
               <Button
+                variant={drawTool === 'fibonacci_range' ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={drawTool === 'fibonacci_range' ? 'Cancel Fibonacci Range' : 'Draw Fibonacci Range'}
+                aria-pressed={drawTool === 'fibonacci_range'}
+                onClick={() => toggleTool('fibonacci_range')}
+              >
+                <span className="text-xs font-semibold">Fib</span>
+              </Button>
+              <Button
+                variant={drawTool === 'fibonacci_range_extension' ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={drawTool === 'fibonacci_range_extension' ? 'Cancel Fibonacci Range Extension' : 'Draw Fibonacci Range Extension'}
+                aria-pressed={drawTool === 'fibonacci_range_extension'}
+                onClick={() => toggleTool('fibonacci_range_extension')}
+              >
+                <span className="text-xs font-semibold">Ext</span>
+              </Button>
+              <Button
                 variant={drawTool === 'warning_circle' ? 'default' : 'ghost'}
                 size="icon"
                 aria-label={
@@ -829,12 +942,15 @@ function DashboardPane({
             axesVisible={axesVisible}
             trendlines={trendlineDrawings}
             rectangles={rectangleDrawings}
+            fibonacciRanges={fibonacciRangeDrawings}
+            fibonacciExtensions={fibonacciExtensionDrawings}
             warningCircles={warningCircleDrawings}
             icons={iconDrawings}
             polylines={polylineDrawings}
             textAnchors={textAnchorDrawings}
             forceEvents={forceEvents}
             engulfingEvents={engulfingEvents}
+            // peakEvents={peakEvents}
             volumeProfile={volumeProfile}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}

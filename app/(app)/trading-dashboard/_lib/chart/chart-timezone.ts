@@ -139,7 +139,10 @@ export function unixAtChartZone(
 const SESSION_LINE_SLOTS = [
   { hour: 6, minute: 0 },
   { hour: 7, minute: 0 },
+  { hour: 9, minute: 0 },
+  { hour: 11, minute: 0 },
   { hour: 14, minute: 0 },
+  { hour: 17, minute: 30 },
   { hour: 19, minute: 30 },
   { hour: 23, minute: 0 },
 ] as const

@@ -9,7 +9,7 @@ import {
   RECENT_CANDLE_LIMIT,
   type LightweightCandle,
 } from '@/lib/ticks/candles'
-import type { VolumeProfileTickBin } from '@/lib/ticks/volume-profile'
+import type { VolumeProfilePayload } from '@/lib/ticks/volume-profile'
 
 const MARKET_QUERY_KEY = ['market'] as const
 
@@ -78,23 +78,30 @@ export function marketRecentQueryOptions(timeframe: string) {
   })
 }
 
-export function volumeProfileKey(fromMsc: number, toMsc: number) {
-  return ['market', 'volume-profile', MARKET_SYMBOL, fromMsc, toMsc] as const
+export function volumeProfileKey(fromMsc: number, toMsc: number, intervalSec: number) {
+  return ['market', 'volume-profile', MARKET_SYMBOL, fromMsc, toMsc, intervalSec] as const
 }
 
-export function volumeProfileQueryOptions(fromMsc: number, toMsc: number) {
+export function volumeProfileQueryOptions(
+  fromMsc: number,
+  toMsc: number,
+  intervalSec: number,
+  timeframe: string,
+) {
   return queryOptions({
-    queryKey: volumeProfileKey(fromMsc, toMsc),
-    queryFn: async ({ signal }) => {
+    queryKey: volumeProfileKey(fromMsc, toMsc, intervalSec),
+    queryFn: async ({ signal }): Promise<VolumeProfilePayload> => {
       const params = new URLSearchParams({
         symbol: MARKET_SYMBOL,
         from_msc: String(fromMsc),
         to_msc: String(toMsc),
+        timeframe,
+        interval_sec: String(intervalSec),
       })
       const response = await fetch(`/api/volume-profile?${params}`, { signal })
       if (!response.ok) throw new Error('volume-profile')
-      const body = (await response.json()) as { data?: VolumeProfileTickBin[] }
-      return body.data ?? []
+      const body = (await response.json()) as { data?: VolumeProfilePayload }
+      return body.data ?? { price: [], time: [] }
     },
     staleTime: MARKET_RECENT_STALE_MS,
     gcTime: MARKET_GC_TIME_MS,

@@ -21,9 +21,12 @@ import { VIEWPORT } from '../../_lib/chart/price-chart-style'
 import { bollinger, pricePoint, type ChartType } from '../../_lib/chart/price-chart-series'
 import type { EngulfingOverlayEvent } from './primitives/engulfing-overlay-primitive'
 import type { ForceOverlayEvent } from './primitives/force-overlay-primitive'
+import type { PeakOverlayEvent } from './primitives/peak-overlay-primitive'
 import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
 import type { IconMarkerDrawing } from './primitives/icon-marker-primitive'
 import type { RectangleDrawing } from './primitives/rectangle-primitive'
+import type { FibonacciRangeExtensionDrawing } from './primitives/fibonacci-range-extension-primitive'
+import type { FibonacciRangeDrawing } from './primitives/fibonacci-range-primitive'
 import type { PolylineArrowDrawing } from './primitives/polyline-arrow-primitive'
 import type { TextAnchorDrawing } from './primitives/text-anchor-primitive'
 import type { TrendlineDrawing } from './primitives/trendline-primitive'
@@ -54,12 +57,15 @@ export function PriceChart({
   axesVisible,
   trendlines = [],
   rectangles = [],
+  fibonacciRanges = [],
+  fibonacciExtensions = [],
   warningCircles = [],
   icons = [],
   polylines = [],
   textAnchors = [],
   forceEvents = [],
   engulfingEvents = [],
+  peakEvents = [],
   volumeProfile = null,
   drawTool = null,
   onDrawingComplete,
@@ -80,18 +86,22 @@ export function PriceChart({
   axesVisible: boolean
   trendlines?: readonly TrendlineDrawing[]
   rectangles?: readonly RectangleDrawing[]
+  fibonacciRanges?: readonly FibonacciRangeDrawing[]
+  fibonacciExtensions?: readonly FibonacciRangeExtensionDrawing[]
   warningCircles?: readonly WarningCircleDrawing[]
   icons?: readonly IconMarkerDrawing[]
   polylines?: readonly PolylineArrowDrawing[]
   textAnchors?: readonly TextAnchorDrawing[]
   forceEvents?: readonly ForceOverlayEvent[]
   engulfingEvents?: readonly EngulfingOverlayEvent[]
+  peakEvents?: readonly PeakOverlayEvent[]
   volumeProfile?: VolumeProfileFrame | null
   drawTool?: DrawTool
   onDrawingComplete?: (input: {
     kind: ChartDrawingKind
     p1: DrawingPoint
     p2: DrawingPoint
+    points?: DrawingPoint[]
   }) => void
   onDrawingChange?: (id: string, p1: DrawingPoint, p2: DrawingPoint) => void
   onDrawingChangeEnd?: (id: string) => void
@@ -138,6 +148,7 @@ export function PriceChart({
   const selectedIdRef = useRef<string | null>(null)
   const trendlinesRef = useRef(trendlines)
   const rectanglesRef = useRef(rectangles)
+  const fibonacciRangesRef = useRef(fibonacciRanges)
   const warningCirclesRef = useRef(warningCircles)
   const iconsRef = useRef(icons)
   const polylinesRef = useRef(polylines)
@@ -159,6 +170,7 @@ export function PriceChart({
   setShapeAwaitingP2Ref.current = setShapeAwaitingP2
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
+  fibonacciRangesRef.current = fibonacciRanges
   warningCirclesRef.current = warningCircles
   iconsRef.current = icons
   polylinesRef.current = polylines
@@ -229,6 +241,8 @@ export function PriceChart({
     const handle = handleRef.current
     handle?.trendlines.setSelectedId(id)
     handle?.rectangles.setSelectedId(id)
+    handle?.fibonacciRanges.setSelectedId(id)
+    handle?.fibonacciExtensions.setSelectedId(id)
     handle?.warningCircles.setSelectedId(id)
     handle?.icons.setSelectedId(id)
     handle?.polylines.setSelectedId(id)
@@ -248,6 +262,8 @@ export function PriceChart({
     const handle = handleRef.current
     handle?.trendlines.setDraft(null)
     handle?.rectangles.setDraft(null)
+    handle?.fibonacciRanges.setDraft(null)
+    handle?.fibonacciExtensions.setDraft(null)
     handle?.warningCircles.setDraft(null)
     handle?.icons.setDraft(null)
     handle?.polylines.setDraft(null)
@@ -261,6 +277,7 @@ export function PriceChart({
     // Clear siblings only when they have a draft — never null-then-set the active tool.
     if (tool === 'trendline') {
       if (handle.rectangles.draft) handle.rectangles.setDraft(null)
+      if (handle.fibonacciRanges.draft) handle.fibonacciRanges.setDraft(null)
       if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
       if (handle.icons.draft) handle.icons.setDraft(null)
       if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
@@ -268,6 +285,7 @@ export function PriceChart({
       return
     }
     if (tool === 'rectangle') {
+      if (handle.fibonacciRanges.draft) handle.fibonacciRanges.setDraft(null)
       if (handle.trendlines.draft) handle.trendlines.setDraft(null)
       if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
       if (handle.icons.draft) handle.icons.setDraft(null)
@@ -275,9 +293,19 @@ export function PriceChart({
       handle.rectangles.setDraft(draft)
       return
     }
+    if (tool === 'fibonacci_range') {
+      if (handle.rectangles.draft) handle.rectangles.setDraft(null)
+      if (handle.trendlines.draft) handle.trendlines.setDraft(null)
+      if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
+      if (handle.icons.draft) handle.icons.setDraft(null)
+      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
+      handle.fibonacciRanges.setDraft(draft)
+      return
+    }
     if (tool === 'warning_circle') {
       if (handle.trendlines.draft) handle.trendlines.setDraft(null)
       if (handle.rectangles.draft) handle.rectangles.setDraft(null)
+      if (handle.fibonacciRanges.draft) handle.fibonacciRanges.setDraft(null)
       if (handle.icons.draft) handle.icons.setDraft(null)
       if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
       handle.warningCircles.setDraft(draft)
@@ -360,6 +388,7 @@ export function PriceChart({
           candlesRef,
           trendlinesRef,
           rectanglesRef,
+          fibonacciRangesRef,
           iconsRef,
           textAnchorsRef,
           warningCirclesRef,
@@ -426,6 +455,16 @@ export function PriceChart({
   }, [rectangles, epoch])
 
   useEffect(() => {
+    handleRef.current?.fibonacciExtensions.setExtensions(fibonacciExtensions)
+  }, [fibonacciExtensions, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.fibonacciRanges.setRanges(fibonacciRanges)
+  }, [fibonacciRanges, epoch])
+
+  useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
     handle.warningCircles.setCircles(warningCircles)
@@ -464,6 +503,12 @@ export function PriceChart({
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
+    handle.peakOverlay?.setEvents(peakEvents)
+  }, [peakEvents, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
     handle.volumeProfile?.setProfile(volumeProfile)
   }, [volumeProfile, epoch])
 
@@ -492,6 +537,8 @@ export function PriceChart({
     const drawing = drawTool != null
     handle.trendlines.setSelectionEnabled(!drawing)
     handle.rectangles.setSelectionEnabled(!drawing)
+    handle.fibonacciRanges.setSelectionEnabled(!drawing)
+    handle.fibonacciExtensions.setSelectionEnabled(!drawing)
     handle.warningCircles.setSelectionEnabled(!drawing)
     handle.icons.setSelectionEnabled(!drawing)
     handle.polylines.setSelectionEnabled(!drawing)
@@ -507,12 +554,14 @@ export function PriceChart({
     const exists =
       trendlines.some((d) => d.id === selectedIdRef.current) ||
       rectangles.some((d) => d.id === selectedIdRef.current) ||
+      fibonacciRanges.some((d) => d.id === selectedIdRef.current) ||
+      fibonacciExtensions.some((d) => d.id === selectedIdRef.current) ||
       warningCircles.some((d) => d.id === selectedIdRef.current) ||
       icons.some((d) => d.id === selectedIdRef.current) ||
       polylines.some((d) => d.id === selectedIdRef.current) ||
       textAnchors.some((d) => d.id === selectedIdRef.current)
     if (!exists) selectDrawing(null)
-  }, [trendlines, rectangles, warningCircles, icons, polylines, textAnchors, epoch])
+  }, [trendlines, rectangles, fibonacciRanges, fibonacciExtensions, warningCircles, icons, polylines, textAnchors, epoch])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

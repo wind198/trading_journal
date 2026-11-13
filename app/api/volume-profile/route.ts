@@ -1,8 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { VOLUME_PROFILE_BIN_SIZE, fetchVolumeProfileTickCounts } from '@/lib/ticks/volume-profile'
+import {
+  CANDLE_TIMEFRAMES,
+  type CandleTimeframe,
+} from '@/lib/ticks/candles'
+import {
+  VOLUME_PROFILE_BIN_SIZE,
+  fetchVolumeProfilePayload,
+} from '@/lib/ticks/volume-profile'
 
 const SYMBOL = 'EURUSD'
+const ALLOWED_TF = new Set<string>(['3m', '15m'])
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -24,11 +32,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Bad window' }, { status: 400 })
   }
 
+  const tfRaw = request.nextUrl.searchParams.get('timeframe') ?? '15m'
+  if (!ALLOWED_TF.has(tfRaw)) {
+    return NextResponse.json({ error: 'Bad timeframe' }, { status: 400 })
+  }
+  const intervalRaw = request.nextUrl.searchParams.get('interval_sec')
+  const intervalFromQuery = intervalRaw == null ? Number.NaN : Number(intervalRaw)
+  const intervalSec =
+    Number.isFinite(intervalFromQuery) && intervalFromQuery >= 1
+      ? Math.floor(intervalFromQuery)
+      : CANDLE_TIMEFRAMES[tfRaw as CandleTimeframe]
+
   try {
-    const data = await fetchVolumeProfileTickCounts({
+    const data = await fetchVolumeProfilePayload({
       symbol,
       fromMsc,
       toMsc,
+      intervalSec,
       binSize: VOLUME_PROFILE_BIN_SIZE,
     })
     return NextResponse.json({ data })

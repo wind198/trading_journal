@@ -2,10 +2,11 @@ import { createClient } from '@/lib/supabase/client'
 import { CHART_ICON_KINDS, type ChartIconKind } from './chart-icons'
 
 export type { ChartIconKind }
-export type ShapeDrawingKind = 'trendline' | 'rectangle' | 'warning_circle'
+export type ShapeDrawingKind = 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
 export type PolylineArrowKind = 'polyline_arrow'
 export type TextAnchorKind = 'text_anchor'
 export type ChartDrawingKind =
+  | 'fibonacci_range_extension'
   | ShapeDrawingKind
   | ChartIconKind
   | PolylineArrowKind
@@ -14,6 +15,8 @@ export type ChartDrawingKind =
 const LOADABLE_KINDS = [
   'trendline',
   'rectangle',
+  'fibonacci_range',
+  'fibonacci_range_extension',
   'warning_circle',
   'polyline_arrow',
   'text_anchor',
@@ -124,6 +127,7 @@ export async function insertDrawing(input: {
   kind: ChartDrawingKind
   p1: DrawingPoint
   p2: DrawingPoint
+  points?: DrawingPoint[]
   label?: string
 }): Promise<ChartDrawing> {
   const supabase = createClient()
@@ -144,6 +148,7 @@ export async function insertDrawing(input: {
         p1_price: input.p1.price,
         p2_time: Math.round(input.p2.time),
         p2_price: input.p2.price,
+        ...(input.points ? { points: input.points.map((p) => ({ time: Math.round(p.time), price: p.price })) } : {}),
         ...(input.label !== undefined ? { label: input.label } : {}),
       },
     ])

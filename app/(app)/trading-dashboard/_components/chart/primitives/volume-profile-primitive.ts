@@ -12,11 +12,19 @@ import {
   type VolumeProfileFrame,
 } from '../../../_lib/chart/volume-profile'
 import { VOLUME_PROFILE } from '../../../_lib/chart/price-chart-style'
+import { chartXAtTime, type BarTimeSeries } from '../../../_lib/chart/chart-coordinates'
 
-type Bar = {
+type PriceBar = {
   y0: number
   y1: number
   w: number
+  poc: boolean
+}
+
+type TimeBar = {
+  x: number
+  w: number
+  h: number
   poc: boolean
 }
 
@@ -28,15 +36,25 @@ type Levels = {
 
 class VolumeProfileRenderer {
   constructor(
-    private bars: Bar[],
+    private priceBars: PriceBar[],
+    private timeBars: TimeBar[],
     private levels: Levels,
     private paneWidth: number,
+    private paneHeight: number,
   ) {}
 
   draw(target: CanvasRenderingTarget2D): void {
     target.useMediaCoordinateSpace(({ context, mediaSize }) => {
       const width = this.paneWidth > 0 ? this.paneWidth : mediaSize.width
-      for (const bar of this.bars) {
+      const height = this.paneHeight > 0 ? this.paneHeight : mediaSize.height
+
+      for (const bar of this.timeBars) {
+        if (bar.w < 0.5 || bar.h < 0.5) continue
+        context.fillStyle = bar.poc ? VOLUME_PROFILE.timePocBar : VOLUME_PROFILE.timeBar
+        context.fillRect(bar.x, height - bar.h, bar.w, bar.h)
+      }
+
+      for (const bar of this.priceBars) {
         const top = Math.min(bar.y0, bar.y1)
         const h = Math.max(1, Math.abs(bar.y1 - bar.y0))
         context.fillStyle = bar.poc ? VOLUME_PROFILE.pocBar : VOLUME_PROFILE.bar
@@ -84,7 +102,9 @@ class VolumeProfilePaneView {
       return
     }
 
-    const paneWidth = chart.paneSize().width
+    const pane = chart.paneSize()
+    const paneWidth = pane.width
+    const paneHeight = pane.height
     const maxCount = frame.bins.reduce((max, bin) => Math.max(max, bin.tickCount), 0)
     if (maxCount <= 0) {
       this.rendererObj = null
@@ -93,7 +113,7 @@ class VolumeProfilePaneView {
 
     const maxBarW = paneWidth * VOLUME_PROFILE.maxWidthRatio
     const half = VOLUME_PROFILE_BIN_SIZE / 2
-    const bars: Bar[] = []
+    const priceBars: PriceBar[] = []
 
     for (const bin of frame.bins) {
       const yMid = series.priceToCoordinate(bin.price)
@@ -102,12 +122,60 @@ class VolumeProfilePaneView {
       if (yMid == null) continue
       const y0 = yHi ?? Number(yMid) - 0.5
       const y1 = yLo ?? Number(yMid) + 0.5
-      bars.push({
+      priceBars.push({
         y0: Number(y0),
         y1: Number(y1),
         w: (bin.tickCount / maxCount) * maxBarW,
         poc: bin.price === frame.poc,
       })
+    }
+
+    const timeBars: TimeBar[] = []
+    const maxTimeCount = frame.timeBins.reduce((max, bin) => Math.max(max, bin.tickCount), 0)
+    const bars = this.source.bars
+    if (maxTimeCount > 0 && bars.length > 0) {
+      const maxBarH = paneHeight * VOLUME_PROFILE.maxHeightRatio
+      // Cap width so a bad x1 (far past/future) cannot stretch across the pane.
+      const maxBarW = Math.max(8, paneWidth * 0.08)
+      let timePoc = frame.timeBins[0]?.time ?? 0
+      let timePocCount = -1
+      for (const bin of frame.timeBins) {
+        if (bin.tickCount > timePocCount) {
+          timePocCount = bin.tickCount
+          timePoc = bin.time
+        }
+      }
+
+      const indexByTime = new Map<number, number>()
+      for (let i = 0; i < bars.length; i++) {
+        indexByTime.set(bars[i]!.time, i)
+      }
+
+      for (const bin of frame.timeBins) {
+        const idx = indexByTime.get(bin.time)
+        if (idx == null) continue
+        const x0 = chartXAtTime(chart, bars[idx]!.time, bars)
+        if (x0 == null || !Number.isFinite(x0)) continue
+
+        let x1: number | null = null
+        if (idx + 1 < bars.length) {
+          x1 = chartXAtTime(chart, bars[idx + 1]!.time, bars)
+        }
+        const rawW =
+          x1 != null && Number.isFinite(x1) ? Math.abs(Number(x1) - Number(x0)) : 4
+        // Reject pathological spans (mis-extrapolated coords → “infinite” past bars).
+        if (rawW > paneWidth * 0.25) continue
+        const w = Math.max(1, Math.min(rawW, maxBarW))
+        const left = Number(x0)
+        if (left + w < 0 || left > paneWidth) continue
+
+        timeBars.push({
+          x: left,
+          w,
+          h: (bin.tickCount / maxTimeCount) * maxBarH,
+          poc: bin.time === timePoc,
+        })
+      }
     }
 
     const yAt = (price: number) => {
@@ -116,9 +184,11 @@ class VolumeProfilePaneView {
     }
 
     this.rendererObj = new VolumeProfileRenderer(
-      bars,
+      priceBars,
+      timeBars,
       { poc: yAt(frame.poc), vah: yAt(frame.vah), val: yAt(frame.val) },
       paneWidth,
+      paneHeight,
     )
   }
 }
@@ -127,6 +197,7 @@ export class VolumeProfilePrimitive implements ISeriesPrimitive<Time> {
   chart: IChartApi | null = null
   series: ISeriesApi<SeriesType, Time> | null = null
   frame: VolumeProfileFrame | null = null
+  bars: BarTimeSeries = []
   private requestUpdate: (() => void) | null = null
   private readonly paneView: VolumeProfilePaneView
   private readonly views: VolumeProfilePaneView[]
@@ -138,6 +209,11 @@ export class VolumeProfilePrimitive implements ISeriesPrimitive<Time> {
 
   setProfile(frame: VolumeProfileFrame | null): void {
     this.frame = frame
+    this.requestUpdate?.()
+  }
+
+  setBars(bars: BarTimeSeries): void {
+    this.bars = bars
     this.requestUpdate?.()
   }
 

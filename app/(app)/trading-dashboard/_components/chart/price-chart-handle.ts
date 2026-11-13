@@ -17,10 +17,13 @@ import { EngulfingOverlayPrimitive } from './primitives/engulfing-overlay-primit
 import { ForceOverlayPrimitive } from './primitives/force-overlay-primitive'
 import { IconMarkerPrimitive } from './primitives/icon-marker-primitive'
 import { RectanglePrimitive } from './primitives/rectangle-primitive'
+import { FibonacciRangeExtensionPrimitive } from './primitives/fibonacci-range-extension-primitive'
+import { FibonacciRangePrimitive } from './primitives/fibonacci-range-primitive'
 import { PolylineArrowPrimitive } from './primitives/polyline-arrow-primitive'
 import { SessionVerticalLinesPrimitive } from './primitives/session-vertical-lines-primitive'
 import { TextAnchorPrimitive } from './primitives/text-anchor-primitive'
 import { TrendlinePrimitive } from './primitives/trendline-primitive'
+import { PeakOverlayPrimitive } from './primitives/peak-overlay-primitive'
 import { VolumeProfilePrimitive } from './primitives/volume-profile-primitive'
 import { WarningCirclePrimitive } from './primitives/warning-circle-primitive'
 
@@ -29,6 +32,7 @@ type LwcModule = typeof import('lightweight-charts')
 type AnyPrimitive =
   | TrendlinePrimitive
   | RectanglePrimitive
+  | FibonacciRangePrimitive
   | IconMarkerPrimitive
   | PolylineArrowPrimitive
   | TextAnchorPrimitive
@@ -36,6 +40,7 @@ type AnyPrimitive =
   | ForceOverlayPrimitive
   | EngulfingOverlayPrimitive
   | VolumeProfilePrimitive
+  | PeakOverlayPrimitive
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
@@ -56,12 +61,15 @@ export type ChartHandle = {
   lower: LineSeries
   trendlines: TrendlinePrimitive
   rectangles: RectanglePrimitive
+  fibonacciExtensions: FibonacciRangeExtensionPrimitive
+  fibonacciRanges: FibonacciRangePrimitive
   icons: IconMarkerPrimitive
   polylines: PolylineArrowPrimitive
   textAnchors: TextAnchorPrimitive
   warningCircles: WarningCirclePrimitive
   forceOverlay: ForceOverlayPrimitive
   engulfingOverlay: EngulfingOverlayPrimitive
+  peakOverlay: PeakOverlayPrimitive | null
   sessionVerticalLines: SessionVerticalLinesPrimitive | null
   volumeProfile: VolumeProfilePrimitive | null
   fitted: boolean
@@ -76,13 +84,21 @@ export function usesVolumeProfile(timeframe: string): boolean {
   return timeframe === '15m' || timeframe === '3m'
 }
 
+export function usesPeakDetection(timeframe: string): boolean {
+  return timeframe === '15m' || timeframe === '3m'
+}
+
 export function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
   handle.trendlines.setBars(candles)
   handle.rectangles.setBars(candles)
+  handle.fibonacciRanges.setBars(candles)
+  handle.fibonacciExtensions.setBars(candles)
   handle.icons.setBars(candles)
   handle.polylines.setBars(candles)
   handle.textAnchors.setBars(candles)
   handle.warningCircles.setBars(candles)
+  handle.volumeProfile?.setBars(candles)
+  handle.peakOverlay?.setBars(candles)
 }
 
 /** Resolve click → time/price at cursor (no series or bar-center snap). */
@@ -197,6 +213,8 @@ export function initPriceChart(
 
   const trendlinePrimitive = new TrendlinePrimitive([])
   const rectanglePrimitive = new RectanglePrimitive([])
+  const fibonacciExtensionPrimitive = new FibonacciRangeExtensionPrimitive()
+  const fibonacciRangePrimitive = new FibonacciRangePrimitive([])
   const iconMarkerPrimitive = new IconMarkerPrimitive([])
   const polylineArrowPrimitive = new PolylineArrowPrimitive([])
   const textAnchorPrimitive = new TextAnchorPrimitive([])
@@ -205,6 +223,8 @@ export function initPriceChart(
   const engulfingOverlayPrimitive = new EngulfingOverlayPrimitive([])
   price.attachPrimitive(trendlinePrimitive)
   price.attachPrimitive(rectanglePrimitive)
+  price.attachPrimitive(fibonacciRangePrimitive)
+  price.attachPrimitive(fibonacciExtensionPrimitive)
   price.attachPrimitive(warningCirclePrimitive)
   price.attachPrimitive(iconMarkerPrimitive)
   price.attachPrimitive(polylineArrowPrimitive)
@@ -216,6 +236,11 @@ export function initPriceChart(
     ? new VolumeProfilePrimitive()
     : null
   if (volumeProfilePrimitive) price.attachPrimitive(volumeProfilePrimitive)
+
+  const peakOverlayPrimitive = usesPeakDetection(options.timeframe)
+    ? new PeakOverlayPrimitive([])
+    : null
+  if (peakOverlayPrimitive) price.attachPrimitive(peakOverlayPrimitive)
 
   const sessionVerticalLinesPrimitive = sessionGrid
     ? new SessionVerticalLinesPrimitive()
@@ -247,12 +272,15 @@ export function initPriceChart(
     lower: line(BOLLINGER.bandLower) as LineSeries,
     trendlines: trendlinePrimitive,
     rectangles: rectanglePrimitive,
+    fibonacciRanges: fibonacciRangePrimitive,
+    fibonacciExtensions: fibonacciExtensionPrimitive,
     icons: iconMarkerPrimitive,
     polylines: polylineArrowPrimitive,
     textAnchors: textAnchorPrimitive,
     warningCircles: warningCirclePrimitive,
     forceOverlay: forceOverlayPrimitive,
     engulfingOverlay: engulfingOverlayPrimitive,
+    peakOverlay: peakOverlayPrimitive,
     sessionVerticalLines: sessionVerticalLinesPrimitive,
     volumeProfile: volumeProfilePrimitive,
     fitted: false,

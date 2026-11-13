@@ -6,18 +6,31 @@ export type VolumeProfileBin = {
   tickCount: number
 }
 
+export type VolumeProfileTimeBin = {
+  time: number
+  tickCount: number
+}
+
 export type VolumeProfileFrame = {
   bins: VolumeProfileBin[]
   poc: number
   vah: number
   val: number
+  /** Bottom histogram: ticks per candle bucket. */
+  timeBins: VolumeProfileTimeBin[]
+  intervalSec: number
 }
 
 /** POC = max tick-count bin (lowest price on ties). VAH/VAL = 70% value-area edges. */
 export function buildVolumeProfile(
   bins: readonly VolumeProfileBin[],
-  binSize = VOLUME_PROFILE_BIN_SIZE,
+  options?: {
+    binSize?: number
+    timeBins?: readonly VolumeProfileTimeBin[]
+    intervalSec?: number
+  },
 ): VolumeProfileFrame | null {
+  const binSize = options?.binSize ?? VOLUME_PROFILE_BIN_SIZE
   if (bins.length === 0 || !(binSize > 0)) return null
   const sorted = [...bins]
     .filter((bin) => Number.isFinite(bin.price) && bin.tickCount > 0)
@@ -60,10 +73,15 @@ export function buildVolumeProfile(
   }
 
   const half = binSize / 2
+  const timeBins = (options?.timeBins ?? [])
+    .filter((bin) => Number.isFinite(bin.time) && bin.tickCount > 0)
+    .sort((a, b) => a.time - b.time)
   return {
     bins: sorted,
     poc: sorted[pocIndex].price,
     vah: sorted[hi].price + half,
     val: sorted[lo].price - half,
+    timeBins,
+    intervalSec: options?.intervalSec ?? 0,
   }
 }

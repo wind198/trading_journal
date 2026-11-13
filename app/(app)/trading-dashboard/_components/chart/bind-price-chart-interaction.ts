@@ -13,6 +13,7 @@ import {
 } from '../../_lib/chart/chart-coordinates'
 import type { IconMarkerDrawing } from './primitives/icon-marker-primitive'
 import type { RectangleDrawing } from './primitives/rectangle-primitive'
+import type { FibonacciRangeDrawing } from './primitives/fibonacci-range-primitive'
 import type { TextAnchorDrawing } from './primitives/text-anchor-primitive'
 import type { TrendlineDrawing } from './primitives/trendline-primitive'
 import type { WarningCircleDrawing } from './primitives/warning-circle-primitive'
@@ -23,12 +24,12 @@ const TOUCH_HIT_BOOST = 1.75
 const DOUBLE_TAP_MS = 350
 const DOUBLE_TAP_PX = 24
 
-type ShapeDrawTool = 'trendline' | 'rectangle' | 'warning_circle'
-/** Touch seed/drag/tap-confirm for trendline, rectangle, warning_circle. */
+type ShapeDrawTool = 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
+/** Touch seed/drag/tap-confirm for two-anchor drawing tools. */
 export type TouchShapePhase = 'idle' | 'placing_p1' | 'placing_p2'
 
 export function isShapeDrawTool(tool: ChartDrawingKind | null): tool is ShapeDrawTool {
-  return tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
+  return tool === 'fibonacci_range' || tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
 }
 
 /** Coarse-pointer shapes that use viewport seed → drag → tap confirm. */
@@ -69,11 +70,13 @@ export type DrawingDragState = {
   p1: DrawingPoint
   p2: DrawingPoint
   moveWhole: boolean
+  moveOrigin?: DrawingPoint
 }
 
 export type PolylineDragState = {
   id: string
   vertexIndex: number
+  moveOrigin?: DrawingPoint
   points: DrawingPoint[]
 }
 
@@ -104,13 +107,14 @@ export type PriceChartInteractionRefs = {
   candlesRef: RefObject<BarTimeSeries>
   trendlinesRef: RefObject<readonly TrendlineDrawing[]>
   rectanglesRef: RefObject<readonly RectangleDrawing[]>
+  fibonacciRangesRef: RefObject<readonly FibonacciRangeDrawing[]>
   iconsRef: RefObject<readonly IconMarkerDrawing[]>
   textAnchorsRef: RefObject<readonly TextAnchorDrawing[]>
   warningCirclesRef: RefObject<readonly WarningCircleDrawing[]>
   setShapeAwaitingP2Ref: RefObject<(value: boolean) => void>
   setShapeDraftRef: RefObject<(p1: DrawingPoint, p2?: DrawingPoint | null) => void>
   onCompleteRef: RefObject<
-    | ((input: { kind: ChartDrawingKind; p1: DrawingPoint; p2: DrawingPoint }) => void)
+    | ((input: { kind: ChartDrawingKind; p1: DrawingPoint; p2: DrawingPoint; points?: DrawingPoint[] }) => void)
     | undefined
   >
   onChangeRef: RefObject<
@@ -196,6 +200,8 @@ export function bindPriceChartInteraction(input: {
   const syncDrawingHitGeometry = () => {
     handle.trendlines.updateAllViews()
     handle.rectangles.updateAllViews()
+    handle.fibonacciRanges.updateAllViews()
+    handle.fibonacciExtensions.updateAllViews()
     handle.icons.updateAllViews()
     handle.polylines.updateAllViews()
     handle.textAnchors.updateAllViews()
@@ -205,6 +211,8 @@ export function bindPriceChartInteraction(input: {
   const drawingPoints = (id: string): { p1: DrawingPoint; p2: DrawingPoint } | null => {
     const fromTrend = refs.trendlinesRef.current.find((d) => d.id === id)
     if (fromTrend) return { p1: fromTrend.p1, p2: fromTrend.p2 }
+    const fromFib = refs.fibonacciRangesRef.current.find((d) => d.id === id)
+    if (fromFib) return { p1: fromFib.p1, p2: fromFib.p2 }
     const fromRect = refs.rectanglesRef.current.find((d) => d.id === id)
     if (fromRect) return { p1: fromRect.p1, p2: fromRect.p2 }
     const fromCircle = refs.warningCirclesRef.current.find((d) => d.id === id)
@@ -236,6 +244,8 @@ export function bindPriceChartInteraction(input: {
       event.pointerType === 'touch' || refs.pointerCoarseRef.current ? TOUCH_HIT_BOOST : 1
     handle.trendlines.setHitBoost(boost)
     handle.rectangles.setHitBoost(boost)
+    handle.fibonacciRanges.setHitBoost(boost)
+    handle.fibonacciExtensions.setHitBoost(boost)
     handle.icons.setHitBoost(boost)
     handle.polylines.setHitBoost(boost)
     handle.textAnchors.setHitBoost(boost)
@@ -338,6 +348,18 @@ export function bindPriceChartInteraction(input: {
         refs.onCompleteRef.current?.({ kind: tool, p1: mapped, p2: mapped })
         return
       }
+      if (tool === 'fibonacci_range_extension') {
+        const points = [...refs.polylineDraftRef.current, mapped]
+        if (points.length === 3) {
+          clearDrafts()
+          refs.onCompleteRef.current?.({ kind: tool, p1: points[0], p2: points[2], points })
+        } else {
+          refs.polylineDraftRef.current = points
+          refs.draftRef.current = points[0]
+          handle.fibonacciExtensions.setDraft({ p1: points[0], p2: points[1] })
+        }
+        return
+      }
       if (isPolylineArrowKind(tool)) {
         if (clientX == null || clientY == null) return
         handlePolylinePlacement(point, clientX, clientY)
@@ -355,11 +377,13 @@ export function bindPriceChartInteraction(input: {
     }
     const lineHit = handle.trendlines.hitTest(point.x, point.y)
     const rectHit = handle.rectangles.hitTest(point.x, point.y)
+    const fibHit = handle.fibonacciRanges.hitTest(point.x, point.y)
+    const extensionHit = handle.fibonacciExtensions.hitTest(point.x, point.y)
     const circleHit = handle.warningCircles.hitTest(point.x, point.y)
     const iconHit = handle.icons.hitTest(point.x, point.y)
     const polyHit = handle.polylines.hitTest(point.x, point.y)
     const textHit = handle.textAnchors.hitTest(point.x, point.y)
-    const hit = [lineHit, rectHit, circleHit, iconHit, polyHit, textHit]
+    const hit = [lineHit, fibHit, extensionHit, rectHit, circleHit, iconHit, polyHit, textHit]
       .filter((item): item is NonNullable<typeof item> => item != null)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))[0]
     const hitId = hit?.externalId ?? null
@@ -394,6 +418,15 @@ export function bindPriceChartInteraction(input: {
 
   const updateDraftPreview = (param: { point?: { x: number; y: number } }) => {
     const tool = refs.drawToolRef.current
+    if (tool === 'fibonacci_range_extension') {
+      const points = refs.polylineDraftRef.current
+      const hover = pointFromEvent(param)
+      if (!points.length || !hover) return
+      handle.fibonacciExtensions.setDraft(points.length === 1
+        ? { p1: points[0], p2: hover }
+        : { p1: points[0], p2: points[1], p3: hover })
+      return
+    }
     if (tool && isPolylineArrowKind(tool)) return
     if (!tool) return
     const first = refs.draftRef.current
@@ -633,6 +666,25 @@ export function bindPriceChartInteraction(input: {
 
     const selectedId = refs.selectedIdRef.current
     if (!selectedId || selectedId.startsWith('temp-')) return
+    const extension = handle.fibonacciExtensions.getDrawing(selectedId)
+    if (extension?.p3) {
+      const anchor = handle.fibonacciExtensions.hitTestExtensionAnchor(point.x, point.y)
+      const hit = handle.fibonacciExtensions.hitTest(point.x, point.y)
+      if (anchor?.id === selectedId || hit?.externalId === selectedId) {
+        const origin = clickToPoint(handle, point, refs.candlesRef.current)
+        if (!origin) return
+        event.preventDefault()
+        refs.polylineDragRef.current = {
+          id: selectedId,
+          vertexIndex: anchor?.id === selectedId ? anchor.vertexIndex : -1,
+          moveOrigin: origin,
+          points: [extension.p1, extension.p2, extension.p3].map((p) => ({ ...p })),
+        }
+        setCapture(event, chartEl)
+        syncInteractionLock()
+        return
+      }
+    }
     const polyAnchor = handle.polylines.hitTestAnchor(point.x, point.y)
     if (polyAnchor && polyAnchor.id === selectedId) {
       const poly = handle.polylines.getDrawing(selectedId)
@@ -652,9 +704,21 @@ export function bindPriceChartInteraction(input: {
     const anchor =
       handle.trendlines.hitTestAnchor(point.x, point.y) ??
       handle.rectangles.hitTestAnchor(point.x, point.y) ??
+      handle.fibonacciRanges.hitTestAnchor(point.x, point.y) ??
       handle.warningCircles.hitTestAnchor(point.x, point.y) ??
       handle.icons.hitTestAnchor(point.x, point.y) ??
       handle.textAnchors.hitTestAnchor(point.x, point.y)
+    if (!anchor && handle.fibonacciRanges.getDrawing(selectedId) &&
+        handle.fibonacciRanges.hitTest(point.x, point.y)?.externalId === selectedId) {
+      const points = drawingPoints(selectedId)
+      const origin = clickToPoint(handle, point, refs.candlesRef.current)
+      if (!points || !origin) return
+      event.preventDefault()
+      refs.dragRef.current = { id: selectedId, endpoint: 'p1', ...points, moveWhole: true, moveOrigin: origin }
+      setCapture(event, chartEl)
+      syncInteractionLock()
+      return
+    }
     if (!anchor || anchor.id !== selectedId) return
     const points = drawingPoints(anchor.id)
     if (!points) return
@@ -703,7 +767,17 @@ export function bindPriceChartInteraction(input: {
       if (!next) return
       refs.didDragRef.current = true
       const points = polyDrag.points.map((p) => ({ ...p }))
-      points[polyDrag.vertexIndex] = next
+      if (polyDrag.vertexIndex === -1 && polyDrag.moveOrigin) {
+        const dt = next.time - polyDrag.moveOrigin.time
+        const dp = next.price - polyDrag.moveOrigin.price
+        for (const p of points) {
+          p.time += dt
+          p.price += dp
+        }
+        polyDrag.moveOrigin = next
+      } else {
+        points[polyDrag.vertexIndex] = next
+      }
       polyDrag.points = points
       refs.onPolylineChangeRef.current?.(polyDrag.id, points)
       return
@@ -714,7 +788,16 @@ export function bindPriceChartInteraction(input: {
       const next = clickToPoint(handle, point, refs.candlesRef.current)
       if (!next) return
       refs.didDragRef.current = true
-      if (drag.moveWhole) {
+      if (drag.moveWhole && drag.moveOrigin) {
+        const dt = next.time - drag.moveOrigin.time
+        const dp = next.price - drag.moveOrigin.price
+        const p1 = { time: drag.p1.time + dt, price: drag.p1.price + dp }
+        const p2 = { time: drag.p2.time + dt, price: drag.p2.price + dp }
+        drag.moveOrigin = next
+        drag.p1 = p1
+        drag.p2 = p2
+        refs.onChangeRef.current?.(drag.id, p1, p2)
+      } else if (drag.moveWhole) {
         drag.p1 = next
         drag.p2 = next
         refs.onChangeRef.current?.(drag.id, next, next)
