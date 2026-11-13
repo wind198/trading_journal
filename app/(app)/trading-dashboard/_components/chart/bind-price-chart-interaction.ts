@@ -24,12 +24,12 @@ const TOUCH_HIT_BOOST = 1.75
 const DOUBLE_TAP_MS = 350
 const DOUBLE_TAP_PX = 24
 
-type ShapeDrawTool = 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
-/** Touch seed/drag/tap-confirm for two-anchor drawing tools. */
-export type TouchShapePhase = 'idle' | 'placing_p1' | 'placing_p2'
+type ShapeDrawTool = 'fibonacci_range_extension' | 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
+/** Touch seed/drag/tap-confirm; extensions have a third anchor. */
+export type TouchShapePhase = 'idle' | 'placing_p1' | 'placing_p2' | 'placing_p3'
 
 export function isShapeDrawTool(tool: ChartDrawingKind | null): tool is ShapeDrawTool {
-  return tool === 'fibonacci_range' || tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
+  return tool === 'fibonacci_range_extension' || tool === 'fibonacci_range' || tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
 }
 
 /** Coarse-pointer shapes that use viewport seed → drag → tap confirm. */
@@ -54,7 +54,7 @@ export function seedTouchShapeDraft(input: {
   candles: BarTimeSeries
   draftRef: RefObject<DrawingPoint | null>
   touchShapePhaseRef: RefObject<TouchShapePhase>
-  setShapeDraft: (p1: DrawingPoint, p2?: DrawingPoint | null) => void
+  setShapeDraft: (p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => void
 }): boolean {
   const p1 = viewportCenterPoint(input.handle, input.candles)
   if (!p1) return false
@@ -97,6 +97,7 @@ export type PriceChartInteractionRefs = {
   touchShapePhaseRef: RefObject<TouchShapePhase>
   touchShapeDragStartRef: RefObject<{ x: number; y: number } | null>
   shapePreviewP2Ref: RefObject<DrawingPoint | null>
+  shapePreviewP3Ref: RefObject<DrawingPoint | null>
   polylineDraftRef: RefObject<DrawingPoint[]>
   lastPolyTapRef: RefObject<{ time: number; x: number; y: number } | null>
   lastLabelTapRef: RefObject<{ id: string; time: number; x: number; y: number } | null>
@@ -112,7 +113,7 @@ export type PriceChartInteractionRefs = {
   textAnchorsRef: RefObject<readonly TextAnchorDrawing[]>
   warningCirclesRef: RefObject<readonly WarningCircleDrawing[]>
   setShapeAwaitingP2Ref: RefObject<(value: boolean) => void>
-  setShapeDraftRef: RefObject<(p1: DrawingPoint, p2?: DrawingPoint | null) => void>
+  setShapeDraftRef: RefObject<(p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => void>
   onCompleteRef: RefObject<
     | ((input: { kind: ChartDrawingKind; p1: DrawingPoint; p2: DrawingPoint; points?: DrawingPoint[] }) => void)
     | undefined
@@ -130,7 +131,7 @@ export type PriceChartInteractionRefs = {
 export type PriceChartInteractionHelpers = {
   clearDrafts: () => void
   selectDrawing: (id: string | null) => void
-  setShapeDraft: (p1: DrawingPoint, p2?: DrawingPoint | null) => void
+  setShapeDraft: (p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => void
   syncInteractionLock: () => void
   setPolylineDraft: (points: DrawingPoint[], previewPoint?: DrawingPoint | null) => void
   syncDrawOverlay: () => void
@@ -164,7 +165,7 @@ export function bindPriceChartInteraction(input: {
   }
   let touchDragOrigin: TouchDragOrigin | null = null
   let pendingDraftRaf: number | null = null
-  let pendingDraft: { p1: DrawingPoint; p2?: DrawingPoint | null } | null = null
+  let pendingDraft: { p1: DrawingPoint; p2?: DrawingPoint | null; p3?: DrawingPoint | null } | null = null
   let chartRectCache: DOMRect | null = null
 
   const flushDraftRaf = () => {
@@ -175,18 +176,18 @@ export function bindPriceChartInteraction(input: {
     if (pendingDraft) {
       const draft = pendingDraft
       pendingDraft = null
-      refs.setShapeDraftRef.current(draft.p1, draft.p2)
+      refs.setShapeDraftRef.current(draft.p1, draft.p2, draft.p3)
     }
   }
 
-  const scheduleShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint | null) => {
-    pendingDraft = { p1, p2 }
+  const scheduleShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => {
+    pendingDraft = { p1, p2, p3 }
     if (pendingDraftRaf != null) return
     pendingDraftRaf = requestAnimationFrame(() => {
       pendingDraftRaf = null
       const draft = pendingDraft
       pendingDraft = null
-      if (draft) refs.setShapeDraftRef.current(draft.p1, draft.p2)
+      if (draft) refs.setShapeDraftRef.current(draft.p1, draft.p2, draft.p3)
     })
   }
 
@@ -327,8 +328,24 @@ export function bindPriceChartInteraction(input: {
     if (phase === 'placing_p2') {
       const p2 = refs.shapePreviewP2Ref.current
       if (!p2) return
+      if (tool === 'fibonacci_range_extension') {
+        const p3 = {
+          time: defaultShapePreviewP2(p2, refs.candlesRef.current).time,
+          price: (p1.price + p2.price) / 2,
+        }
+        refs.touchShapePhaseRef.current = 'placing_p3'
+        refs.setShapeDraftRef.current(p1, p2, p3)
+        return
+      }
       clearDrafts()
       refs.onCompleteRef.current?.({ kind: tool, p1, p2 })
+    }
+    if (phase === 'placing_p3' && tool === 'fibonacci_range_extension') {
+      const p2 = refs.shapePreviewP2Ref.current
+      const p3 = refs.shapePreviewP3Ref.current
+      if (!p2 || !p3) return
+      clearDrafts()
+      refs.onCompleteRef.current?.({ kind: tool, p1, p2: p3, points: [p1, p2, p3] })
     }
   }
 
@@ -419,6 +436,7 @@ export function bindPriceChartInteraction(input: {
   const updateDraftPreview = (param: { point?: { x: number; y: number } }) => {
     const tool = refs.drawToolRef.current
     if (tool === 'fibonacci_range_extension') {
+      if (!shapePreviewFollowsPointer()) return
       const points = refs.polylineDraftRef.current
       const hover = pointFromEvent(param)
       if (!points.length || !hover) return
@@ -454,6 +472,7 @@ export function bindPriceChartInteraction(input: {
     if (phase === 'placing_p2') {
       return refs.shapePreviewP2Ref.current ?? refs.draftRef.current
     }
+    if (phase === 'placing_p3') return refs.shapePreviewP3Ref.current
     return null
   }
 
@@ -495,7 +514,8 @@ export function bindPriceChartInteraction(input: {
     if (isCoarsePointer(event) && isTouchSeedShapeTool(tool)) {
       if (
         refs.touchShapePhaseRef.current !== 'placing_p1' &&
-        refs.touchShapePhaseRef.current !== 'placing_p2'
+        refs.touchShapePhaseRef.current !== 'placing_p2' &&
+        refs.touchShapePhaseRef.current !== 'placing_p3'
       ) {
         seedTouchShapeDraft({
           handle,
@@ -565,6 +585,8 @@ export function bindPriceChartInteraction(input: {
         scheduleShapeDraft(mapped, null)
       } else if (phase === 'placing_p2') {
         scheduleShapeDraft(refs.draftRef.current, mapped)
+      } else if (phase === 'placing_p3') {
+        scheduleShapeDraft(refs.draftRef.current, refs.shapePreviewP2Ref.current, mapped)
       }
       return
     }

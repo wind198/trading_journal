@@ -138,6 +138,7 @@ export function PriceChart({
   const touchShapePhaseRef = useRef<TouchShapePhase>('idle')
   const touchShapeDragStartRef = useRef<{ x: number; y: number } | null>(null)
   const shapePreviewP2Ref = useRef<DrawingPoint | null>(null)
+  const shapePreviewP3Ref = useRef<DrawingPoint | null>(null)
   const polylineDraftRef = useRef<DrawingPoint[]>([])
   const lastPolyTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
   const lastLabelTapRef = useRef<{ id: string; time: number; x: number; y: number } | null>(
@@ -258,6 +259,7 @@ export function PriceChart({
     touchShapePhaseRef.current = 'idle'
     touchShapeDragStartRef.current = null
     shapePreviewP2Ref.current = null
+    shapePreviewP3Ref.current = null
     setShapeAwaitingP2Ref.current(false)
     const handle = handleRef.current
     handle?.trendlines.setDraft(null)
@@ -270,10 +272,14 @@ export function PriceChart({
     handle?.textAnchors.setDraft(null)
   }
 
-  const setActiveDraft = (draft: { p1: DrawingPoint; p2?: DrawingPoint } | null) => {
+  const setActiveDraft = (draft: { p1: DrawingPoint; p2?: DrawingPoint; p3?: DrawingPoint } | null) => {
     const tool = drawToolRef.current
     const handle = handleRef.current
     if (!handle || !tool || isChartIconKind(tool) || isTextAnchorKind(tool)) return
+    if (tool === 'fibonacci_range_extension') {
+      handle.fibonacciExtensions.setDraft(draft)
+      return
+    }
     // Clear siblings only when they have a draft — never null-then-set the active tool.
     if (tool === 'trendline') {
       if (handle.rectangles.draft) handle.rectangles.setDraft(null)
@@ -313,15 +319,17 @@ export function PriceChart({
   }
 
   /** `p2: null` = single-point preview (placing_p1). Omit p2 to keep prior preview / desktop hover. */
-  const setShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint | null) => {
+  const setShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => {
     if (p2 === null) {
       shapePreviewP2Ref.current = null
+      shapePreviewP3Ref.current = null
       setActiveDraft({ p1 })
       return
     }
     const preview = p2 ?? shapePreviewP2Ref.current ?? p1
     shapePreviewP2Ref.current = preview
-    setActiveDraft({ p1, p2: preview })
+    if (p3 !== undefined) shapePreviewP3Ref.current = p3
+    setActiveDraft({ p1, p2: preview, p3: shapePreviewP3Ref.current ?? undefined })
   }
   const setShapeDraftRef = useRef(setShapeDraft)
   setShapeDraftRef.current = setShapeDraft
@@ -332,6 +340,7 @@ export function PriceChart({
     const p1 = draftRef.current
     const p2 = shapePreviewP2Ref.current
     if (!p1 || !p2) return
+    if (tool === 'fibonacci_range_extension') return
     clearDrafts()
     onCompleteRef.current?.({ kind: tool, p1, p2 })
   }
@@ -378,6 +387,7 @@ export function PriceChart({
           touchShapePhaseRef,
           touchShapeDragStartRef,
           shapePreviewP2Ref,
+          shapePreviewP3Ref,
           polylineDraftRef,
           lastPolyTapRef,
           lastLabelTapRef,
