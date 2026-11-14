@@ -19,7 +19,7 @@ export type FibonacciRangeDrawing = {
 }
 
 const LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const
-const EXTENSION_LEVELS = [1, 1.236, 1.382, 1.5, 1.618, 1.786, 2]
+const EXTENSION_LEVELS = [0, 0.382, 0.618, 1, 1.236, 1.382, 1.5, 1.618, 1.786, 2]
 const COLORS = ['#9ca3af', '#ef5350', '#ff9800', '#26a69a', '#2196f3', '#7e57c2', '#9ca3af']
 
 const SELECTED_STROKE = '#F0AD4E'
@@ -52,7 +52,7 @@ function distToSegment(px: number, py: number, x1: number, y1: number, x2: numbe
 }
 
 class FibonacciRangeRenderer {
-  constructor(private ranges: RangeGeometry[]) {}
+  constructor(private ranges: RangeGeometry[]) { }
 
   draw(target: CanvasRenderingTarget2D): void {
     target.useMediaCoordinateSpace(({ context }) => {
@@ -111,7 +111,7 @@ class FibonacciRangePaneView {
   private rendererObj: FibonacciRangeRenderer | null = null
   private ranges: RangeGeometry[] = []
 
-  constructor(private source: FibonacciRangePrimitive) {}
+  constructor(private source: FibonacciRangePrimitive) { }
 
   zOrder(): 'bottom' {
     return 'bottom'
