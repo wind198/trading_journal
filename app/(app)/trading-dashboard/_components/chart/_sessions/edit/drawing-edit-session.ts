@@ -1,6 +1,7 @@
 import type { DrawingPoint } from '../../../../_lib/chart/chart-drawings'
-import type { BarTimeSeries } from '../../../../_lib/chart/chart-coordinates'
+import { chartXAtTime, type BarTimeSeries } from '../../../../_lib/chart/chart-coordinates'
 import { clickToPoint, type ChartHandle } from '../../price-chart-handle'
+import { CreationPointerSession } from '../create/creation-pointer-session'
 import type { EditToolSet } from './edit-tool-registry'
 import type {
   NormalizedPointer,
@@ -39,27 +40,57 @@ export type StoreEditController = {
 }
 
 type ActiveLegacy = { kind: 'legacy'; session: ToolEditSession; pointerId: number }
-type ActiveStore = { kind: 'store'; pointerId: number }
+type ActiveStore = { kind: 'store'; pointerId: number; relative: boolean }
 type ActiveEdit = ActiveLegacy | ActiveStore
+
+type TwoPointEditInput = {
+  endpoint: 'p1' | 'p2'
+  p1: DrawingPoint
+  p2: DrawingPoint
+}
+
+function isTwoPointEditInput(input: unknown): input is TwoPointEditInput {
+  if (!input || typeof input !== 'object') return false
+  const value = input as Partial<TwoPointEditInput>
+  return (value.endpoint === 'p1' || value.endpoint === 'p2') &&
+    value.p1 != null &&
+    value.p2 != null
+}
 
 /** Coordinates one active edit; geometry and hit rules live with the tool behaviors. */
 export class DrawingEditSession {
   private active: ActiveEdit | null = null
   private press: { tool: ToolEditBehavior; id: string; x: number; y: number; pointerId: number } | null = null
+  private readonly relativeDrag: CreationPointerSession
 
   constructor(
     private readonly ports: DrawingEditPorts,
     private readonly tapThresholdPx: number,
     private readonly tools: EditToolSet,
     private readonly storeEdit: StoreEditController | null = null,
-  ) {}
+  ) {
+    this.relativeDrag = new CreationPointerSession(
+      (screen) => clickToPoint(this.ports.handle, screen, this.ports.candles()),
+      tapThresholdPx,
+    )
+  }
 
   get isDragging(): boolean {
     return this.active !== null || Boolean(this.storeEdit?.isActive())
   }
 
+  private endpointScreen(input: unknown): ScreenPoint | null {
+    if (!isTwoPointEditInput(input)) return null
+    const point = input.endpoint === 'p1' ? input.p1 : input.p2
+    const x = chartXAtTime(this.ports.handle.chart, point.time, this.ports.candles())
+    const y = this.ports.handle.price.priceToCoordinate(point.price)
+    if (x == null || y == null) return null
+    return { x: Number(x), y: Number(y) }
+  }
+
   private beginLegacy(session: ToolEditSession, event: PointerEvent): void {
     event.preventDefault()
+    this.relativeDrag.cancel()
     this.active = { kind: 'legacy', session, pointerId: event.pointerId }
     this.ports.capture(event)
     this.ports.syncLock()
@@ -74,7 +105,18 @@ export class DrawingEditSession {
       pointerId: event.pointerId,
     })
     if (!started) return false
-    this.active = { kind: 'store', pointerId: event.pointerId }
+
+    // Touch: relative drag from the grabbed anchor (same as coarse create) so the
+    // handle does not jump to the fat hit-target finger position.
+    const coarse = event.pointerType === 'touch'
+    const origin = coarse ? this.endpointScreen(begin.input) : null
+    if (origin) {
+      this.relativeDrag.begin(event.pointerId, event.clientX, event.clientY, origin)
+    } else {
+      this.relativeDrag.cancel()
+    }
+
+    this.active = { kind: 'store', pointerId: event.pointerId, relative: origin != null }
     this.ports.capture(event)
     this.ports.syncLock()
     return true
@@ -135,8 +177,16 @@ export class DrawingEditSession {
       }
     }
     if (this.active?.pointerId !== event.pointerId) return
-    const mapped = clickToPoint(this.ports.handle, point, this.ports.candles())
-    if (!mapped) return
+
+    let mapped: DrawingPoint | null
+    if (this.active.kind === 'store' && this.active.relative) {
+      mapped = this.relativeDrag.move(event.pointerId, event.clientX, event.clientY)
+      if (!mapped) return
+    } else {
+      mapped = clickToPoint(this.ports.handle, point, this.ports.candles())
+      if (!mapped) return
+    }
+
     this.ports.markDrag()
     if (this.active.kind === 'store') {
       this.storeEdit?.move({
@@ -157,6 +207,7 @@ export class DrawingEditSession {
   private finishLegacy(): boolean {
     const active = this.active
     this.active = null
+    this.relativeDrag.cancel()
     if (!active || active.kind !== 'legacy') return false
     this.ports.syncLock()
     if (active.session.changeKind === 'polyline') this.ports.polylineChangeEnd(active.session.id)
@@ -167,6 +218,7 @@ export class DrawingEditSession {
   private finishStore(event: PointerEvent, point: ScreenPoint): boolean {
     const active = this.active
     this.active = null
+    this.relativeDrag.cancel()
     if (!active || active.kind !== 'store') return false
     this.storeEdit?.up({
       pointerId: event.pointerId,
@@ -197,6 +249,7 @@ export class DrawingEditSession {
     this.ports.release(event)
     if (this.active.kind === 'store') {
       this.active = null
+      this.relativeDrag.cancel()
       this.storeEdit?.cancel()
       this.ports.syncLock()
       return
@@ -215,6 +268,7 @@ export class DrawingEditSession {
       this.ports.releaseById(this.active.pointerId)
       if (this.active.kind === 'store') {
         this.active = null
+        this.relativeDrag.cancel()
         this.storeEdit?.cancel()
         this.ports.syncLock()
         return

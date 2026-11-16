@@ -12,8 +12,17 @@ function pairHandle(opts: {
   trendDrawing?: { id: string; p1: { time: number; price: number }; p2: { time: number; price: number } } | null
 }) {
   return {
-    chart: { timeScale: () => ({ coordinateToLogical: () => null, coordinateToTime: (x: number) => x }) },
-    price: { coordinateToPrice: (y: number) => y },
+    chart: {
+      timeScale: () => ({
+        coordinateToLogical: () => null,
+        coordinateToTime: (x: number) => x,
+        timeToCoordinate: (t: number) => t,
+      }),
+    },
+    price: {
+      coordinateToPrice: (y: number) => y,
+      priceToCoordinate: (p: number) => p,
+    },
     trendlines: {
       ...empty,
       hitTestAnchor: () => opts.trendHit ?? null,
@@ -132,4 +141,34 @@ test('foreign rectangle anchor blocks later legacy phases', () => {
   assert.equal(h.runtime.isDragging, false)
   assert.equal(h.runtime.store.snapshot.status, 'idle')
   assert.deepEqual(h.captured, [])
+})
+
+test('touch trendline edit drags relative to the anchor, not the finger hit offset', () => {
+  const drawing = { id: 'tl', p1: { time: 1, price: 2 }, p2: { time: 10, price: 20 } }
+  const h = runtimeFor(pairHandle({
+    trendHit: { id: 'tl', endpoint: 'p2' },
+    trendDrawing: drawing,
+  }), 'tl')
+  const down = {
+    pointerId: 1,
+    clientX: 100,
+    clientY: 100,
+    pointerType: 'touch',
+    preventDefault() {},
+  } as PointerEvent
+  // Finger lands off-center on the fat hit target; absolute mapping would jump to here.
+  h.runtime.pointerDown(down, { x: 18, y: 28 })
+  assert.equal(h.runtime.store.snapshot.status, 'active')
+  const move = {
+    pointerId: 1,
+    clientX: 115,
+    clientY: 130,
+    pointerType: 'touch',
+    preventDefault() {},
+  } as PointerEvent
+  // Local point is deliberately wrong; relative drag must ignore it and apply client delta to p2.
+  h.runtime.pointerMove(move, { x: 999, y: 999 })
+  assert.deepEqual(h.changed, [{ id: 'tl', p1: drawing.p1, p2: { time: 25, price: 50 } }])
+  assert.equal(h.runtime.pointerUp(move), true)
+  assert.deepEqual(h.ended, ['tl'])
 })

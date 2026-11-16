@@ -178,7 +178,7 @@ function Dashboard() {
   const [marketReloading, setMarketReloading] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
-  const [globalChartType, setGlobalChartType] = useState<ChartType>('candlestick')
+  const [globalChartType, setGlobalChartType] = useState<ChartType>('line')
   const queryClient = useQueryClient()
   const router = useRouter()
 
@@ -286,7 +286,7 @@ function Dashboard() {
           const isExpanded = expanded === pane.id
           if (expanded && !isExpanded) return null
           const chartType = isExpanded
-            ? (chartTypes[pane.id] ?? 'candlestick')
+            ? (chartTypes[pane.id] ?? 'line')
             : globalChartType
 
           const compact = !isExpanded && !tablet

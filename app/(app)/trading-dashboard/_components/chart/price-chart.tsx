@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { IChartApi, Time } from 'lightweight-charts'
+import { Button } from '@/components/ui/button'
+import { X } from 'lucide-react'
 import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
 import {
   type ChartDrawingKind,
@@ -110,6 +112,7 @@ export function PriceChart({
   const drawOverlayRef = useRef<HTMLDivElement>(null)
   const pointerCaptureElRef = useRef<HTMLElement | null>(null)
   const handleRef = useRef<ChartHandle | null>(null)
+  const [pointerCoarse, setPointerCoarse] = useState(false)
   const candlesRef = useRef<BarTimeSeries>(candles ?? [])
   const appliedCandlesRef = useRef<LightweightCandle[]>([])
   const appliedEpochRef = useRef(-1)
@@ -202,6 +205,7 @@ export function PriceChart({
     const mq = window.matchMedia('(pointer: coarse)')
     const update = () => {
       pointerCoarseRef.current = mq.matches
+      setPointerCoarse(mq.matches)
     }
     update()
     mq.addEventListener('change', update)
@@ -237,6 +241,16 @@ export function PriceChart({
     if (el && pointerId != null) {
       try { el.releasePointerCapture(pointerId) } catch { /* lost capture */ }
     }
+  }
+
+  const cancelDrawTool = () => {
+    if (!drawToolRef.current) return
+    editSessionRef.current?.cancelActive()
+    releaseActivePointerCapture()
+    interactionCancelRef.current?.()
+    clearDrafts()
+    onDrawToolCancelRef.current?.()
+    syncInteractionLock()
   }
 
   const setShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => {
@@ -472,11 +486,7 @@ export function PriceChart({
       if (event.key === 'Escape') {
         if (!drawToolRef.current) return
         event.preventDefault()
-        releaseActivePointerCapture()
-        interactionCancelRef.current?.()
-        clearDrafts()
-        onDrawToolCancelRef.current?.()
-        syncInteractionLock()
+        cancelDrawTool()
         return
       }
       if (event.key !== 'Delete' && event.key !== 'Backspace') return
@@ -581,6 +591,24 @@ export function PriceChart({
         }}
         aria-hidden={!drawTool}
       />
+      {drawTool && pointerCoarse ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon-lg"
+          className="absolute right-3 bottom-3 z-20 size-11 shadow-md"
+          aria-label="Cancel drawing"
+          onPointerDown={(event) => {
+            event.stopPropagation()
+          }}
+          onClick={(event) => {
+            event.stopPropagation()
+            cancelDrawTool()
+          }}
+        >
+          <X />
+        </Button>
+      ) : null}
     </div>
   )
 }
