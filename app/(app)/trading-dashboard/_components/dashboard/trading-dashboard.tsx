@@ -17,9 +17,9 @@ import {
 import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
 import { NotesSidebar } from '../notes/notes-sidebar'
 import { GuidesSidebar } from '../guides/guides-sidebar'
-import { PeakTuningSidebar } from '../peaks/peak-tuning-sidebar'
 import { NonTradeWarningBanner } from './non-trade-warning-banner'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
+import { DrawingLabelSession, type DrawingLabelState } from '../chart/_sessions/configure/drawing-label-session'
 import {
   Dialog,
   DialogContent,
@@ -61,12 +61,6 @@ import {
   type EngulfingEvent,
 } from '../../_lib/overlays/engulfing'
 import {
-  DEFAULT_PEAK_DETECTION_CONFIG,
-  detectPeaks,
-  type PeakDetectionConfig,
-  type PeakEvent,
-} from '../../_lib/overlays/peak-detection'
-import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
 } from '../../_lib/bias/base-line-bias'
@@ -94,7 +88,6 @@ import {
   Maximize2,
   Minimize2,
   Minus,
-  Activity,
   ListChecks,
   NotebookPen,
   RefreshCw,
@@ -182,10 +175,6 @@ function Dashboard() {
   const [fullScreen, setFullScreen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [guidesOpen, setGuidesOpen] = useState(false)
-  const [peaksOpen, setPeaksOpen] = useState(false)
-  const [peakConfig, setPeakConfig] = useState<PeakDetectionConfig>(
-    DEFAULT_PEAK_DETECTION_CONFIG,
-  )
   const [marketReloading, setMarketReloading] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
@@ -251,10 +240,7 @@ function Dashboard() {
               onClick={() => {
                 setNotesOpen((open) => {
                   const next = !open
-                  if (next) {
-                    setGuidesOpen(false)
-                    setPeaksOpen(false)
-                  }
+                  if (next) setGuidesOpen(false)
                   return next
                 })
               }}
@@ -269,33 +255,12 @@ function Dashboard() {
               onClick={() => {
                 setGuidesOpen((open) => {
                   const next = !open
-                  if (next) {
-                    setNotesOpen(false)
-                    setPeaksOpen(false)
-                  }
+                  if (next) setNotesOpen(false)
                   return next
                 })
               }}
             >
               <ListChecks />
-            </Button> */}
-            {/* <Button
-              variant={peaksOpen ? 'secondary' : 'ghost'}
-              size="icon-sm"
-              aria-label={peaksOpen ? 'Close peak tuning' : 'Open peak tuning'}
-              aria-pressed={peaksOpen}
-              onClick={() => {
-                setPeaksOpen((open) => {
-                  const next = !open
-                  if (next) {
-                    setNotesOpen(false)
-                    setGuidesOpen(false)
-                  }
-                  return next
-                })
-              }}
-            >
-              <Activity />
             </Button> */}
             <Button
               variant="ghost"
@@ -336,7 +301,6 @@ function Dashboard() {
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
               }
-              peakConfig={peakConfig}
               onToggleExpand={() => {
                 if (isExpanded) {
                   setExpanded(null)
@@ -351,13 +315,6 @@ function Dashboard() {
         </div>
         {notesOpen && <NotesSidebar symbol={SYMBOL} onClose={() => setNotesOpen(false)} />}
         {guidesOpen && <GuidesSidebar onClose={() => setGuidesOpen(false)} />}
-        {peaksOpen && (
-          <PeakTuningSidebar
-            config={peakConfig}
-            onChange={setPeakConfig}
-            onClose={() => setPeaksOpen(false)}
-          />
-        )}
       </div>
       {fullScreen && (
         <Button
@@ -383,7 +340,6 @@ function DashboardPane({
   axesVisible,
   onChartType,
   onToggleExpand,
-  peakConfig,
 }: {
   pane: (typeof PANES)[number]
   isExpanded: boolean
@@ -392,7 +348,6 @@ function DashboardPane({
   axesVisible: boolean
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
-  peakConfig: PeakDetectionConfig
 }) {
   const history = useInfiniteQuery(marketHistoryInfiniteOptions(pane.id))
   const recent = useQuery(marketRecentQueryOptions(pane.id))
@@ -452,12 +407,6 @@ function DashboardPane({
     return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
   }, [isExpanded, candles])
 
-  // const peakEvents = useMemo((): PeakEvent[] => {
-  //   if (pane.id !== '15m' && pane.id !== '3m') return []
-  //   if (candles.length === 0) return []
-  //   return detectPeaks(candles, peakConfig)
-  // }, [pane.id, candles, peakConfig])
-
   const volumeProfile = useMemo(() => {
     if (pane.id !== '15m' && pane.id !== '3m') return null
     const payload = volumeProfileQuery.data
@@ -478,8 +427,19 @@ function DashboardPane({
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
-  const [labelEditDrawingId, setLabelEditDrawingId] = useState<string | null>(null)
-  const [labelDraft, setLabelDraft] = useState('')
+  const labelSessionRef = useRef<DrawingLabelSession | null>(null)
+  if (!labelSessionRef.current) labelSessionRef.current = new DrawingLabelSession()
+  const [labelState, setLabelState] = useState<DrawingLabelState>({ status: 'closed' })
+  const labelEditDrawingId = labelState.status === 'editing' ? labelState.id : null
+  const labelDraft = labelState.status === 'editing' ? labelState.draft : ''
+  const openLabelSession = (input: { id: string; kind: string | null; label: string }) => {
+    labelSessionRef.current!.open(input)
+    setLabelState(labelSessionRef.current!.state)
+  }
+  const cancelLabelSession = () => {
+    labelSessionRef.current!.cancel()
+    setLabelState(labelSessionRef.current!.state)
+  }
   const { queuePersist, commitPersist, queuePolylinePersist, commitPolylinePersist } =
     useDebouncedDrawingPersist(pane.id, setDrawings)
 
@@ -637,8 +597,7 @@ function DashboardPane({
       .then((saved) => {
         setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
         if (isTextAnchorKind(input.kind)) {
-          setLabelEditDrawingId(saved.id)
-          setLabelDraft(saved.label ?? '')
+          openLabelSession({ id: saved.id, kind: saved.kind, label: saved.label ?? '' })
         }
       })
       .catch(() => {
@@ -719,19 +678,18 @@ function DashboardPane({
 
   const openLabelEditor = (id: string) => {
     const drawing = drawings.find((d) => d.id === id)
-    setLabelEditDrawingId(id)
-    setLabelDraft(drawing?.label ?? '')
+    openLabelSession({ id, kind: drawing?.kind ?? null, label: drawing?.label ?? '' })
   }
 
   const saveDrawingLabel = () => {
-    if (!labelEditDrawingId) return
-    const id = labelEditDrawingId
-    const label = labelDraft
+    const result = labelSessionRef.current!.save()
+    if (!result) return
+    setLabelState(labelSessionRef.current!.state)
+    const { id, label } = result
     const drawing = drawings.find((d) => d.id === id)
     setDrawings((current) =>
       current.map((d) => (d.id === id ? { ...d, label } : d)),
     )
-    setLabelEditDrawingId(null)
     if (id.startsWith('temp-')) return
     const persist =
       drawing &&
@@ -950,7 +908,6 @@ function DashboardPane({
             textAnchors={textAnchorDrawings}
             forceEvents={forceEvents}
             engulfingEvents={engulfingEvents}
-            // peakEvents={peakEvents}
             volumeProfile={volumeProfile}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}
@@ -969,7 +926,7 @@ function DashboardPane({
       <Dialog
         open={labelEditDrawingId != null}
         onOpenChange={(open) => {
-          if (!open) setLabelEditDrawingId(null)
+          if (!open) cancelLabelSession()
         }}
       >
         <DialogContent className="sm:max-w-md">
@@ -984,7 +941,10 @@ function DashboardPane({
           </DialogHeader>
           <Input
             value={labelDraft}
-            onChange={(e) => setLabelDraft(e.target.value)}
+            onChange={(e) => {
+              labelSessionRef.current!.changeDraft(e.target.value)
+              setLabelState(labelSessionRef.current!.state)
+            }}
             placeholder={
               labelEditIsText
                 ? 'Text at anchor'
@@ -997,7 +957,7 @@ function DashboardPane({
             }}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLabelEditDrawingId(null)}>
+            <Button variant="outline" onClick={cancelLabelSession}>
               Cancel
             </Button>
             <Button onClick={saveDrawingLabel}>Save</Button>

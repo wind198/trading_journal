@@ -64,23 +64,10 @@ export const ENGULFING = {
   bearish: '#4F46E5',
 } as const
 
-
-
-/** Peak / trough markers (close-based). */
-export const PEAK_DETECTION = {
-  peak: '#DC2626',
-  trough: '#16A34A',
-} as const
-
-/** Rolling tick volume profile (15m / 3m): right = by price, bottom = by time. */
+/** Rolling tick volume profile (15m / 3m): right-side bars by price. */
 export const VOLUME_PROFILE = {
   bar: 'rgba(5, 15, 26, 0.16)',
   pocBar: 'rgba(0, 82, 255, 0.38)',
-  poc: '#0052FF',
   va: 'rgba(0, 82, 255, 0.45)',
   maxWidthRatio: 0.22,
-  /** Bottom time histogram — keep short so candles stay readable. */
-  timeBar: 'rgba(5, 15, 26, 0.2)',
-  timePocBar: 'rgba(0, 82, 255, 0.32)',
-  maxHeightRatio: 0.18,
 } as const

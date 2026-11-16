@@ -13,19 +13,16 @@ import {
   VIEWPORT,
 } from '../../_lib/chart/price-chart-style'
 import type { ChartType } from '../../_lib/chart/price-chart-series'
-import { EngulfingOverlayPrimitive } from './primitives/engulfing-overlay-primitive'
-import { ForceOverlayPrimitive } from './primitives/force-overlay-primitive'
-import { IconMarkerPrimitive } from './primitives/icon-marker-primitive'
-import { RectanglePrimitive } from './primitives/rectangle-primitive'
-import { FibonacciRangeExtensionPrimitive } from './primitives/fibonacci-range-extension-primitive'
-import { FibonacciRangePrimitive } from './primitives/fibonacci-range-primitive'
-import { PolylineArrowPrimitive } from './primitives/polyline-arrow-primitive'
-import { SessionVerticalLinesPrimitive } from './primitives/session-vertical-lines-primitive'
-import { TextAnchorPrimitive } from './primitives/text-anchor-primitive'
-import { TrendlinePrimitive } from './primitives/trendline-primitive'
-import { PeakOverlayPrimitive } from './primitives/peak-overlay-primitive'
-import { VolumeProfilePrimitive } from './primitives/volume-profile-primitive'
-import { WarningCirclePrimitive } from './primitives/warning-circle-primitive'
+import { IndicatorLayer } from './_components/indicators/indicator-layer'
+import { IconMarkerPrimitive } from './_components/objects/icon/icon-marker-primitive'
+import { RectanglePrimitive } from './_components/objects/rect/rectangle-primitive'
+import { FibonacciRangeExtensionPrimitive } from './_components/objects/fibonacci-extension/fibonacci-range-extension-primitive'
+import { FibonacciRangePrimitive } from './_components/objects/fibonacci-range/fibonacci-range-primitive'
+import { PolylineArrowPrimitive } from './_components/objects/polyline/polyline-arrow-primitive'
+import { TextAnchorPrimitive } from './_components/objects/text/text-anchor-primitive'
+import { TrendlinePrimitive } from './_components/objects/trendline/trendline-primitive'
+import { WarningCirclePrimitive } from './_components/objects/warning-circle/warning-circle-primitive'
+import { asPrimitiveLayer, ChartPrimitiveRegistry } from './chart-primitive-registry'
 
 type LwcModule = typeof import('lightweight-charts')
 
@@ -37,10 +34,6 @@ type AnyPrimitive =
   | PolylineArrowPrimitive
   | TextAnchorPrimitive
   | WarningCirclePrimitive
-  | ForceOverlayPrimitive
-  | EngulfingOverlayPrimitive
-  | VolumeProfilePrimitive
-  | PeakOverlayPrimitive
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
@@ -67,11 +60,8 @@ export type ChartHandle = {
   polylines: PolylineArrowPrimitive
   textAnchors: TextAnchorPrimitive
   warningCircles: WarningCirclePrimitive
-  forceOverlay: ForceOverlayPrimitive
-  engulfingOverlay: EngulfingOverlayPrimitive
-  peakOverlay: PeakOverlayPrimitive | null
-  sessionVerticalLines: SessionVerticalLinesPrimitive | null
-  volumeProfile: VolumeProfilePrimitive | null
+  primitives: ChartPrimitiveRegistry
+  indicators: IndicatorLayer
   fitted: boolean
   firstTime: number | null
 }
@@ -84,10 +74,6 @@ export function usesVolumeProfile(timeframe: string): boolean {
   return timeframe === '15m' || timeframe === '3m'
 }
 
-export function usesPeakDetection(timeframe: string): boolean {
-  return timeframe === '15m' || timeframe === '3m'
-}
-
 export function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
   handle.trendlines.setBars(candles)
   handle.rectangles.setBars(candles)
@@ -97,8 +83,7 @@ export function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
   handle.polylines.setBars(candles)
   handle.textAnchors.setBars(candles)
   handle.warningCircles.setBars(candles)
-  handle.volumeProfile?.setBars(candles)
-  handle.peakOverlay?.setBars(candles)
+  handle.indicators.setBars(candles)
 }
 
 /** Resolve click → time/price at cursor (no series or bar-center snap). */
@@ -219,8 +204,6 @@ export function initPriceChart(
   const polylineArrowPrimitive = new PolylineArrowPrimitive([])
   const textAnchorPrimitive = new TextAnchorPrimitive([])
   const warningCirclePrimitive = new WarningCirclePrimitive([])
-  const forceOverlayPrimitive = new ForceOverlayPrimitive([])
-  const engulfingOverlayPrimitive = new EngulfingOverlayPrimitive([])
   price.attachPrimitive(trendlinePrimitive)
   price.attachPrimitive(rectanglePrimitive)
   price.attachPrimitive(fibonacciRangePrimitive)
@@ -229,25 +212,14 @@ export function initPriceChart(
   price.attachPrimitive(iconMarkerPrimitive)
   price.attachPrimitive(polylineArrowPrimitive)
   price.attachPrimitive(textAnchorPrimitive)
-  price.attachPrimitive(forceOverlayPrimitive)
-  price.attachPrimitive(engulfingOverlayPrimitive)
-
-  const volumeProfilePrimitive = usesVolumeProfile(options.timeframe)
-    ? new VolumeProfilePrimitive()
-    : null
-  if (volumeProfilePrimitive) price.attachPrimitive(volumeProfilePrimitive)
-
-  const peakOverlayPrimitive = usesPeakDetection(options.timeframe)
-    ? new PeakOverlayPrimitive([])
-    : null
-  if (peakOverlayPrimitive) price.attachPrimitive(peakOverlayPrimitive)
-
-  const sessionVerticalLinesPrimitive = sessionGrid
-    ? new SessionVerticalLinesPrimitive()
-    : null
-  if (sessionVerticalLinesPrimitive) {
-    created.panes()[0].attachPrimitive(sessionVerticalLinesPrimitive)
-  }
+  const indicators = new IndicatorLayer(
+    created,
+    price as unknown as ISeriesApi<SeriesType, Time>,
+    {
+      volumeProfile: usesVolumeProfile(options.timeframe),
+      sessionGrid,
+    },
+  )
 
   let adjusting = false
   created.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -264,6 +236,16 @@ export function initPriceChart(
     if (range.from < VIEWPORT.loadEdge) options.onLoadOlder()
   })
 
+  const primitives = new ChartPrimitiveRegistry()
+  primitives.register('trendline', asPrimitiveLayer(trendlinePrimitive))
+  primitives.register('rectangle', asPrimitiveLayer(rectanglePrimitive))
+  primitives.register('fibonacci_range', asPrimitiveLayer(fibonacciRangePrimitive))
+  primitives.register('fibonacci_range_extension', asPrimitiveLayer(fibonacciExtensionPrimitive))
+  primitives.register('warning_circle', asPrimitiveLayer(warningCirclePrimitive))
+  primitives.register('icon', asPrimitiveLayer(iconMarkerPrimitive))
+  primitives.register('polyline', asPrimitiveLayer(polylineArrowPrimitive))
+  primitives.register('text_anchor', asPrimitiveLayer(textAnchorPrimitive))
+
   const handle: ChartHandle = {
     chart: created,
     price: price as unknown as PriceSeries & ISeriesApi<SeriesType, Time>,
@@ -278,11 +260,8 @@ export function initPriceChart(
     polylines: polylineArrowPrimitive,
     textAnchors: textAnchorPrimitive,
     warningCircles: warningCirclePrimitive,
-    forceOverlay: forceOverlayPrimitive,
-    engulfingOverlay: engulfingOverlayPrimitive,
-    peakOverlay: peakOverlayPrimitive,
-    sessionVerticalLines: sessionVerticalLinesPrimitive,
-    volumeProfile: volumeProfilePrimitive,
+    primitives,
+    indicators,
     fitted: false,
     firstTime: null,
   }

@@ -2,15 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { IChartApi, Time } from 'lightweight-charts'
-import { Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
 import {
-  isTextAnchorKind,
   type ChartDrawingKind,
   type DrawingPoint,
 } from '../../_lib/chart/chart-drawings'
-import { isChartIconKind } from '../../_lib/chart/chart-icons'
 import type { BarTimeSeries } from '../../_lib/chart/chart-coordinates'
 import {
   chartCoordinateBars,
@@ -19,27 +15,26 @@ import {
 import { diffCandles } from '../../_lib/chart/candle-sync-diff'
 import { VIEWPORT } from '../../_lib/chart/price-chart-style'
 import { bollinger, pricePoint, type ChartType } from '../../_lib/chart/price-chart-series'
-import type { EngulfingOverlayEvent } from './primitives/engulfing-overlay-primitive'
-import type { ForceOverlayEvent } from './primitives/force-overlay-primitive'
-import type { PeakOverlayEvent } from './primitives/peak-overlay-primitive'
+import type { EngulfingOverlayEvent } from './_components/indicators/engulfing/engulfing-overlay-primitive'
+import type { ForceOverlayEvent } from './_components/indicators/force/force-overlay-primitive'
 import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
-import type { IconMarkerDrawing } from './primitives/icon-marker-primitive'
-import type { RectangleDrawing } from './primitives/rectangle-primitive'
-import type { FibonacciRangeExtensionDrawing } from './primitives/fibonacci-range-extension-primitive'
-import type { FibonacciRangeDrawing } from './primitives/fibonacci-range-primitive'
-import type { PolylineArrowDrawing } from './primitives/polyline-arrow-primitive'
-import type { TextAnchorDrawing } from './primitives/text-anchor-primitive'
-import type { TrendlineDrawing } from './primitives/trendline-primitive'
-import type { WarningCircleDrawing } from './primitives/warning-circle-primitive'
+import type { IconMarkerDrawing } from './_components/objects/icon/icon-marker-primitive'
+import type { RectangleDrawing } from './_components/objects/rect/rectangle-primitive'
+import type { FibonacciRangeExtensionDrawing } from './_components/objects/fibonacci-extension/fibonacci-range-extension-primitive'
+import type { FibonacciRangeDrawing } from './_components/objects/fibonacci-range/fibonacci-range-primitive'
+import type { PolylineArrowDrawing } from './_components/objects/polyline/polyline-arrow-primitive'
+import type { TextAnchorDrawing } from './_components/objects/text/text-anchor-primitive'
+import type { TrendlineDrawing } from './_components/objects/trendline/trendline-primitive'
+import type { WarningCircleDrawing } from './_components/objects/warning-circle/warning-circle-primitive'
 import {
   bindPriceChartInteraction,
-  isShapeDrawTool,
   isTouchSeedShapeTool,
-  seedTouchShapeDraft,
-  type DrawingDragState,
-  type PolylineDragState,
-  type TouchShapePhase,
+  isTwoPointDrawTool,
 } from './bind-price-chart-interaction'
+import type { ChartEditRuntime } from './_sessions/edit/chart-edit-runtime'
+import type { ChartSelectionRuntime } from './_sessions/edit/chart-selection-runtime'
+import { applyShapeDraft, clearDrawingDrafts } from './drawing-draft-adapter'
+import type { TwoPointToolKind } from './_sessions/create/two-point-create-behavior'
 import {
   initPriceChart,
   syncDrawingBars,
@@ -65,7 +60,6 @@ export function PriceChart({
   textAnchors = [],
   forceEvents = [],
   engulfingEvents = [],
-  peakEvents = [],
   volumeProfile = null,
   drawTool = null,
   onDrawingComplete,
@@ -94,7 +88,6 @@ export function PriceChart({
   textAnchors?: readonly TextAnchorDrawing[]
   forceEvents?: readonly ForceOverlayEvent[]
   engulfingEvents?: readonly EngulfingOverlayEvent[]
-  peakEvents?: readonly PeakOverlayEvent[]
   volumeProfile?: VolumeProfileFrame | null
   drawTool?: DrawTool
   onDrawingComplete?: (input: {
@@ -123,27 +116,11 @@ export function PriceChart({
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
   const drawToolRef = useRef(drawTool)
-  const draftRef = useRef<DrawingPoint | null>(null)
-  const dragRef = useRef<DrawingDragState | null>(null)
-  const polylineDragRef = useRef<PolylineDragState | null>(null)
-  const didDragRef = useRef(false)
-  const skipNextClickRef = useRef(false)
-  const tapStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
-  const iconPressRef = useRef<{
-    id: string
-    x: number
-    y: number
-    pointerId: number
-  } | null>(null)
-  const touchShapePhaseRef = useRef<TouchShapePhase>('idle')
-  const touchShapeDragStartRef = useRef<{ x: number; y: number } | null>(null)
-  const shapePreviewP2Ref = useRef<DrawingPoint | null>(null)
-  const shapePreviewP3Ref = useRef<DrawingPoint | null>(null)
-  const polylineDraftRef = useRef<DrawingPoint[]>([])
-  const lastPolyTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
-  const lastLabelTapRef = useRef<{ id: string; time: number; x: number; y: number } | null>(
-    null,
-  )
+  const seedCoarseTwoPointRef = useRef<((tool: TwoPointToolKind) => boolean) | null>(null)
+  const seedCoarseThreePointRef = useRef<(() => boolean) | null>(null)
+  const interactionCancelRef = useRef<(() => void) | null>(null)
+  const editSessionRef = useRef<ChartEditRuntime | null>(null)
+  const selectionSessionRef = useRef<ChartSelectionRuntime | null>(null)
   const pointerCoarseRef = useRef(false)
   const chartElRef = useRef<HTMLElement | null>(null)
   const selectedIdRef = useRef<string | null>(null)
@@ -165,10 +142,6 @@ export function PriceChart({
   const onPolylineChangeEndRef = useRef(onPolylineChangeEnd)
   const onPolylineLabelEditRef = useRef(onPolylineLabelEdit)
   const [epoch, setEpoch] = useState(0)
-  const [shapeAwaitingP2, setShapeAwaitingP2] = useState(false)
-  const [showCoarseUi, setShowCoarseUi] = useState(false)
-  const setShapeAwaitingP2Ref = useRef(setShapeAwaitingP2)
-  setShapeAwaitingP2Ref.current = setShapeAwaitingP2
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
   fibonacciRangesRef.current = fibonacciRanges
@@ -212,7 +185,7 @@ export function PriceChart({
     const handle = handleRef.current
     if (!handle) return
     const drawing = drawToolRef.current != null
-    const dragging = dragRef.current != null || polylineDragRef.current != null
+    const dragging = editSessionRef.current?.isDragging ?? false
     const locked = drawing || dragging
     handle.chart.applyOptions({
       handleScroll: !locked,
@@ -229,7 +202,6 @@ export function PriceChart({
     const mq = window.matchMedia('(pointer: coarse)')
     const update = () => {
       pointerCoarseRef.current = mq.matches
-      setShowCoarseUi(mq.matches)
     }
     update()
     mq.addEventListener('change', update)
@@ -252,98 +224,27 @@ export function PriceChart({
   }
 
   const clearDrafts = () => {
-    draftRef.current = null
-    polylineDraftRef.current = []
-    lastPolyTapRef.current = null
-    lastLabelTapRef.current = null
-    touchShapePhaseRef.current = 'idle'
-    touchShapeDragStartRef.current = null
-    shapePreviewP2Ref.current = null
-    shapePreviewP3Ref.current = null
-    setShapeAwaitingP2Ref.current(false)
+    selectionSessionRef.current?.reset()
     const handle = handleRef.current
-    handle?.trendlines.setDraft(null)
-    handle?.rectangles.setDraft(null)
-    handle?.fibonacciRanges.setDraft(null)
-    handle?.fibonacciExtensions.setDraft(null)
-    handle?.warningCircles.setDraft(null)
-    handle?.icons.setDraft(null)
-    handle?.polylines.setDraft(null)
-    handle?.textAnchors.setDraft(null)
+    if (handle) clearDrawingDrafts(handle)
   }
 
-  const setActiveDraft = (draft: { p1: DrawingPoint; p2?: DrawingPoint; p3?: DrawingPoint } | null) => {
-    const tool = drawToolRef.current
-    const handle = handleRef.current
-    if (!handle || !tool || isChartIconKind(tool) || isTextAnchorKind(tool)) return
-    if (tool === 'fibonacci_range_extension') {
-      handle.fibonacciExtensions.setDraft(draft)
-      return
-    }
-    // Clear siblings only when they have a draft — never null-then-set the active tool.
-    if (tool === 'trendline') {
-      if (handle.rectangles.draft) handle.rectangles.setDraft(null)
-      if (handle.fibonacciRanges.draft) handle.fibonacciRanges.setDraft(null)
-      if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
-      if (handle.icons.draft) handle.icons.setDraft(null)
-      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
-      handle.trendlines.setDraft(draft)
-      return
-    }
-    if (tool === 'rectangle') {
-      if (handle.fibonacciRanges.draft) handle.fibonacciRanges.setDraft(null)
-      if (handle.trendlines.draft) handle.trendlines.setDraft(null)
-      if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
-      if (handle.icons.draft) handle.icons.setDraft(null)
-      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
-      handle.rectangles.setDraft(draft)
-      return
-    }
-    if (tool === 'fibonacci_range') {
-      if (handle.rectangles.draft) handle.rectangles.setDraft(null)
-      if (handle.trendlines.draft) handle.trendlines.setDraft(null)
-      if (handle.warningCircles.draft) handle.warningCircles.setDraft(null)
-      if (handle.icons.draft) handle.icons.setDraft(null)
-      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
-      handle.fibonacciRanges.setDraft(draft)
-      return
-    }
-    if (tool === 'warning_circle') {
-      if (handle.trendlines.draft) handle.trendlines.setDraft(null)
-      if (handle.rectangles.draft) handle.rectangles.setDraft(null)
-      if (handle.fibonacciRanges.draft) handle.fibonacciRanges.setDraft(null)
-      if (handle.icons.draft) handle.icons.setDraft(null)
-      if (handle.textAnchors.draft) handle.textAnchors.setDraft(null)
-      handle.warningCircles.setDraft(draft)
+  const releaseActivePointerCapture = () => {
+    const el = pointerCaptureElRef.current
+    const pointerId = selectionSessionRef.current?.activePointerId
+    pointerCaptureElRef.current = null
+    selectionSessionRef.current?.resetPointer()
+    if (el && pointerId != null) {
+      try { el.releasePointerCapture(pointerId) } catch { /* lost capture */ }
     }
   }
 
-  /** `p2: null` = single-point preview (placing_p1). Omit p2 to keep prior preview / desktop hover. */
   const setShapeDraft = (p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => {
-    if (p2 === null) {
-      shapePreviewP2Ref.current = null
-      shapePreviewP3Ref.current = null
-      setActiveDraft({ p1 })
-      return
-    }
-    const preview = p2 ?? shapePreviewP2Ref.current ?? p1
-    shapePreviewP2Ref.current = preview
-    if (p3 !== undefined) shapePreviewP3Ref.current = p3
-    setActiveDraft({ p1, p2: preview, p3: shapePreviewP3Ref.current ?? undefined })
+    const handle = handleRef.current
+    if (handle) applyShapeDraft(handle, drawToolRef.current, { p1, p2: p2 ?? undefined, p3: p3 ?? undefined })
   }
   const setShapeDraftRef = useRef(setShapeDraft)
   setShapeDraftRef.current = setShapeDraft
-
-  const commitShapeDraft = () => {
-    const tool = drawToolRef.current
-    if (!tool || !isShapeDrawTool(tool)) return
-    const p1 = draftRef.current
-    const p2 = shapePreviewP2Ref.current
-    if (!p1 || !p2) return
-    if (tool === 'fibonacci_range_extension') return
-    clearDrafts()
-    onCompleteRef.current?.({ kind: tool, p1, p2 })
-  }
 
   useEffect(() => {
     const el = ref.current
@@ -365,6 +266,7 @@ export function PriceChart({
       createdChart = handle.chart
 
       if (cancelled) {
+        handle.indicators.detach()
         handle.chart.remove()
         return
       }
@@ -377,20 +279,11 @@ export function PriceChart({
         overlayEl: drawOverlayRef.current,
         refs: {
           drawToolRef,
-          draftRef,
-          dragRef,
-          polylineDragRef,
-          didDragRef,
-          skipNextClickRef,
-          tapStartRef,
-          iconPressRef,
-          touchShapePhaseRef,
-          touchShapeDragStartRef,
-          shapePreviewP2Ref,
-          shapePreviewP3Ref,
-          polylineDraftRef,
-          lastPolyTapRef,
-          lastLabelTapRef,
+          seedCoarseTwoPointRef,
+          seedCoarseThreePointRef,
+          interactionCancelRef,
+          editSessionRef,
+          selectionSessionRef,
           pointerCoarseRef,
           pointerCaptureElRef,
           chartElRef,
@@ -402,7 +295,6 @@ export function PriceChart({
           iconsRef,
           textAnchorsRef,
           warningCirclesRef,
-          setShapeAwaitingP2Ref,
           setShapeDraftRef,
           onCompleteRef,
           onChangeRef,
@@ -424,6 +316,7 @@ export function PriceChart({
 
       if (cancelled) {
         removePointerHandlers()
+        handle.indicators.detach()
         handle.chart.remove()
         return
       }
@@ -434,12 +327,9 @@ export function PriceChart({
     return () => {
       cancelled = true
       removePointerHandlers?.()
+      const handle = handleRef.current
+      handle?.indicators.detach()
       handleRef.current = null
-      draftRef.current = null
-      touchShapePhaseRef.current = 'idle'
-      touchShapeDragStartRef.current = null
-      dragRef.current = null
-      polylineDragRef.current = null
       selectedIdRef.current = null
       createdChart?.remove()
     }
@@ -501,28 +391,25 @@ export function PriceChart({
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
-    handle.forceOverlay.setEvents(forceEvents)
+    handle.indicators.setForceEvents(forceEvents)
   }, [forceEvents, epoch])
 
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
-    handle.engulfingOverlay.setEvents(engulfingEvents)
+    handle.indicators.setEngulfingEvents(engulfingEvents)
   }, [engulfingEvents, epoch])
 
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
-    handle.peakOverlay?.setEvents(peakEvents)
-  }, [peakEvents, epoch])
-
-  useEffect(() => {
-    const handle = handleRef.current
-    if (!handle) return
-    handle.volumeProfile?.setProfile(volumeProfile)
+    handle.indicators.setVolumeProfile(volumeProfile)
   }, [volumeProfile, epoch])
 
   useEffect(() => {
+    editSessionRef.current?.cancelActive()
+    releaseActivePointerCapture()
+    interactionCancelRef.current?.()
     clearDrafts()
     if (drawTool) selectDrawing(null)
     if (
@@ -530,13 +417,11 @@ export function PriceChart({
       pointerCoarseRef.current &&
       handleRef.current
     ) {
-      seedTouchShapeDraft({
-        handle: handleRef.current,
-        candles: candlesRef.current,
-        draftRef,
-        touchShapePhaseRef,
-        setShapeDraft,
-      })
+      if (isTwoPointDrawTool(drawTool)) {
+        seedCoarseTwoPointRef.current?.(drawTool)
+      } else if (drawTool === 'fibonacci_range_extension') {
+        seedCoarseThreePointRef.current?.()
+      }
     }
   }, [drawTool, epoch])
 
@@ -587,6 +472,8 @@ export function PriceChart({
       if (event.key === 'Escape') {
         if (!drawToolRef.current) return
         event.preventDefault()
+        releaseActivePointerCapture()
+        interactionCancelRef.current?.()
         clearDrafts()
         onDrawToolCancelRef.current?.()
         syncInteractionLock()
@@ -619,7 +506,6 @@ export function PriceChart({
     const coordBars = chartCoordinateBars(candles, tf)
     candlesRef.current = coordBars
     syncDrawingBars(handle, coordBars)
-    handle.sessionVerticalLines?.setBars(coordBars)
 
     if (diff.kind === 'unchanged') return
 
@@ -695,25 +581,6 @@ export function PriceChart({
         }}
         aria-hidden={!drawTool}
       />
-      {showCoarseUi &&
-        shapeAwaitingP2 &&
-        drawTool != null &&
-        isShapeDrawTool(drawTool) &&
-        !isTouchSeedShapeTool(drawTool) && (
-          <Button
-            type="button"
-            size="icon"
-            className="absolute bottom-3 right-3 z-20 size-11 touch-manipulation shadow-md"
-            aria-label="Confirm second point"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              commitShapeDraft()
-            }}
-          >
-            <Check className="size-5" />
-          </Button>
-        )}
     </div>
   )
 }
