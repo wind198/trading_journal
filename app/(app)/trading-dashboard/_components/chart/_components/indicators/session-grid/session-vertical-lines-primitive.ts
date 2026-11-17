@@ -55,7 +55,7 @@ class SessionVerticalLinesPaneView implements IPanePrimitivePaneView {
     }
     const xs: number[] = []
     const bars = this.source.bars
-    for (const unix of sessionVerticalLineTimes()) {
+    for (const unix of sessionVerticalLineTimes(this.source.enabledSlots)) {
       const x = chartXAtTime(chart, unix, bars)
       if (x != null) xs.push(Number(x))
     }
@@ -66,6 +66,8 @@ class SessionVerticalLinesPaneView implements IPanePrimitivePaneView {
 export class SessionVerticalLinesPrimitive implements IPanePrimitive<Time> {
   chart: IChartApi | null = null
   bars: BarTimeSeries = []
+  /** null = all slots enabled. */
+  enabledSlots: ReadonlySet<string> | null = null
   private requestUpdate: (() => void) | null = null
   private readonly paneView: SessionVerticalLinesPaneView
   private readonly views: SessionVerticalLinesPaneView[]
@@ -78,6 +80,11 @@ export class SessionVerticalLinesPrimitive implements IPanePrimitive<Time> {
 
   setBars(bars: BarTimeSeries): void {
     this.bars = bars
+    this.requestUpdate?.()
+  }
+
+  setEnabledSlots(enabled: ReadonlySet<string> | null): void {
+    this.enabledSlots = enabled
     this.requestUpdate?.()
   }
 

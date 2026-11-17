@@ -58,6 +58,10 @@ export class IndicatorLayer {
     this.volumeProfile?.setProfile(profile)
   }
 
+  setSessionSlots(enabled: ReadonlySet<string> | null): void {
+    this.sessionGrid?.setEnabledSlots(enabled)
+  }
+
   /** Releases primitives in reverse attachment order. Safe to call more than once. */
   detach(): void {
     if (this.detached) return

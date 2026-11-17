@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { IChartApi, Time } from 'lightweight-charts'
+import type { IChartApi, LogicalRange, Time } from 'lightweight-charts'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
@@ -46,6 +46,13 @@ import {
 export type { ChartType }
 export type DrawTool = ChartDrawingKind | null
 
+type ViewportSnapshot = {
+  timeframe: string
+  range: LogicalRange
+  barSpacing: number
+  rightOffset: number
+}
+
 export function PriceChart({
   candles,
   chartType,
@@ -63,6 +70,7 @@ export function PriceChart({
   forceEvents = [],
   engulfingEvents = [],
   volumeProfile = null,
+  sessionSlotEnabled = null,
   drawTool = null,
   onDrawingComplete,
   onDrawingChange,
@@ -91,6 +99,8 @@ export function PriceChart({
   forceEvents?: readonly ForceOverlayEvent[]
   engulfingEvents?: readonly EngulfingOverlayEvent[]
   volumeProfile?: VolumeProfileFrame | null
+  /** null = all session slots; otherwise only these slot ids are drawn. */
+  sessionSlotEnabled?: ReadonlySet<string> | null
   drawTool?: DrawTool
   onDrawingComplete?: (input: {
     kind: ChartDrawingKind
@@ -130,6 +140,7 @@ export function PriceChart({
   const trendlinesRef = useRef(trendlines)
   const rectanglesRef = useRef(rectangles)
   const fibonacciRangesRef = useRef(fibonacciRanges)
+  const fibonacciExtensionsRef = useRef(fibonacciExtensions)
   const warningCirclesRef = useRef(warningCircles)
   const iconsRef = useRef(icons)
   const polylinesRef = useRef(polylines)
@@ -145,9 +156,11 @@ export function PriceChart({
   const onPolylineChangeEndRef = useRef(onPolylineChangeEnd)
   const onPolylineLabelEditRef = useRef(onPolylineLabelEdit)
   const [epoch, setEpoch] = useState(0)
+  const viewportSnapshotRef = useRef<ViewportSnapshot | null>(null)
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
   fibonacciRangesRef.current = fibonacciRanges
+  fibonacciExtensionsRef.current = fibonacciExtensions
   warningCirclesRef.current = warningCircles
   iconsRef.current = icons
   polylinesRef.current = polylines
@@ -306,9 +319,11 @@ export function PriceChart({
           trendlinesRef,
           rectanglesRef,
           fibonacciRangesRef,
+          fibonacciExtensionsRef,
           iconsRef,
           textAnchorsRef,
           warningCirclesRef,
+          polylinesRef,
           setShapeDraftRef,
           onCompleteRef,
           onChangeRef,
@@ -342,6 +357,19 @@ export function PriceChart({
       cancelled = true
       removePointerHandlers?.()
       const handle = handleRef.current
+      if (handle?.fitted) {
+        const scale = handle.chart.timeScale()
+        const range = scale.getVisibleLogicalRange()
+        if (range) {
+          const opts = scale.options()
+          viewportSnapshotRef.current = {
+            timeframe,
+            range,
+            barSpacing: opts.barSpacing,
+            rightOffset: opts.rightOffset,
+          }
+        }
+      }
       handle?.indicators.detach()
       handleRef.current = null
       selectedIdRef.current = null
@@ -419,6 +447,12 @@ export function PriceChart({
     if (!handle) return
     handle.indicators.setVolumeProfile(volumeProfile)
   }, [volumeProfile, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.indicators.setSessionSlots(sessionSlotEnabled)
+  }, [sessionSlotEnabled, epoch])
 
   useEffect(() => {
     editSessionRef.current?.cancelActive()
@@ -560,11 +594,30 @@ export function PriceChart({
     appliedCandlesRef.current = candles
     handle.firstTime = coordBars[0].time
 
-    if (keep) {
+    const snapshot = viewportSnapshotRef.current
+    if (snapshot && snapshot.timeframe === timeframe && snapshot.range) {
+      viewportSnapshotRef.current = null
+      scale.applyOptions({
+        barSpacing: snapshot.barSpacing,
+        rightOffset: snapshot.rightOffset,
+      })
+      scale.setVisibleLogicalRange(snapshot.range)
+      handle.fitted = true
+      requestAnimationFrame(() => {
+        if (handleRef.current !== handle) return
+        scale.applyOptions({
+          barSpacing: snapshot.barSpacing,
+          rightOffset: snapshot.rightOffset,
+        })
+        scale.setVisibleLogicalRange(snapshot.range)
+      })
+    } else if (keep) {
+      viewportSnapshotRef.current = null
       if (prepended !== 0) {
         scale.setVisibleLogicalRange({ from: keep.from + prepended, to: keep.to + prepended })
       }
     } else {
+      viewportSnapshotRef.current = null
       const to = candles.length + futureTimes.length
       const range = { from: Math.max(0, to - VIEWPORT.visibleBars), to }
       scale.setVisibleLogicalRange(range)

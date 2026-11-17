@@ -8,4 +8,8 @@ export class SessionGridIndicator {
   setBars(bars: BarTimeSeries): void {
     this.primitive.setBars(bars)
   }
+
+  setEnabledSlots(enabled: ReadonlySet<string> | null): void {
+    this.primitive.setEnabledSlots(enabled)
+  }
 }

@@ -136,7 +136,7 @@ export function unixAtChartZone(
   return unix
 }
 
-const SESSION_LINE_SLOTS = [
+export const SESSION_LINE_SLOTS = [
   { hour: 6, minute: 0 },
   { hour: 7, minute: 0 },
   { hour: 9, minute: 0 },
@@ -146,6 +146,25 @@ const SESSION_LINE_SLOTS = [
   { hour: 19, minute: 30 },
   { hour: 23, minute: 0 },
 ] as const
+
+export type SessionLineSlot = (typeof SESSION_LINE_SLOTS)[number]
+export type SessionSlotId = `${string}:${string}`
+
+export function sessionSlotId(slot: { hour: number; minute: number }): SessionSlotId {
+  return `${String(slot.hour).padStart(2, '0')}:${String(slot.minute).padStart(2, '0')}`
+}
+
+export function sessionSlotLabel(slot: { hour: number; minute: number }): string {
+  return sessionSlotId(slot)
+}
+
+export function defaultSessionSlotEnabled(): Record<SessionSlotId, boolean> {
+  const enabled = {} as Record<SessionSlotId, boolean>
+  for (const slot of SESSION_LINE_SLOTS) {
+    enabled[sessionSlotId(slot)] = true
+  }
+  return enabled
+}
 
 const SESSION_DAY_OFFSETS = [-2, -1, 0, 1] as const
 
@@ -171,13 +190,19 @@ function addCalendarDays(year: number, month: number, day: number, deltaDays: nu
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() }
 }
 
-/** Session verticals for today−2 … today+1 in chart zone. */
-export function sessionVerticalLineTimes(): number[] {
+/**
+ * Session verticals for today−2 … today+1 in chart zone.
+ * `enabled` null/undefined keeps every slot; otherwise only ids present in the set.
+ */
+export function sessionVerticalLineTimes(
+  enabled?: ReadonlySet<string> | null,
+): number[] {
   const today = chartZoneTodayYmd()
   const times: number[] = []
   for (const offset of SESSION_DAY_OFFSETS) {
     const { year, month, day } = addCalendarDays(today.year, today.month, today.day, offset)
     for (const slot of SESSION_LINE_SLOTS) {
+      if (enabled && !enabled.has(sessionSlotId(slot))) continue
       times.push(unixAtChartZone(year, month, day, slot.hour, slot.minute))
     }
   }

@@ -17,13 +17,16 @@ import {
 } from '../../_lib/chart/chart-coordinates'
 import type { IconMarkerDrawing } from './_components/objects/icon/icon-marker-primitive'
 import type { RectangleDrawing } from './_components/objects/rect/rectangle-primitive'
+import type { FibonacciRangeExtensionDrawing } from './_components/objects/fibonacci-extension/fibonacci-range-extension-primitive'
 import type { FibonacciRangeDrawing } from './_components/objects/fibonacci-range/fibonacci-range-primitive'
+import type { PolylineArrowDrawing } from './_components/objects/polyline/polyline-arrow-primitive'
 import type { TextAnchorDrawing } from './_components/objects/text/text-anchor-primitive'
 import type { TrendlineDrawing } from './_components/objects/trendline/trendline-primitive'
 import type { WarningCircleDrawing } from './_components/objects/warning-circle/warning-circle-primitive'
 import { createChartEditRuntime, type ChartEditRuntime } from './_sessions/edit/chart-edit-runtime'
 import { createChartSelectionRuntime, type ChartSelectionRuntime } from './_sessions/edit/chart-selection-runtime'
 import { DrawingPreviewScheduler } from './drawing-preview-scheduler'
+import { DrawingEditPreviewScheduler } from './drawing-edit-preview'
 import { ChartPointerAdapter } from './chart-pointer-adapter'
 import { isCoarsePointerEvent, shapePreviewFollowsPointer as previewFollowsPointer } from './chart-pointer-gesture'
 import { CreationPointerSession } from './_sessions/create/creation-pointer-session'
@@ -73,9 +76,11 @@ export type PriceChartInteractionRefs = {
   trendlinesRef: RefObject<readonly TrendlineDrawing[]>
   rectanglesRef: RefObject<readonly RectangleDrawing[]>
   fibonacciRangesRef: RefObject<readonly FibonacciRangeDrawing[]>
+  fibonacciExtensionsRef: RefObject<readonly FibonacciRangeExtensionDrawing[]>
   iconsRef: RefObject<readonly IconMarkerDrawing[]>
   textAnchorsRef: RefObject<readonly TextAnchorDrawing[]>
   warningCirclesRef: RefObject<readonly WarningCircleDrawing[]>
+  polylinesRef: RefObject<readonly PolylineArrowDrawing[]>
   setShapeDraftRef: RefObject<(p1: DrawingPoint, p2?: DrawingPoint | null, p3?: DrawingPoint | null) => void>
   onCompleteRef: RefObject<
     | ((input: { kind: ChartDrawingKind; p1: DrawingPoint; p2: DrawingPoint; points?: DrawingPoint[] }) => void)
@@ -228,7 +233,22 @@ export function createChartInteractionComposition(input: {
   const setCapture = (event: PointerEvent, el: HTMLElement) => pointer.capture(event, el)
   const releaseCapture = (event: PointerEvent) => pointer.release(event)
 
-  const editRuntime = createChartEditRuntime({
+  const restoreEditPrimitives = () => {
+    handle.trendlines.setLines(refs.trendlinesRef.current)
+    handle.rectangles.setRects(refs.rectanglesRef.current)
+    handle.fibonacciRanges.setRanges(refs.fibonacciRangesRef.current)
+    handle.fibonacciExtensions.setExtensions(refs.fibonacciExtensionsRef.current)
+    handle.warningCircles.setCircles(refs.warningCirclesRef.current)
+    handle.icons.setIcons(refs.iconsRef.current)
+    handle.textAnchors.setAnchors(refs.textAnchorsRef.current)
+    handle.polylines.setPolylines(refs.polylinesRef.current)
+  }
+
+  const editPreview = new DrawingEditPreviewScheduler(handle, restoreEditPrimitives)
+  let lastTwoPoint: { id: string; p1: DrawingPoint; p2: DrawingPoint } | null = null
+  let lastPolyline: { id: string; points: DrawingPoint[] } | null = null
+
+  const editRuntimeInner = createChartEditRuntime({
     handle,
     candles: () => refs.candlesRef.current,
     selectedId: () => refs.selectedIdRef.current,
@@ -239,10 +259,32 @@ export function createChartInteractionComposition(input: {
     releaseById: (pointerId) => pointer.releaseById(pointerId),
     syncLock: syncInteractionLock,
     markDrag: () => selectionRuntime.markDrag(),
-    change: (id, p1, p2) => refs.onChangeRef.current?.(id, p1, p2),
-    changeEnd: (id) => refs.onChangeEndRef.current?.(id),
-    polylineChange: (id, points) => refs.onPolylineChangeRef.current?.(id, points),
-    polylineChangeEnd: (id) => refs.onPolylineChangeEndRef.current?.(id),
+    change: (id, p1, p2) => {
+      lastTwoPoint = { id, p1, p2 }
+      lastPolyline = null
+      editPreview.scheduleTwoPoint(id, p1, p2)
+    },
+    changeEnd: (id) => {
+      editPreview.flush()
+      if (lastTwoPoint?.id === id) {
+        refs.onChangeRef.current?.(id, lastTwoPoint.p1, lastTwoPoint.p2)
+      }
+      lastTwoPoint = null
+      refs.onChangeEndRef.current?.(id)
+    },
+    polylineChange: (id, points) => {
+      lastPolyline = { id, points }
+      lastTwoPoint = null
+      editPreview.schedulePolyline(id, points)
+    },
+    polylineChangeEnd: (id) => {
+      editPreview.flush()
+      if (lastPolyline?.id === id) {
+        refs.onPolylineChangeRef.current?.(id, lastPolyline.points)
+      }
+      lastPolyline = null
+      refs.onPolylineChangeEndRef.current?.(id)
+    },
     drawings: () => ({
       trendlines: refs.trendlinesRef.current,
       rectangles: refs.rectanglesRef.current,
@@ -252,6 +294,36 @@ export function createChartInteractionComposition(input: {
       warningCircles: refs.warningCirclesRef.current,
     }),
   }, TAP_MOVE_THRESHOLD_PX)
+
+  const editRuntime: ChartEditRuntime = {
+    get store() {
+      return editRuntimeInner.store
+    },
+    get isDragging() {
+      return editRuntimeInner.isDragging
+    },
+    pointerDown: (event, point) => editRuntimeInner.pointerDown(event, point),
+    pointerMove: (event, point) => editRuntimeInner.pointerMove(event, point),
+    pointerUp: (event) => editRuntimeInner.pointerUp(event),
+    pointerCancel: (event) => {
+      editPreview.discardAndRestore()
+      lastTwoPoint = null
+      lastPolyline = null
+      editRuntimeInner.pointerCancel(event)
+    },
+    cancelActive: () => {
+      editPreview.discardAndRestore()
+      lastTwoPoint = null
+      lastPolyline = null
+      editRuntimeInner.cancelActive()
+    },
+    dispose: () => {
+      editPreview.discard()
+      lastTwoPoint = null
+      lastPolyline = null
+      editRuntimeInner.dispose()
+    },
+  }
   refs.editSessionRef.current = editRuntime
 
   const onDrawOverlayPointerDown = (event: PointerEvent) => {
@@ -397,6 +469,7 @@ export function createChartInteractionComposition(input: {
       selectionRuntime.dispose()
       refs.selectionSessionRef.current = null
       discardDraftRaf()
+      editPreview.discard()
       refs.seedCoarseThreePointRef.current = null
       refs.seedCoarseTwoPointRef.current = null
       pointer.dispose()

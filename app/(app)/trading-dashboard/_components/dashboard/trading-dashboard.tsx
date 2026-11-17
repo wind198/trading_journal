@@ -6,6 +6,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { Toggle } from '@/components/ui/toggle'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,11 @@ import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
 import { NotesSidebar } from '../notes/notes-sidebar'
 import { GuidesSidebar } from '../guides/guides-sidebar'
 import { NonTradeWarningBanner } from './non-trade-warning-banner'
+import {
+  ChartOverlaySettingsMenu,
+  useChartOverlaySettings,
+  useSessionSlotsEnabled,
+} from './chart-overlay-settings-menu'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import { DrawingLabelSession, type DrawingLabelState } from '../chart/_sessions/configure/drawing-label-session'
 import {
@@ -85,6 +91,7 @@ import {
   ArrowDown,
   ArrowUp,
   Expand,
+  Focus,
   Maximize2,
   Minimize2,
   Minus,
@@ -118,14 +125,11 @@ function useTabletUp() {
 
 const CHART_TYPES: { id: ChartType; label: string }[] = [
   { id: 'line', label: 'Line' },
-  { id: 'area', label: 'Area' },
   { id: 'candlestick', label: 'Candle' },
-  { id: 'bar', label: 'Bar' },
 ]
 
 const GLOBAL_CHART_TYPES = [
   { id: 'line', label: 'Line' },
-  { id: 'area', label: 'Area' },
   { id: 'candlestick', label: 'Candle' },
 ] as const satisfies readonly { id: ChartType; label: string }[]
 
@@ -137,6 +141,7 @@ const PANES = [
 ] as const
 
 type PaneId = (typeof PANES)[number]['id']
+const FOCUS_PANE_IDS = ['15m', '3m'] as const satisfies readonly PaneId[]
 type BiasValue = -1 | 0 | 1
 
 function BiasArrow({ value, compact }: { value: BiasValue | null; compact: boolean }) {
@@ -173,6 +178,8 @@ export function TradingDashboard() {
 function Dashboard() {
   const [expanded, setExpanded] = useState<PaneId | null>(null)
   const [fullScreen, setFullScreen] = useState(false)
+  const [focusMode, setFocusMode] = useState(false)
+  const [overlaySettings, setOverlaySettings] = useChartOverlaySettings()
   const [notesOpen, setNotesOpen] = useState(false)
   const [guidesOpen, setGuidesOpen] = useState(false)
   const [marketReloading, setMarketReloading] = useState(false)
@@ -181,6 +188,13 @@ function Dashboard() {
   const [globalChartType, setGlobalChartType] = useState<ChartType>('line')
   const queryClient = useQueryClient()
   const router = useRouter()
+  const visiblePanes =
+    expanded == null && focusMode
+      ? PANES.filter((pane) =>
+          (FOCUS_PANE_IDS as readonly string[]).includes(pane.id),
+        )
+      : PANES
+  const sessionSlotEnabled = useSessionSlotsEnabled(overlaySettings.sessionSlots)
 
   const signOut = async () => {
     await createClient().auth.signOut()
@@ -232,6 +246,21 @@ function Dashboard() {
                   {type.label}
                 </Button>
               ))}
+            {expanded == null && (
+              <Toggle
+                variant="outline"
+                size="sm"
+                pressed={focusMode}
+                aria-label={focusMode ? 'Exit focus mode' : 'Focus mode: 15m and 3m only'}
+                onPressedChange={setFocusMode}
+              >
+                <Focus />
+              </Toggle>
+            )}
+            <ChartOverlaySettingsMenu
+              settings={overlaySettings}
+              onSettingsChange={setOverlaySettings}
+            />
             <Button
               variant={notesOpen ? 'secondary' : 'ghost'}
               size="icon-sm"
@@ -279,10 +308,12 @@ function Dashboard() {
           className={
             expanded
               ? 'flex h-full min-h-0 overflow-hidden p-2'
-              : 'grid h-full min-h-0 grid-cols-1 grid-rows-4 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2'
+              : focusMode
+                ? 'grid h-full min-h-0 grid-cols-1 grid-rows-2 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-1'
+                : 'grid h-full min-h-0 grid-cols-1 grid-rows-4 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2'
           }
         >
-        {PANES.map((pane) => {
+        {visiblePanes.map((pane) => {
           const isExpanded = expanded === pane.id
           if (expanded && !isExpanded) return null
           const chartType = isExpanded
@@ -298,6 +329,8 @@ function Dashboard() {
               compact={compact}
               chartType={chartType}
               axesVisible={isExpanded || tablet}
+              showVolumeProfile={overlaySettings.volumeProfile}
+              sessionSlotEnabled={sessionSlotEnabled}
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
               }
@@ -338,6 +371,8 @@ function DashboardPane({
   compact,
   chartType,
   axesVisible,
+  showVolumeProfile,
+  sessionSlotEnabled,
   onChartType,
   onToggleExpand,
 }: {
@@ -346,6 +381,8 @@ function DashboardPane({
   compact: boolean
   chartType: ChartType
   axesVisible: boolean
+  showVolumeProfile: boolean
+  sessionSlotEnabled: ReadonlySet<string>
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
 }) {
@@ -380,7 +417,7 @@ function DashboardPane({
           pane.id,
         )
       : volumeProfileQueryOptions(0, 1, vpIntervalSec, pane.id)),
-    enabled: volumeProfileWindow != null,
+    enabled: volumeProfileWindow != null && showVolumeProfile,
   })
   const loadOlder = () => {
     if (loadingOlder.current || !history.hasNextPage || history.isFetchingNextPage) return
@@ -408,7 +445,7 @@ function DashboardPane({
   }, [isExpanded, candles])
 
   const volumeProfile = useMemo(() => {
-    if (pane.id !== '15m' && pane.id !== '3m') return null
+    if (!showVolumeProfile || (pane.id !== '15m' && pane.id !== '3m')) return null
     const payload = volumeProfileQuery.data
     const window = volumeProfileWindow
     const timeBins = window
@@ -422,7 +459,7 @@ function DashboardPane({
       timeBins,
       intervalSec: vpIntervalSec,
     })
-  }, [pane.id, volumeProfileQuery.data, volumeProfileWindow, vpIntervalSec])
+  }, [showVolumeProfile, pane.id, volumeProfileQuery.data, volumeProfileWindow, vpIntervalSec])
 
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
@@ -909,6 +946,7 @@ function DashboardPane({
             forceEvents={forceEvents}
             engulfingEvents={engulfingEvents}
             volumeProfile={volumeProfile}
+            sessionSlotEnabled={sessionSlotEnabled}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}
             onDrawingChange={onDrawingChange}
