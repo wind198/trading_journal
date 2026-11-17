@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { IChartApi, LogicalRange, Time } from 'lightweight-charts'
+import type { IChartApi, ITimeScaleApi, LogicalRange, Time } from 'lightweight-charts'
+import { useDebounceCallback } from 'usehooks-ts'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 import type { CandleTimeframe, LightweightCandle } from '@/lib/ticks/candles'
@@ -16,6 +17,11 @@ import {
 } from '../../_lib/chart/extend-candles-to-chart-eod'
 import { diffCandles } from '../../_lib/chart/candle-sync-diff'
 import { VIEWPORT } from '../../_lib/chart/price-chart-style'
+import {
+  readViewport,
+  writeViewport,
+  type PersistedChartViewport,
+} from '../../_lib/chart/chart-viewport-storage'
 import { bollinger, pricePoint, type ChartType } from '../../_lib/chart/price-chart-series'
 import type { EngulfingOverlayEvent } from './_components/indicators/engulfing/engulfing-overlay-primitive'
 import type { ForceOverlayEvent } from './_components/indicators/force/force-overlay-primitive'
@@ -51,6 +57,40 @@ type ViewportSnapshot = {
   range: LogicalRange
   barSpacing: number
   rightOffset: number
+}
+
+function timeToUnix(time: Time): number | null {
+  return typeof time === 'number' && Number.isFinite(time) ? time : null
+}
+
+function capturePersistedViewport(chart: IChartApi): PersistedChartViewport | null {
+  const scale = chart.timeScale()
+  const timeRange = scale.getVisibleRange()
+  if (!timeRange) return null
+  const from = timeToUnix(timeRange.from)
+  const to = timeToUnix(timeRange.to)
+  if (from == null || to == null || to <= from) return null
+  const opts = scale.options()
+  return {
+    from,
+    to,
+    barSpacing: opts.barSpacing,
+    rightOffset: opts.rightOffset,
+  }
+}
+
+function applyPersistedViewport(
+  scale: ITimeScaleApi<Time>,
+  viewport: PersistedChartViewport,
+): void {
+  scale.applyOptions({
+    barSpacing: viewport.barSpacing,
+    rightOffset: viewport.rightOffset,
+  })
+  scale.setVisibleRange({
+    from: viewport.from as Time,
+    to: viewport.to as Time,
+  })
 }
 
 export function PriceChart({
@@ -157,6 +197,18 @@ export function PriceChart({
   const onPolylineLabelEditRef = useRef(onPolylineLabelEdit)
   const [epoch, setEpoch] = useState(0)
   const viewportSnapshotRef = useRef<ViewportSnapshot | null>(null)
+  const restoringViewportRef = useRef(false)
+  const timeframeRef = useRef(timeframe)
+  timeframeRef.current = timeframe
+  const persistViewport = useDebounceCallback(() => {
+    if (restoringViewportRef.current) return
+    const handle = handleRef.current
+    if (!handle?.fitted) return
+    const snap = capturePersistedViewport(handle.chart)
+    if (snap) writeViewport(timeframeRef.current, snap)
+  }, 300)
+  const persistViewportRef = useRef(persistViewport)
+  persistViewportRef.current = persistViewport
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
   fibonacciRangesRef.current = fibonacciRanges
@@ -280,6 +332,7 @@ export function PriceChart({
     let cancelled = false
     let createdChart: IChartApi | null = null
     let removePointerHandlers: (() => void) | null = null
+    let unsubscribeRange: (() => void) | null = null
 
     void import('lightweight-charts').then((lwc) => {
       if (cancelled || !ref.current) return
@@ -350,11 +403,21 @@ export function PriceChart({
         return
       }
 
+      const onVisibleRangeChange = () => {
+        persistViewportRef.current()
+      }
+      handle.chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleRangeChange)
+      unsubscribeRange = () => {
+        handle.chart.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleRangeChange)
+      }
+
       setEpoch((value) => value + 1)
     })
 
     return () => {
       cancelled = true
+      persistViewportRef.current.flush()
+      unsubscribeRange?.()
       removePointerHandlers?.()
       const handle = handleRef.current
       if (handle?.fitted) {
@@ -369,6 +432,8 @@ export function PriceChart({
             rightOffset: opts.rightOffset,
           }
         }
+        const persisted = capturePersistedViewport(handle.chart)
+        if (persisted) writeViewport(timeframe, persisted)
       }
       handle?.indicators.detach()
       handleRef.current = null
@@ -597,6 +662,7 @@ export function PriceChart({
     const snapshot = viewportSnapshotRef.current
     if (snapshot && snapshot.timeframe === timeframe && snapshot.range) {
       viewportSnapshotRef.current = null
+      restoringViewportRef.current = true
       scale.applyOptions({
         barSpacing: snapshot.barSpacing,
         rightOffset: snapshot.rightOffset,
@@ -604,12 +670,16 @@ export function PriceChart({
       scale.setVisibleLogicalRange(snapshot.range)
       handle.fitted = true
       requestAnimationFrame(() => {
-        if (handleRef.current !== handle) return
+        if (handleRef.current !== handle) {
+          restoringViewportRef.current = false
+          return
+        }
         scale.applyOptions({
           barSpacing: snapshot.barSpacing,
           rightOffset: snapshot.rightOffset,
         })
         scale.setVisibleLogicalRange(snapshot.range)
+        restoringViewportRef.current = false
       })
     } else if (keep) {
       viewportSnapshotRef.current = null
@@ -618,14 +688,37 @@ export function PriceChart({
       }
     } else {
       viewportSnapshotRef.current = null
-      const to = candles.length + futureTimes.length
-      const range = { from: Math.max(0, to - VIEWPORT.visibleBars), to }
-      scale.setVisibleLogicalRange(range)
-      handle.fitted = true
-      requestAnimationFrame(() => {
-        if (handleRef.current !== handle) return
+      const persisted = readViewport(timeframe)
+      const fitDefault = () => {
+        const to = candles.length + futureTimes.length
+        const range = { from: Math.max(0, to - VIEWPORT.visibleBars), to }
         scale.setVisibleLogicalRange(range)
-      })
+        handle.fitted = true
+        requestAnimationFrame(() => {
+          if (handleRef.current !== handle) return
+          scale.setVisibleLogicalRange(range)
+        })
+      }
+      if (persisted) {
+        restoringViewportRef.current = true
+        applyPersistedViewport(scale, persisted)
+        if (scale.getVisibleRange()) {
+          handle.fitted = true
+          requestAnimationFrame(() => {
+            if (handleRef.current !== handle) {
+              restoringViewportRef.current = false
+              return
+            }
+            applyPersistedViewport(scale, persisted)
+            restoringViewportRef.current = false
+          })
+        } else {
+          restoringViewportRef.current = false
+          fitDefault()
+        }
+      } else {
+        fitDefault()
+      }
     }
   }, [candles, timeframe, chartType, epoch])
 
