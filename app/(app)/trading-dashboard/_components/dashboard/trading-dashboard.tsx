@@ -24,6 +24,7 @@ import {
   useChartOverlaySettings,
   useSessionSlotsEnabled,
 } from './chart-overlay-settings-menu'
+import { paneIndicators } from '../../_lib/chart/chart-indicator-pane-settings'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import { DrawingLabelSession, type DrawingLabelState } from '../chart/_sessions/configure/drawing-label-session'
 import {
@@ -321,6 +322,7 @@ function Dashboard() {
             : globalChartType
 
           const compact = !isExpanded && !tablet
+          const paneToggles = paneIndicators(overlaySettings, pane.id)
           return (
             <DashboardPane
               key={pane.id}
@@ -331,6 +333,8 @@ function Dashboard() {
               axesVisible={isExpanded || tablet}
               showVolumeProfile={overlaySettings.volumeProfile}
               sessionSlotEnabled={sessionSlotEnabled}
+              showBollinger={paneToggles.bollinger}
+              showIchimoku={paneToggles.ichimoku}
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
               }
@@ -373,6 +377,8 @@ function DashboardPane({
   axesVisible,
   showVolumeProfile,
   sessionSlotEnabled,
+  showBollinger,
+  showIchimoku,
   onChartType,
   onToggleExpand,
 }: {
@@ -383,6 +389,8 @@ function DashboardPane({
   axesVisible: boolean
   showVolumeProfile: boolean
   sessionSlotEnabled: ReadonlySet<string>
+  showBollinger: boolean
+  showIchimoku: boolean
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
 }) {
@@ -947,6 +955,8 @@ function DashboardPane({
             engulfingEvents={engulfingEvents}
             volumeProfile={volumeProfile}
             sessionSlotEnabled={sessionSlotEnabled}
+            showBollinger={showBollinger}
+            showIchimoku={showIchimoku}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}
             onDrawingChange={onDrawingChange}

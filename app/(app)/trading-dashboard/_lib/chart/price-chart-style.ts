@@ -8,6 +8,13 @@ export const VIEWPORT = {
   futureLogicalBars: 24,
 } as const
 
+export const ICHIMOKU = {
+  conversion: '#0496FF',
+  base: '#991B9E',
+  cloudBullish: 'rgba(5, 177, 105, 0.22)',
+  cloudBearish: 'rgba(223, 41, 53, 0.22)',
+} as const
+
 export const BOLLINGER = {
   length: 104,
   mult: 2,

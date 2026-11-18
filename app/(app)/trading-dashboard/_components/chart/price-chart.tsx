@@ -22,7 +22,8 @@ import {
   writeViewport,
   type PersistedChartViewport,
 } from '../../_lib/chart/chart-viewport-storage'
-import { bollinger, pricePoint, type ChartType } from '../../_lib/chart/price-chart-series'
+import { ichimokuForChart } from '../../_lib/chart/price-chart-ichimoku'
+import { bollinger, pricePoint, type BandLevel, type ChartType } from '../../_lib/chart/price-chart-series'
 import type { EngulfingOverlayEvent } from './_components/indicators/engulfing/engulfing-overlay-primitive'
 import type { ForceOverlayEvent } from './_components/indicators/force/force-overlay-primitive'
 import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
@@ -79,6 +80,57 @@ function capturePersistedViewport(chart: IChartApi): PersistedChartViewport | nu
   }
 }
 
+function emptyBandLevels(length: number): (BandLevel | null)[] {
+  return Array.from({ length }, () => null)
+}
+
+function applyIndicatorVisibility(
+  handle: ChartHandle,
+  showBollinger: boolean,
+  showIchimoku: boolean,
+): void {
+  handle.upper.applyOptions({ visible: showBollinger })
+  handle.middle.applyOptions({ visible: showBollinger })
+  handle.lower.applyOptions({ visible: showBollinger })
+  handle.ichimokuConversion.applyOptions({ visible: showIchimoku })
+  handle.ichimokuBase.applyOptions({ visible: showIchimoku })
+}
+
+function syncBollingerBandData(
+  handle: ChartHandle,
+  candles: readonly LightweightCandle[],
+  showBollinger: boolean,
+): void {
+  if (!showBollinger) {
+    handle.upper.setData([])
+    handle.middle.setData([])
+    handle.lower.setData([])
+    return
+  }
+  const bands = bollinger(candles)
+  handle.upper.setData(bands.upper)
+  handle.middle.setData(bands.middle)
+  handle.lower.setData(bands.lower)
+}
+
+function syncIchimokuSeries(
+  handle: ChartHandle,
+  candles: readonly LightweightCandle[],
+  tf: CandleTimeframe,
+  showIchimoku: boolean,
+): void {
+  if (!showIchimoku) {
+    handle.ichimokuConversion.setData([])
+    handle.ichimokuBase.setData([])
+    handle.ichimokuCloud.setCloud([])
+    return
+  }
+  const ichi = ichimokuForChart(candles, tf)
+  handle.ichimokuConversion.setData(ichi.conversion)
+  handle.ichimokuBase.setData(ichi.base)
+  handle.ichimokuCloud.setCloud(ichi.cloud)
+}
+
 function applyPersistedViewport(
   scale: ITimeScaleApi<Time>,
   viewport: PersistedChartViewport,
@@ -111,6 +163,8 @@ export function PriceChart({
   engulfingEvents = [],
   volumeProfile = null,
   sessionSlotEnabled = null,
+  showBollinger = true,
+  showIchimoku = false,
   drawTool = null,
   onDrawingComplete,
   onDrawingChange,
@@ -141,6 +195,8 @@ export function PriceChart({
   volumeProfile?: VolumeProfileFrame | null
   /** null = all session slots; otherwise only these slot ids are drawn. */
   sessionSlotEnabled?: ReadonlySet<string> | null
+  showBollinger?: boolean
+  showIchimoku?: boolean
   drawTool?: DrawTool
   onDrawingComplete?: (input: {
     kind: ChartDrawingKind
@@ -165,6 +221,7 @@ export function PriceChart({
   const [pointerCoarse, setPointerCoarse] = useState(false)
   const candlesRef = useRef<BarTimeSeries>(candles ?? [])
   const appliedCandlesRef = useRef<LightweightCandle[]>([])
+  const indicatorToggleRef = useRef({ showBollinger, showIchimoku })
   const appliedEpochRef = useRef(-1)
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
@@ -616,17 +673,53 @@ export function PriceChart({
     candlesRef.current = coordBars
     syncDrawingBars(handle, coordBars)
 
+    applyIndicatorVisibility(handle, showBollinger, showIchimoku)
+    const prevToggles = indicatorToggleRef.current
+    const bollingerToggled = prevToggles.showBollinger !== showBollinger
+    const ichimokuToggled = prevToggles.showIchimoku !== showIchimoku
+    const indicatorsChanged = bollingerToggled || ichimokuToggled
+
+    if (diff.kind === 'unchanged' && indicatorsChanged) {
+      const scale = handle.chart.timeScale()
+      const logical = scale.getVisibleLogicalRange()
+      const timeOpts = {
+        barSpacing: scale.options().barSpacing,
+        rightOffset: scale.options().rightOffset,
+      }
+      if (bollingerToggled && showBollinger) {
+        syncBollingerBandData(handle, candles, true)
+      }
+      if (ichimokuToggled) {
+        syncIchimokuSeries(handle, candles, tf, showIchimoku)
+      }
+      scale.applyOptions(timeOpts)
+      if (logical) scale.setVisibleLogicalRange(logical)
+      indicatorToggleRef.current = { showBollinger, showIchimoku }
+      return
+    }
+
     if (diff.kind === 'unchanged') return
 
-    const bands = bollinger(candles)
+    if (indicatorsChanged) {
+      indicatorToggleRef.current = { showBollinger, showIchimoku }
+    }
+
+    const bands = showBollinger
+      ? bollinger(candles)
+      : {
+          upper: [] as { time: Time; value: number }[],
+          middle: [] as { time: Time; value: number }[],
+          lower: [] as { time: Time; value: number }[],
+          levels: emptyBandLevels(candles.length),
+        }
 
     // Hot path: poll updates last bar only. historicalUpdate skips trailing whitespace.
-    if (diff.kind === 'lastUpdated') {
+    if (diff.kind === 'lastUpdated' && !indicatorsChanged) {
       const lastIndex = candles.length - 1
       const bar = candles[lastIndex]
       const level = bands.levels[lastIndex]
       handle.price.update(pricePoint(bar, level, chartType), true)
-      if (level) {
+      if (showBollinger && level) {
         const time = bar.time as Time
         handle.upper.update({ time, value: level.upper }, true)
         handle.middle.update({ time, value: level.middle }, true)
@@ -653,9 +746,8 @@ export function PriceChart({
       ...candles.map((bar, index) => pricePoint(bar, bands.levels[index], chartType)),
       ...futureTimes.map((t) => ({ time: t as Time })),
     ])
-    handle.upper.setData(bands.upper)
-    handle.middle.setData(bands.middle)
-    handle.lower.setData(bands.lower)
+    syncBollingerBandData(handle, candles, showBollinger)
+    syncIchimokuSeries(handle, candles, tf, showIchimoku)
     appliedCandlesRef.current = candles
     handle.firstTime = coordBars[0].time
 
@@ -720,7 +812,7 @@ export function PriceChart({
         fitDefault()
       }
     }
-  }, [candles, timeframe, chartType, epoch])
+  }, [candles, timeframe, chartType, epoch, showBollinger, showIchimoku])
 
   return (
     <div

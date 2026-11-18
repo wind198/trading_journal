@@ -9,9 +9,11 @@ import {
   BOLLINGER,
   CANDLE,
   CHART_THEME,
+  ICHIMOKU,
   PRICE_FORMAT,
   VIEWPORT,
 } from '../../_lib/chart/price-chart-style'
+import { IchimokuCloudPrimitive } from './_components/indicators/ichimoku/ichimoku-cloud-primitive'
 import type { ChartType } from '../../_lib/chart/price-chart-series'
 import { IndicatorLayer } from './_components/indicators/indicator-layer'
 import { IconMarkerPrimitive } from './_components/objects/icon/icon-marker-primitive'
@@ -44,6 +46,7 @@ type PriceSeries = {
 type LineSeries = {
   setData: (data: { time: Time; value: number }[]) => void
   update: (bar: { time: Time; value: number }, historicalUpdate?: boolean) => void
+  applyOptions: (options: { visible?: boolean }) => void
 }
 
 export type ChartHandle = {
@@ -52,6 +55,9 @@ export type ChartHandle = {
   upper: LineSeries
   middle: LineSeries
   lower: LineSeries
+  ichimokuConversion: LineSeries
+  ichimokuBase: LineSeries
+  ichimokuCloud: IchimokuCloudPrimitive
   trendlines: TrendlinePrimitive
   rectangles: RectanglePrimitive
   fibonacciExtensions: FibonacciRangeExtensionPrimitive
@@ -194,6 +200,8 @@ export function initPriceChart(
       priceFormat: PRICE_FORMAT,
       priceLineVisible: false,
       lastValueVisible: false,
+      /** Bands / Ichimoku must not expand the price scale when toggled or updated. */
+      autoscaleInfoProvider: () => null,
     })
 
   const trendlinePrimitive = new TrendlinePrimitive([])
@@ -212,6 +220,8 @@ export function initPriceChart(
   price.attachPrimitive(iconMarkerPrimitive)
   price.attachPrimitive(polylineArrowPrimitive)
   price.attachPrimitive(textAnchorPrimitive)
+  const ichimokuCloudPrimitive = new IchimokuCloudPrimitive()
+  price.attachPrimitive(ichimokuCloudPrimitive)
   const indicators = new IndicatorLayer(
     created,
     price as unknown as ISeriesApi<SeriesType, Time>,
@@ -252,6 +262,9 @@ export function initPriceChart(
     upper: line(BOLLINGER.bandUpper) as LineSeries,
     middle: line(BOLLINGER.bandMiddle) as LineSeries,
     lower: line(BOLLINGER.bandLower) as LineSeries,
+    ichimokuConversion: line(ICHIMOKU.conversion) as LineSeries,
+    ichimokuBase: line(ICHIMOKU.base) as LineSeries,
+    ichimokuCloud: ichimokuCloudPrimitive,
     trendlines: trendlinePrimitive,
     rectangles: rectanglePrimitive,
     fibonacciRanges: fibonacciRangePrimitive,
