@@ -1,0 +1,19 @@
+{
+  "name": "@mt5/execution-contracts",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Generated TypeScript types for MT5 execution bridge wire contracts",
+  "type": "module",
+  "exports": {
+    ".": "./generated/typescript/index.ts"
+  },
+  "scripts": {
+    "validate": "asyncapi validate asyncapi.yaml",
+    "generate:ts": "python3 scripts/compile_schemas.py && node scripts/generate-typescript.mjs",
+    "generate": "bash ./scripts/generate.sh"
+  },
+  "devDependencies": {
+    "@asyncapi/cli": "2.16.1",
+    "json-schema-to-typescript": "15.0.4"
+  }
+}

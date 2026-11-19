@@ -6,7 +6,14 @@ import {
 export const DASHBOARD_PANE_IDS = ['4h', '1h', '15m', '3m'] as const
 export type DashboardPaneId = (typeof DASHBOARD_PANE_IDS)[number]
 
-export type PaneIndicatorToggles = { bollinger: boolean; ichimoku: boolean }
+export type PaneIndicatorToggles = {
+  bollinger: boolean
+  ichimoku: boolean
+  regime: boolean
+  force: boolean
+  engulfing: boolean
+  keyLevels: boolean
+}
 
 export type ChartOverlaySettings = {
   volumeProfile: boolean
@@ -14,19 +21,29 @@ export type ChartOverlaySettings = {
   indicatorsByPane: Record<DashboardPaneId, PaneIndicatorToggles>
 }
 
-const PANE_DEFAULTS: PaneIndicatorToggles = { bollinger: true, ichimoku: false }
+const PANE_DEFAULTS: PaneIndicatorToggles = {
+  bollinger: true,
+  ichimoku: false,
+  regime: true,
+  force: true,
+  engulfing: true,
+  keyLevels: true,
+}
 
 export function defaultPaneIndicatorToggles(): PaneIndicatorToggles {
   return { ...PANE_DEFAULTS }
 }
 
 export function defaultIndicatorsByPane(): Record<DashboardPaneId, PaneIndicatorToggles> {
-  return {
+  const defaults = {
     '4h': defaultPaneIndicatorToggles(),
     '1h': defaultPaneIndicatorToggles(),
     '15m': defaultPaneIndicatorToggles(),
     '3m': defaultPaneIndicatorToggles(),
   }
+  defaults['4h'].regime = false
+  defaults['1h'].regime = false
+  return defaults
 }
 
 export const DEFAULT_OVERLAY_SETTINGS: ChartOverlaySettings = {
@@ -69,6 +86,10 @@ function parseIndicatorsByPane(
     const row = entry as Record<string, unknown>
     if (typeof row.bollinger === 'boolean') out[id].bollinger = row.bollinger
     if (typeof row.ichimoku === 'boolean') out[id].ichimoku = row.ichimoku
+    if (typeof row.regime === 'boolean') out[id].regime = row.regime
+    if (typeof row.force === 'boolean') out[id].force = row.force
+    if (typeof row.engulfing === 'boolean') out[id].engulfing = row.engulfing
+    if (typeof row.keyLevels === 'boolean') out[id].keyLevels = row.keyLevels
   }
 
   return out
@@ -117,8 +138,10 @@ export function paneIndicators(
 ): PaneIndicatorToggles {
   if (isDashboardPaneId(paneId)) {
     return {
-      bollinger: settings.indicatorsByPane[paneId].bollinger,
-      ichimoku: settings.indicatorsByPane[paneId].ichimoku,
+      ...settings.indicatorsByPane[paneId],
+      regime:
+        (paneId === '15m' || paneId === '3m') &&
+        settings.indicatorsByPane[paneId].regime,
     }
   }
   return defaultPaneIndicatorToggles()

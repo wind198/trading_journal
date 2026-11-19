@@ -146,8 +146,8 @@ export function initPriceChart(
       textColor: CHART_THEME.text,
     },
     grid: {
-      vertLines: { color: CHART_THEME.grid, visible: !sessionGrid },
-      horzLines: { color: CHART_THEME.grid },
+      vertLines: { visible: false },
+      horzLines: { visible: false },
     },
     localization: {
       timeFormatter: (time: Time) => formatChartCrosshairTime(time),

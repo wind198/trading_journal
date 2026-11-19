@@ -7,9 +7,15 @@ import type { ForceOverlayEvent } from './force/force-overlay-primitive'
 import { ForceIndicator } from './force/force-indicator'
 import { SessionGridIndicator } from './session-grid/session-grid-indicator'
 import { VolumeProfileIndicator } from './volume-profile/volume-profile-indicator'
+import { MarketContextPrimitive } from './market-context/market-context-primitive'
+import type { KeyLevelZone, RegimeSegment } from '../../../../_lib/overlays/baseline-indicators'
+import type { ForceScorePoint } from '../../../../_lib/overlays/baseline-indicators'
+import { ForceScorePrimitive } from './force-score/force-score-primitive'
 
 /** Attaches indicators in the existing paint order and forwards their changing inputs. */
 export class IndicatorLayer {
+  readonly marketContext = new MarketContextPrimitive()
+  readonly forceScore = new ForceScorePrimitive()
   readonly force = new ForceIndicator()
   readonly engulfing = new EngulfingIndicator()
   readonly volumeProfile: VolumeProfileIndicator | null
@@ -22,10 +28,14 @@ export class IndicatorLayer {
     price: ISeriesApi<SeriesType, Time>,
     options: { volumeProfile: boolean; sessionGrid: boolean },
   ) {
+    price.attachPrimitive(this.marketContext)
+    this.detachCallbacks.push(() => price.detachPrimitive(this.marketContext))
     price.attachPrimitive(this.force.primitive)
     this.detachCallbacks.push(() => price.detachPrimitive(this.force.primitive))
     price.attachPrimitive(this.engulfing.primitive)
     this.detachCallbacks.push(() => price.detachPrimitive(this.engulfing.primitive))
+    price.attachPrimitive(this.forceScore)
+    this.detachCallbacks.push(() => price.detachPrimitive(this.forceScore))
 
     this.volumeProfile = options.volumeProfile ? new VolumeProfileIndicator() : null
     this.sessionGrid = options.sessionGrid ? new SessionGridIndicator() : null
@@ -52,6 +62,22 @@ export class IndicatorLayer {
 
   setEngulfingEvents(events: readonly EngulfingOverlayEvent[]): void {
     this.engulfing.setEvents(events)
+  }
+
+  setRegimeSegments(segments: readonly RegimeSegment[]): void {
+    this.marketContext.setRegimes(segments)
+  }
+
+  setKeyLevels(levels: readonly KeyLevelZone[]): void {
+    this.marketContext.setLevels(levels)
+  }
+
+  setCurrentPrice(price: number | null): void {
+    this.marketContext.setCurrentPrice(price)
+  }
+
+  setForceScores(scores: readonly ForceScorePoint[]): void {
+    this.forceScore.setScores(scores)
   }
 
   setVolumeProfile(profile: VolumeProfileFrame | null): void {

@@ -27,6 +27,7 @@ import { bollinger, pricePoint, type BandLevel, type ChartType } from '../../_li
 import type { EngulfingOverlayEvent } from './_components/indicators/engulfing/engulfing-overlay-primitive'
 import type { ForceOverlayEvent } from './_components/indicators/force/force-overlay-primitive'
 import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
+import type { ForceScorePoint, KeyLevelZone, RegimeSegment } from '../../_lib/overlays/baseline-indicators'
 import type { IconMarkerDrawing } from './_components/objects/icon/icon-marker-primitive'
 import type { RectangleDrawing } from './_components/objects/rect/rectangle-primitive'
 import type { FibonacciRangeExtensionDrawing } from './_components/objects/fibonacci-extension/fibonacci-range-extension-primitive'
@@ -161,6 +162,9 @@ export function PriceChart({
   textAnchors = [],
   forceEvents = [],
   engulfingEvents = [],
+  regimeSegments = [],
+  keyLevels = [],
+  forceScores = [],
   volumeProfile = null,
   sessionSlotEnabled = null,
   showBollinger = true,
@@ -192,6 +196,9 @@ export function PriceChart({
   textAnchors?: readonly TextAnchorDrawing[]
   forceEvents?: readonly ForceOverlayEvent[]
   engulfingEvents?: readonly EngulfingOverlayEvent[]
+  regimeSegments?: readonly RegimeSegment[]
+  keyLevels?: readonly KeyLevelZone[]
+  forceScores?: readonly ForceScorePoint[]
   volumeProfile?: VolumeProfileFrame | null
   /** null = all session slots; otherwise only these slot ids are drawn. */
   sessionSlotEnabled?: ReadonlySet<string> | null
@@ -563,6 +570,30 @@ export function PriceChart({
     if (!handle) return
     handle.indicators.setEngulfingEvents(engulfingEvents)
   }, [engulfingEvents, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.indicators.setRegimeSegments(regimeSegments)
+  }, [regimeSegments, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.indicators.setKeyLevels(keyLevels)
+  }, [keyLevels, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.indicators.setCurrentPrice(candles.at(-1)?.close ?? null)
+  }, [candles, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.indicators.setForceScores(forceScores)
+  }, [forceScores, epoch])
 
   useEffect(() => {
     const handle = handleRef.current

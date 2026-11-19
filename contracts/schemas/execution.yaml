@@ -1,0 +1,80 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$defs:
+  AckResult:
+    type: string
+    enum:
+      - ARMED
+      - REJECTED
+      - WAREHOUSE_OFFLINE
+      - UNKNOWN_OUTCOME
+      - ROUTED
+      - RECEIVED
+      - CANCELLED
+  OrderLifecycleState:
+    type: string
+    enum:
+      - SUBMITTED
+      - ROUTED
+      - RECEIVED
+      - ARMED
+      - TRIGGERED
+      - EXECUTION_SUBMITTED
+      - FILLED
+      - REJECTED
+      - FAILED
+      - CANCELLED
+      - EXPIRED
+  OrderAckPayload:
+    type: object
+    additionalProperties: false
+    required: [order_id, result]
+    properties:
+      order_id:
+        type: string
+        format: uuid
+      result:
+        $ref: '#/$defs/AckResult'
+      state:
+        $ref: '#/$defs/OrderLifecycleState'
+      reason:
+        type: string
+      calculated_volume_lots:
+        type: string
+      stop_loss_price:
+        type: string
+      take_profit_price:
+        type: string
+      estimated_risk_usd:
+        type: string
+  HeartbeatPayload:
+    type: object
+    additionalProperties: false
+    required: [device_id, account_id]
+    properties:
+      device_id:
+        type: string
+      account_id:
+        type: string
+      online:
+        type: boolean
+        default: true
+      armed_order_count:
+        type: integer
+        minimum: 0
+        default: 0
+  DeliveryUnavailablePayload:
+    type: object
+    additionalProperties: false
+    required: [device_id, result]
+    properties:
+      order_id:
+        type: string
+        format: uuid
+      device_id:
+        type: string
+      result:
+        type: string
+        const: WAREHOUSE_OFFLINE
+      reason:
+        type: string
+        default: no_warehouse_in_room

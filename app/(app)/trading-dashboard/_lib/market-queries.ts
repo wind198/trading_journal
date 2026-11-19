@@ -111,3 +111,31 @@ export function volumeProfileQueryOptions(
     placeholderData: (previous) => previous,
   })
 }
+
+export function keyLevelVolumeQueryOptions(
+  fromMsc: number,
+  toMsc: number,
+  intervalSec: number,
+  timeframe: string,
+) {
+  return queryOptions({
+    queryKey: ['market', 'key-level-volume', MARKET_SYMBOL, timeframe, fromMsc, toMsc, intervalSec] as const,
+    queryFn: async ({ signal }): Promise<VolumeProfilePayload> => {
+      const params = new URLSearchParams({
+        symbol: MARKET_SYMBOL,
+        from_msc: String(fromMsc),
+        to_msc: String(toMsc),
+        timeframe,
+        interval_sec: String(intervalSec),
+        time_only: '1',
+      })
+      const response = await fetch(`/api/volume-profile?${params}`, { signal })
+      if (!response.ok) throw new Error('key-level-volume')
+      const body = (await response.json()) as { data?: VolumeProfilePayload }
+      return body.data ?? { price: [], time: [] }
+    },
+    staleTime: Infinity,
+    gcTime: MARKET_GC_TIME_MS,
+    placeholderData: (previous) => previous,
+  })
+}

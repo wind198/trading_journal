@@ -8,11 +8,15 @@ import {
   DEFAULT_OVERLAY_SETTINGS,
 } from './chart-indicator-pane-settings'
 
-test('defaultIndicatorsByPane: bollinger on, ichimoku off', () => {
+test('defaultIndicatorsByPane: migrated indicators default on where supported', () => {
   const map = defaultIndicatorsByPane()
   for (const id of ['4h', '1h', '15m', '3m'] as const) {
     assert.equal(map[id].bollinger, true)
     assert.equal(map[id].ichimoku, false)
+    assert.equal(map[id].regime, id === '15m' || id === '3m')
+    assert.equal(map[id].force, true)
+    assert.equal(map[id].engulfing, true)
+    assert.equal(map[id].keyLevels, true)
   }
 })
 
@@ -46,5 +50,27 @@ test('parseOverlaySettings: partial pane map fills defaults', () => {
 
 test('paneIndicators unknown pane uses defaults', () => {
   const toggles = paneIndicators(DEFAULT_OVERLAY_SETTINGS, '5m')
-  assert.deepEqual(toggles, { bollinger: true, ichimoku: false })
+  assert.deepEqual(toggles, {
+    bollinger: true,
+    ichimoku: false,
+    regime: true,
+    force: true,
+    engulfing: true,
+    keyLevels: true,
+  })
+})
+
+test('paneIndicators forces regime off on higher timeframes', () => {
+  const settings = {
+    ...DEFAULT_OVERLAY_SETTINGS,
+    indicatorsByPane: {
+      ...DEFAULT_OVERLAY_SETTINGS.indicatorsByPane,
+      '4h': { ...DEFAULT_OVERLAY_SETTINGS.indicatorsByPane['4h'], regime: true },
+      '1h': { ...DEFAULT_OVERLAY_SETTINGS.indicatorsByPane['1h'], regime: true },
+    },
+  }
+  assert.equal(paneIndicators(settings, '4h').regime, false)
+  assert.equal(paneIndicators(settings, '1h').regime, false)
+  assert.equal(paneIndicators(settings, '15m').regime, true)
+  assert.equal(paneIndicators(settings, '3m').regime, true)
 })

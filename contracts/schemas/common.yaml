@@ -1,0 +1,83 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$defs:
+  SchemaVersion:
+    type: integer
+    const: 2
+  AckResult:
+    type: string
+    enum:
+      - ARMED
+      - REJECTED
+      - WAREHOUSE_OFFLINE
+      - UNKNOWN_OUTCOME
+      - ROUTED
+      - RECEIVED
+      - CANCELLED
+  OrderLifecycleState:
+    type: string
+    enum:
+      - SUBMITTED
+      - ROUTED
+      - RECEIVED
+      - ARMED
+      - TRIGGERED
+      - EXECUTION_SUBMITTED
+      - FILLED
+      - REJECTED
+      - FAILED
+      - CANCELLED
+      - EXPIRED
+  MessageType:
+    type: string
+    enum:
+      - order.install
+      - order.cancel
+      - order.ack
+      - order.status
+      - order.submitted
+      - execution.report
+      - sync.request
+      - sync.snapshot
+      - heartbeat
+      - delivery.unavailable
+  DecimalString:
+    type: string
+    pattern: '^[0-9]+(\.[0-9]+)?$'
+  ExecutionEnvelope:
+    type: object
+    additionalProperties: false
+    required:
+      - schema_version
+      - message_id
+      - correlation_id
+      - message_type
+      - sent_at
+      - source
+      - target
+      - device_id
+      - payload
+    properties:
+      schema_version:
+        $ref: '#/$defs/SchemaVersion'
+      message_id:
+        type: string
+        format: uuid
+      correlation_id:
+        type: string
+        format: uuid
+      message_type:
+        $ref: '#/$defs/MessageType'
+      sent_at:
+        type: string
+        format: date-time
+      source:
+        type: string
+        minLength: 1
+      target:
+        type: string
+        minLength: 1
+      device_id:
+        type: string
+        minLength: 1
+      payload:
+        type: object

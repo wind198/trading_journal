@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireSessionUser } from '@/lib/auth/require-session-user'
 import {
   CANDLE_TIMEFRAMES,
   type CandleTimeframe,
@@ -7,16 +7,14 @@ import {
 import {
   VOLUME_PROFILE_BIN_SIZE,
   fetchVolumeProfilePayload,
+  fetchVolumeProfileTimeTickCounts,
 } from '@/lib/ticks/volume-profile'
 
 const SYMBOL = 'EURUSD'
-const ALLOWED_TF = new Set<string>(['3m', '15m'])
+const ALLOWED_TF = new Set<string>(Object.keys(CANDLE_TIMEFRAMES))
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await requireSessionUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const symbol = request.nextUrl.searchParams.get('symbol') ?? SYMBOL
@@ -44,13 +42,16 @@ export async function GET(request: NextRequest) {
       : CANDLE_TIMEFRAMES[tfRaw as CandleTimeframe]
 
   try {
-    const data = await fetchVolumeProfilePayload({
+    const options = {
       symbol,
       fromMsc,
       toMsc,
       intervalSec,
       binSize: VOLUME_PROFILE_BIN_SIZE,
-    })
+    }
+    const data = request.nextUrl.searchParams.get('time_only') === '1'
+      ? { price: [], time: await fetchVolumeProfileTimeTickCounts(options) }
+      : await fetchVolumeProfilePayload(options)
     return NextResponse.json({ data })
   } catch (error) {
     console.error('volume profile', error instanceof Error ? error.message : 'failed')

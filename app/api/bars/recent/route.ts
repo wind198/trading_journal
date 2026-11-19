@@ -1,17 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { fetchRecentCandles } from '@/lib/ticks/fetch'
 import { CANDLE_TIMEFRAMES, RECENT_CANDLE_LIMIT, type CandleTimeframe } from '@/lib/ticks/candles'
-import { createClient } from '@/lib/supabase/server'
+import { requireSessionUser } from '@/lib/auth/require-session-user'
 
 function isTimeframe(value: string): value is CandleTimeframe {
   return value in CANDLE_TIMEFRAMES
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await requireSessionUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const timeframe = request.nextUrl.searchParams.get('timeframe') ?? ''

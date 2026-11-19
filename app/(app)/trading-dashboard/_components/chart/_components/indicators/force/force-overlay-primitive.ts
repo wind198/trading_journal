@@ -11,17 +11,10 @@ import {
   CANDLE_OVERLAY_STACK,
   overlayMarkerGeometry,
 } from '../../../../../_lib/chart/candle-overlay-layout'
-import {
-  ForceDirection,
-  ForceStatus,
-  type ForceEvent,
-} from '../../../../../_lib/overlays/force-candle-decay'
+import type { BaselineForceEvent } from '../../../../../_lib/overlays/baseline-indicators'
 import { FORCE } from '../../../../../_lib/chart/price-chart-style'
 
-export type ForceOverlayEvent = Pick<
-  ForceEvent,
-  'eventId' | 'time' | 'direction' | 'srcOpen' | 'srcClose' | 'srcHigh' | 'srcLow' | 'status'
->
+export type ForceOverlayEvent = BaselineForceEvent
 
 type Marker = {
   cx: number
@@ -30,18 +23,8 @@ type Marker = {
   fill: string
 }
 
-function forceFill(direction: ForceDirection, status: ForceStatus): string | null {
-  const palette = direction === ForceDirection.Bullish ? FORCE.bullish : FORCE.bearish
-  switch (status) {
-    case ForceStatus.FullyActive:
-      return palette.fully
-    case ForceStatus.PartiallyActive:
-      return palette.partial
-    case ForceStatus.BarelyActive:
-      return palette.barely
-    default:
-      return null
-  }
+function forceFill(direction: ForceOverlayEvent['direction']): string {
+  return direction === 'BULLISH' ? FORCE.bullish.fully : FORCE.bearish.fully
 }
 
 class ForceOverlayRenderer {
@@ -85,14 +68,13 @@ class ForceOverlayPaneView {
     const markers: Marker[] = []
 
     for (const event of this.source.events) {
-      const fill = forceFill(event.direction, event.status)
-      if (!fill) continue
+      const fill = forceFill(event.direction)
       const x = chart.timeScale().timeToCoordinate(event.time as Time)
       const yHigh = series.priceToCoordinate(event.srcHigh)
       const yLow = series.priceToCoordinate(event.srcLow)
       if (x == null || yHigh == null || yLow == null) continue
 
-      const bullish = event.direction === ForceDirection.Bullish
+      const bullish = event.direction === 'BULLISH'
       const { cx, cy, size } = overlayMarkerGeometry(
         Number(x),
         spacing,

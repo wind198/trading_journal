@@ -1,0 +1,69 @@
+asyncapi: '3.1.0'
+info:
+  title: MT5 Execution Bridge
+  version: '2.0.0'
+  description: Socket.IO /execution namespace — schema v2 wire contracts.
+defaultContentType: application/json
+channels:
+  orderInstall:
+    address: order.install
+    messages:
+      OrderInstallMessage:
+        $ref: '#/components/messages/OrderInstallMessage'
+  orderAck:
+    address: order.ack
+    messages:
+      OrderAckMessage:
+        $ref: '#/components/messages/OrderAckMessage'
+operations:
+  sendOrderInstall:
+    action: send
+    channel:
+      $ref: '#/channels/orderInstall'
+    messages:
+      - $ref: '#/channels/orderInstall/messages/OrderInstallMessage'
+  receiveOrderAck:
+    action: receive
+    channel:
+      $ref: '#/channels/orderAck'
+    messages:
+      - $ref: '#/channels/orderAck/messages/OrderAckMessage'
+components:
+  messages:
+    OrderInstallMessage:
+      name: OrderInstallMessage
+      payload:
+        $ref: '#/components/schemas/ConditionalOrderCreateV2'
+    OrderAckMessage:
+      name: OrderAckMessage
+      payload:
+        $ref: '#/components/schemas/OrderAckPayload'
+    OrderCancelMessage:
+      name: OrderCancelMessage
+      payload:
+        $ref: '#/components/schemas/OrderCancelPayload'
+    ExecutionEnvelopeMessage:
+      name: ExecutionEnvelopeMessage
+      payload:
+        $ref: '#/components/schemas/ExecutionEnvelope'
+  schemas:
+    ConditionalOrderCreateV2:
+      $ref: './schemas/order.yaml#/$defs/ConditionalOrderCreateV2'
+    OrderCancelPayload:
+      $ref: './schemas/order.yaml#/$defs/OrderCancelPayload'
+    OrderAckPayload:
+      $ref: './schemas/execution.yaml#/$defs/OrderAckPayload'
+    HeartbeatPayload:
+      $ref: './schemas/execution.yaml#/$defs/HeartbeatPayload'
+    DeliveryUnavailablePayload:
+      $ref: './schemas/execution.yaml#/$defs/DeliveryUnavailablePayload'
+    ExecutionEnvelope:
+      $ref: './schemas/common.yaml#/$defs/ExecutionEnvelope'
+    OrderRisk:
+      $ref: './schemas/order.yaml#/$defs/OrderRisk'
+    AckResult:
+      $ref: './schemas/execution.yaml#/$defs/AckResult'
+    OrderLifecycleState:
+      $ref: './schemas/execution.yaml#/$defs/OrderLifecycleState'
+x-socketio-transport: websocket
+x-socketio-namespace: /execution

@@ -1,0 +1,149 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$defs:
+  CandleCloseTrigger:
+    type: object
+    additionalProperties: false
+    required: [type, price]
+    properties:
+      type:
+        type: string
+        const: candle_close_cross
+      price:
+        type: string
+        pattern: '^[0-9]+(\.[0-9]+)?$'
+  ForceScoreFilter:
+    type: object
+    additionalProperties: false
+    required: [type, minimum]
+    properties:
+      type:
+        type: string
+        const: force_score
+      minimum:
+        type: integer
+        minimum: 0
+        maximum: 100
+      direction:
+        type: string
+        const: same_as_order
+        default: same_as_order
+  PatternFilter:
+    type: object
+    additionalProperties: false
+    required: [type, name, minimum_score]
+    properties:
+      type:
+        type: string
+        const: pattern
+      name:
+        type: string
+        const: engulfing
+      direction:
+        type: string
+        const: same_as_order
+        default: same_as_order
+      minimum_score:
+        type: integer
+        minimum: 0
+        maximum: 100
+  OrderFilter:
+    oneOf:
+      - $ref: '#/$defs/ForceScoreFilter'
+      - $ref: '#/$defs/PatternFilter'
+  OrderRisk:
+    type: object
+    additionalProperties: false
+    required: [stop_loss_points, take_profit_points, max_loss_usd]
+    properties:
+      stop_loss_points:
+        type: integer
+        minimum: 1
+      take_profit_points:
+        type: integer
+        minimum: 1
+      max_loss_usd:
+        type: string
+        pattern: '^[0-9]+(\.[0-9]+)?$'
+  ExecutionOptions:
+    type: object
+    additionalProperties: false
+    properties:
+      max_deviation_points:
+        type: integer
+        minimum: 0
+        default: 20
+      comment:
+        type: string
+        maxLength: 64
+        default: journal-close-stop
+  ConditionalOrderCreateV2:
+    type: object
+    additionalProperties: false
+    required:
+      - schema_version
+      - order_id
+      - device_id
+      - account_id
+      - symbol
+      - side
+      - entry_price
+      - timeframe
+      - trigger
+      - risk
+      - expires_at
+    properties:
+      schema_version:
+        type: integer
+        const: 2
+      order_id:
+        type: string
+        format: uuid
+      device_id:
+        type: string
+        minLength: 1
+      account_id:
+        type: string
+        minLength: 1
+      symbol:
+        type: string
+        minLength: 1
+      side:
+        type: string
+        enum: [BUY, SELL]
+      entry_price:
+        type: string
+        pattern: '^[0-9]+(\.[0-9]+)?$'
+      timeframe:
+        type: string
+        enum: ['3m', '15m', '1h', '4h']
+      trigger:
+        $ref: '#/$defs/CandleCloseTrigger'
+      filters:
+        type: array
+        items:
+          $ref: '#/$defs/OrderFilter'
+        default: []
+      risk:
+        $ref: '#/$defs/OrderRisk'
+      execution:
+        $ref: '#/$defs/ExecutionOptions'
+      expires_at:
+        type: string
+        format: date-time
+  OrderCancelPayload:
+    type: object
+    additionalProperties: false
+    required: [order_id, device_id, account_id]
+    properties:
+      order_id:
+        type: string
+        format: uuid
+      device_id:
+        type: string
+        minLength: 1
+      account_id:
+        type: string
+        minLength: 1
+      reason:
+        type: string
+        default: user_requested

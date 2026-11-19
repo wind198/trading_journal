@@ -87,6 +87,15 @@ function IndicatorBulkRow({
   )
 }
 
+const INDICATORS = [
+  ['bollinger', 'Bollinger'],
+  ['ichimoku', 'Ichimoku'],
+  ['regime', 'Regime'],
+  ['force', 'Force candles'],
+  ['engulfing', 'Engulfing'],
+  ['keyLevels', 'Key levels'],
+] as const
+
 export function ChartOverlaySettingsMenu({
   settings,
   onSettingsChange,
@@ -137,56 +146,37 @@ export function ChartOverlaySettingsMenu({
         })}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Indicators</DropdownMenuLabel>
-        <IndicatorBulkRow
-          label="Bollinger"
-          onAll={() =>
-            onSettingsChange((current) => setIndicatorAllPanes(current, 'bollinger', true))
-          }
-          offAll={() =>
-            onSettingsChange((current) => setIndicatorAllPanes(current, 'bollinger', false))
-          }
-        />
-        <IndicatorBulkRow
-          label="Ichimoku"
-          onAll={() =>
-            onSettingsChange((current) => setIndicatorAllPanes(current, 'ichimoku', true))
-          }
-          offAll={() =>
-            onSettingsChange((current) => setIndicatorAllPanes(current, 'ichimoku', false))
-          }
-        />
+        {INDICATORS.map(([key, label]) => (
+          <IndicatorBulkRow
+            key={key}
+            label={label}
+            onAll={() => onSettingsChange((current) => setIndicatorAllPanes(current, key, true))}
+            offAll={() => onSettingsChange((current) => setIndicatorAllPanes(current, key, false))}
+          />
+        ))}
         <div
-          className="grid grid-cols-[auto_1fr_1fr] items-center gap-x-3 gap-y-2 px-2 py-2 text-xs text-muted-foreground"
+          className="grid grid-cols-[auto_repeat(4,1fr)] items-center gap-x-3 gap-y-2 px-2 py-2 text-xs text-muted-foreground"
           onPointerDown={(event) => event.stopPropagation()}
         >
           <span />
-          <span className="text-center font-medium text-foreground">Bollinger</span>
-          <span className="text-center font-medium text-foreground">Ichimoku</span>
-          {DASHBOARD_PANE_IDS.map((paneId) => (
-            <div key={paneId} className="contents">
-              <span className="font-medium text-foreground">{PANE_LABELS[paneId]}</span>
-              <label className="flex justify-center">
-                <Checkbox
-                  checked={settings.indicatorsByPane[paneId].bollinger}
-                  onCheckedChange={(checked) =>
-                    onSettingsChange((current) =>
-                      setPaneIndicator(current, paneId, 'bollinger', checked === true),
-                    )
-                  }
-                  aria-label={`Bollinger on ${paneId}`}
-                />
-              </label>
-              <label className="flex justify-center">
-                <Checkbox
-                  checked={settings.indicatorsByPane[paneId].ichimoku}
-                  onCheckedChange={(checked) =>
-                    onSettingsChange((current) =>
-                      setPaneIndicator(current, paneId, 'ichimoku', checked === true),
-                    )
-                  }
-                  aria-label={`Ichimoku on ${paneId}`}
-                />
-              </label>
+          {DASHBOARD_PANE_IDS.map((paneId) => <span key={paneId} className="text-center font-medium text-foreground">{PANE_LABELS[paneId]}</span>)}
+          {INDICATORS.map(([key, label]) => (
+            <div key={key} className="contents">
+              <span className="font-medium text-foreground">{label}</span>
+              {DASHBOARD_PANE_IDS.map((paneId) => (
+                <label key={paneId} className="flex justify-center">
+                  <Checkbox
+                    checked={
+                      key === 'regime' && (paneId === '4h' || paneId === '1h')
+                        ? false
+                        : settings.indicatorsByPane[paneId][key]
+                    }
+                    disabled={key === 'regime' && (paneId === '4h' || paneId === '1h')}
+                    onCheckedChange={(checked) => onSettingsChange((current) => setPaneIndicator(current, paneId, key, checked === true))}
+                    aria-label={`${label} on ${paneId}`}
+                  />
+                </label>
+              ))}
             </div>
           ))}
         </div>

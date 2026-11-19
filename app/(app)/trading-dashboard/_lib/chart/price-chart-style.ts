@@ -5,7 +5,7 @@ export const VIEWPORT = {
   maxVisibleBars: 1000,
   loadEdge: 50,
   /** Empty logical bars right of last candle for projection drawings. */
-  futureLogicalBars: 24,
+  futureLogicalBars: 50,
 } as const
 
 export const ICHIMOKU = {

@@ -11,16 +11,10 @@ import {
   CANDLE_OVERLAY_STACK,
   overlayMarkerGeometry,
 } from '../../../../../_lib/chart/candle-overlay-layout'
-import {
-  EngulfingDirection,
-  type EngulfingEvent,
-} from '../../../../../_lib/overlays/engulfing'
+import type { BaselineEngulfingEvent } from '../../../../../_lib/overlays/baseline-indicators'
 import { ENGULFING } from '../../../../../_lib/chart/price-chart-style'
 
-export type EngulfingOverlayEvent = Pick<
-  EngulfingEvent,
-  'time' | 'direction' | 'srcOpen' | 'srcHigh' | 'srcLow' | 'srcClose'
->
+export type EngulfingOverlayEvent = BaselineEngulfingEvent
 
 type Marker = {
   cx: number
@@ -87,7 +81,7 @@ class EngulfingOverlayPaneView {
       const yLow = series.priceToCoordinate(event.srcLow)
       if (x == null || yHigh == null || yLow == null) continue
 
-      const bullish = event.direction === EngulfingDirection.Bullish
+      const bullish = event.direction === 'BULLISH'
       const { cx, cy, size } = overlayMarkerGeometry(
         Number(x),
         spacing,

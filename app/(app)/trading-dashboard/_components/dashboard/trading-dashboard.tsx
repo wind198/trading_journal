@@ -19,6 +19,7 @@ import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
 import { NotesSidebar } from '../notes/notes-sidebar'
 import { GuidesSidebar } from '../guides/guides-sidebar'
 import { NonTradeWarningBanner } from './non-trade-warning-banner'
+import { ExecutionOrderDrawer } from '../execution/execution-order-drawer'
 import {
   ChartOverlaySettingsMenu,
   useChartOverlaySettings,
@@ -57,16 +58,14 @@ import {
 } from '../../_lib/chart/chart-icons'
 import { useDebouncedDrawingPersist } from '../../_hooks/useDebouncedDrawingPersist'
 import {
-  calculateForceDecay,
-  DEFAULT_FORCE_DECAY_CONFIG,
-  filterConsecutiveForceDisplay,
-  type ForceEvent,
-} from '../../_lib/overlays/force-candle-decay'
-import {
-  DEFAULT_ENGULFING_CONFIG,
-  scanEngulfing,
-  type EngulfingEvent,
-} from '../../_lib/overlays/engulfing'
+  detectBaselineEngulfing,
+  detectBaselineForce,
+  calculateForceScores,
+  detectKeyLevels,
+  detectRegimeSegments,
+  keyLevelVolumeBarCount,
+  type VolumeCandle,
+} from '../../_lib/overlays/baseline-indicators'
 import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
@@ -85,6 +84,7 @@ import {
   hardReloadMarketQueries,
   marketHistoryInfiniteOptions,
   marketRecentQueryOptions,
+  keyLevelVolumeQueryOptions,
   volumeProfileQueryOptions,
 } from '../../_lib/market-queries'
 import { buildVolumeProfile } from '../../_lib/chart/volume-profile'
@@ -183,6 +183,7 @@ function Dashboard() {
   const [overlaySettings, setOverlaySettings] = useChartOverlaySettings()
   const [notesOpen, setNotesOpen] = useState(false)
   const [guidesOpen, setGuidesOpen] = useState(false)
+  const [executionOpen, setExecutionOpen] = useState(false)
   const [marketReloading, setMarketReloading] = useState(false)
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
@@ -258,6 +259,9 @@ function Dashboard() {
                 <Focus />
               </Toggle>
             )}
+            <Button size="sm" variant="outline" onClick={() => setExecutionOpen(true)}>
+              Execute
+            </Button>
             <ChartOverlaySettingsMenu
               settings={overlaySettings}
               onSettingsChange={setOverlaySettings}
@@ -335,6 +339,10 @@ function Dashboard() {
               sessionSlotEnabled={sessionSlotEnabled}
               showBollinger={paneToggles.bollinger}
               showIchimoku={paneToggles.ichimoku}
+              showRegime={paneToggles.regime}
+              showForce={paneToggles.force}
+              showEngulfing={paneToggles.engulfing}
+              showKeyLevels={paneToggles.keyLevels}
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
               }
@@ -365,6 +373,11 @@ function Dashboard() {
           Exit
         </Button>
       )}
+      <ExecutionOrderDrawer
+        open={executionOpen}
+        onOpenChange={setExecutionOpen}
+        symbol={SYMBOL}
+      />
     </div>
   )
 }
@@ -379,6 +392,10 @@ function DashboardPane({
   sessionSlotEnabled,
   showBollinger,
   showIchimoku,
+  showRegime,
+  showForce,
+  showEngulfing,
+  showKeyLevels,
   onChartType,
   onToggleExpand,
 }: {
@@ -391,6 +408,10 @@ function DashboardPane({
   sessionSlotEnabled: ReadonlySet<string>
   showBollinger: boolean
   showIchimoku: boolean
+  showRegime: boolean
+  showForce: boolean
+  showEngulfing: boolean
+  showKeyLevels: boolean
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
 }) {
@@ -409,6 +430,15 @@ function DashboardPane({
     () => mergeCandles(historyBars, recent.data ?? []),
     [historyBars, recent.data],
   )
+  const closedBarsRef = useRef<{ key: string; bars: LightweightCandle[] }>({ key: '', bars: [] })
+  const closedCandidate = candles.slice(0, -1)
+  const closedKey = closedCandidate.length
+    ? `${closedCandidate.length}:${closedCandidate[0]!.time}:${closedCandidate.at(-1)!.time}`
+    : 'empty'
+  if (closedBarsRef.current.key !== closedKey) {
+    closedBarsRef.current = { key: closedKey, bars: closedCandidate }
+  }
+  const closedBars = closedBarsRef.current.bars
   const volumeProfileWindow = useMemo(() => {
     if (pane.id !== '15m' && pane.id !== '3m') return null
     return volumeProfileWindowFromCandles(candles, pane.id as CandleTimeframe)
@@ -427,6 +457,27 @@ function DashboardPane({
       : volumeProfileQueryOptions(0, 1, vpIntervalSec, pane.id)),
     enabled: volumeProfileWindow != null && showVolumeProfile,
   })
+  const keyLevelBarCount = keyLevelVolumeBarCount(pane.id)
+  const keyLevelWindow = useMemo(
+    () =>
+      volumeProfileWindowFromCandles(
+        closedBars,
+        pane.id as CandleTimeframe,
+        keyLevelBarCount,
+      ),
+    [closedBars, keyLevelBarCount, pane.id],
+  )
+  const keyLevelVolumeQuery = useQuery({
+    ...(keyLevelWindow
+      ? keyLevelVolumeQueryOptions(
+          keyLevelWindow.fromMsc,
+          keyLevelWindow.toMsc,
+          keyLevelWindow.intervalSec,
+          pane.id,
+        )
+      : keyLevelVolumeQueryOptions(0, 1, CANDLE_TIMEFRAMES[pane.id], pane.id)),
+    enabled: showKeyLevels && keyLevelWindow != null,
+  })
   const loadOlder = () => {
     if (loadingOlder.current || !history.hasNextPage || history.isFetchingNextPage) return
     loadingOlder.current = true
@@ -439,18 +490,36 @@ function DashboardPane({
     return points.length > 0 ? points[points.length - 1].value : null
   }, [candles])
 
-  // Lazy + cached: skip work when collapsed; memoized by candles identity when expanded.
-  // Calc keeps all events; display drops consecutive force candles after the first.
-  const forceEvents = useMemo((): ForceEvent[] => {
-    if (candles.length === 0) return []
-    const { activeEvents } = calculateForceDecay(candles, DEFAULT_FORCE_DECAY_CONFIG)
-    return filterConsecutiveForceDisplay(activeEvents)
-  }, [isExpanded, candles])
-
-  const engulfingEvents = useMemo((): EngulfingEvent[] => {
-    if (candles.length === 0) return []
-    return scanEngulfing(candles, DEFAULT_ENGULFING_CONFIG)
-  }, [isExpanded, candles])
+  const forceEvents = useMemo(
+    () => showForce ? detectBaselineForce(closedBars) : [],
+    [closedBars, showForce],
+  )
+  const forceScores = useMemo(
+    () => showForce && pane.id === '3m' ? calculateForceScores(closedBars) : [],
+    [closedBars, pane.id, showForce],
+  )
+  const engulfingEvents = useMemo(
+    () => showEngulfing ? detectBaselineEngulfing(closedBars) : [],
+    [closedBars, showEngulfing],
+  )
+  const regimeSegments = useMemo(
+    () => showRegime ? detectRegimeSegments(closedBars) : [],
+    [closedBars, showRegime],
+  )
+  const keyLevels = useMemo(() => {
+    if (!showKeyLevels || !keyLevelWindow) return []
+    const aligned = alignTimeBinsToCandleOpens(
+      keyLevelVolumeQuery.data?.time ?? [],
+      keyLevelWindow.candleTimes,
+      keyLevelWindow.intervalSec,
+    )
+    const volumeByTime = new Map(aligned.map((bin) => [bin.time, bin.tickCount]))
+    const volumeBars: VolumeCandle[] = closedBars.slice(-keyLevelBarCount).map((bar) => ({
+      ...bar,
+      volume: volumeByTime.get(bar.time) ?? 0,
+    }))
+    return detectKeyLevels(volumeBars, keyLevelWindow.intervalSec)
+  }, [closedBars, keyLevelBarCount, keyLevelVolumeQuery.data, keyLevelWindow, showKeyLevels])
 
   const volumeProfile = useMemo(() => {
     if (!showVolumeProfile || (pane.id !== '15m' && pane.id !== '3m')) return null
@@ -952,7 +1021,10 @@ function DashboardPane({
             polylines={polylineDrawings}
             textAnchors={textAnchorDrawings}
             forceEvents={forceEvents}
+            forceScores={forceScores}
             engulfingEvents={engulfingEvents}
+            regimeSegments={regimeSegments}
+            keyLevels={keyLevels}
             volumeProfile={volumeProfile}
             sessionSlotEnabled={sessionSlotEnabled}
             showBollinger={showBollinger}

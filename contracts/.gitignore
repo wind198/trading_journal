@@ -1,0 +1,3 @@
+node_modules/
+asyncapi.bundled.yaml
+schemas/compiled.models.json

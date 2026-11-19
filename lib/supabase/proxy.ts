@@ -1,3 +1,4 @@
+import { shouldBypassAuthOnLocalhost } from '@/lib/auth/local-dev-bypass'
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -28,8 +29,11 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const { data } = await supabase.auth.getClaims()
   const { pathname } = request.nextUrl
+
+  if (shouldBypassAuthOnLocalhost(request)) return supabaseResponse
+
+  const { data } = await supabase.auth.getClaims()
 
   if (pathname.startsWith('/api/')) return supabaseResponse
 
