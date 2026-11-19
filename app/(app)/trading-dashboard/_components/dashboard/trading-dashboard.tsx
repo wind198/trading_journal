@@ -100,6 +100,7 @@ import {
   ListChecks,
   NotebookPen,
   RefreshCw,
+  Ruler,
   RotateCcw,
   Shrink,
   MapPin,
@@ -568,6 +569,7 @@ function DashboardPane({
   }, [showVolumeProfile, pane.id, volumeProfileQuery.data, volumeProfileWindow, vpIntervalSec])
 
   const [drawTool, setDrawTool] = useState<DrawTool>(null)
+  const [measureActive, setMeasureActive] = useState(false)
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
   const labelSessionRef = useRef<DrawingLabelSession | null>(null)
@@ -589,6 +591,7 @@ function DashboardPane({
   useEffect(() => {
     if (isExpanded) return
     setDrawTool(null)
+    setMeasureActive(false)
     setSelectedDrawingId(null)
   }, [isExpanded])
 
@@ -686,11 +689,24 @@ function DashboardPane({
     labelEditDrawing != null && isWarningCircleKind(labelEditDrawing.kind)
 
   const toggleTool = (tool: ChartDrawingKind) => {
+    setMeasureActive(false)
     setDrawTool((current) => (current === tool ? null : tool))
   }
 
   const selectIconTool = (kind: ChartIconKind) => {
+    setMeasureActive(false)
     setDrawTool((current) => (current === kind ? null : kind))
+  }
+
+  const toggleMeasure = () => {
+    setMeasureActive((current) => {
+      const next = !current
+      if (next) {
+        setDrawTool(null)
+        setSelectedDrawingId(null)
+      }
+      return next
+    })
   }
 
   const onDrawingComplete = (input: {
@@ -893,6 +909,15 @@ function DashboardPane({
           {isExpanded && (
             <>
               <Button
+                variant={measureActive ? 'default' : 'ghost'}
+                size="icon"
+                aria-label={measureActive ? 'Cancel price measurement' : 'Measure price distance'}
+                aria-pressed={measureActive}
+                onClick={toggleMeasure}
+              >
+                <Ruler />
+              </Button>
+              <Button
                 variant={drawTool === 'trendline' ? 'default' : 'ghost'}
                 size="icon"
                 aria-label={drawTool === 'trendline' ? 'Cancel trendline' : 'Draw trendline'}
@@ -1061,12 +1086,14 @@ function DashboardPane({
             showBollinger={indicatorVisibility.bollinger}
             showIchimoku={indicatorVisibility.ichimoku}
             drawTool={drawTool}
+            measureActive={measureActive}
             onDrawingComplete={onDrawingComplete}
             onDrawingChange={onDrawingChange}
             onDrawingChangeEnd={onDrawingChangeEnd}
             onDrawingDelete={onDrawingDelete}
             onSelectionChange={setSelectedDrawingId}
             onDrawToolCancel={() => setDrawTool(null)}
+            onMeasureCancel={() => setMeasureActive(false)}
             onPolylineComplete={onPolylineComplete}
             onPolylineChange={onPolylineChange}
             onPolylineChangeEnd={onPolylineChangeEnd}

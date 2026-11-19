@@ -1,0 +1,33 @@
+.leftColumn,
+.rightColumn {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .main {
+    align-items: center;
+    padding-block: 0.5rem;
+  }
+
+  .card {
+    max-width: 56rem;
+    --card-spacing: 0.75rem;
+  }
+
+  .content {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .leftColumn,
+  .rightColumn,
+  .inputs {
+    gap: 0.75rem;
+  }
+
+  .inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

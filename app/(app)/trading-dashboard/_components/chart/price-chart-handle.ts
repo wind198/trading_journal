@@ -25,6 +25,7 @@ import { PolylineArrowPrimitive } from './_components/objects/polyline/polyline-
 import { TextAnchorPrimitive } from './_components/objects/text/text-anchor-primitive'
 import { TrendlinePrimitive } from './_components/objects/trendline/trendline-primitive'
 import { WarningCirclePrimitive } from './_components/objects/warning-circle/warning-circle-primitive'
+import { PriceMeasurementPrimitive } from './_components/objects/measure/price-measurement-primitive'
 import { asPrimitiveLayer, ChartPrimitiveRegistry } from './chart-primitive-registry'
 
 type LwcModule = typeof import('lightweight-charts')
@@ -37,6 +38,7 @@ type AnyPrimitive =
   | PolylineArrowPrimitive
   | TextAnchorPrimitive
   | WarningCirclePrimitive
+  | PriceMeasurementPrimitive
 
 type PriceSeries = {
   setData: (data: readonly object[]) => void
@@ -67,6 +69,7 @@ export type ChartHandle = {
   polylines: PolylineArrowPrimitive
   textAnchors: TextAnchorPrimitive
   warningCircles: WarningCirclePrimitive
+  measurement: PriceMeasurementPrimitive
   primitives: ChartPrimitiveRegistry
   indicators: IndicatorLayer
   fitted: boolean
@@ -221,6 +224,7 @@ export function initPriceChart(
   const polylineArrowPrimitive = new PolylineArrowPrimitive([])
   const textAnchorPrimitive = new TextAnchorPrimitive([])
   const warningCirclePrimitive = new WarningCirclePrimitive([])
+  const measurementPrimitive = new PriceMeasurementPrimitive()
   price.attachPrimitive(trendlinePrimitive)
   price.attachPrimitive(rectanglePrimitive)
   price.attachPrimitive(fibonacciRangePrimitive)
@@ -229,6 +233,7 @@ export function initPriceChart(
   price.attachPrimitive(iconMarkerPrimitive)
   price.attachPrimitive(polylineArrowPrimitive)
   price.attachPrimitive(textAnchorPrimitive)
+  price.attachPrimitive(measurementPrimitive)
   const ichimokuCloudPrimitive = new IchimokuCloudPrimitive()
   price.attachPrimitive(ichimokuCloudPrimitive)
   const indicators = new IndicatorLayer(
@@ -282,6 +287,7 @@ export function initPriceChart(
     polylines: polylineArrowPrimitive,
     textAnchors: textAnchorPrimitive,
     warningCircles: warningCirclePrimitive,
+    measurement: measurementPrimitive,
     primitives,
     indicators,
     fitted: false,

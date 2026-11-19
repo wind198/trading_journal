@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 
 const LINKS = [
   { href: '/trading-dashboard', label: 'Dashboard' },
-  { href: '/schedule', label: 'Schedule' },
+  { href: '/calculator', label: 'Calculator' },
 ] as const
 
 export function AppNavLinks({ className }: { className?: string }) {

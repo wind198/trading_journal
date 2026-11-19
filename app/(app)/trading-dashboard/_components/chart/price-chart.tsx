@@ -38,6 +38,11 @@ import type { TextAnchorDrawing } from './_components/objects/text/text-anchor-p
 import type { TrendlineDrawing } from './_components/objects/trendline/trendline-primitive'
 import type { WarningCircleDrawing } from './_components/objects/warning-circle/warning-circle-primitive'
 import {
+  reducePriceMeasurement,
+  type PriceMeasurementPoint,
+  type PriceMeasurementState,
+} from './_components/objects/measure/price-measurement'
+import {
   bindPriceChartInteraction,
   isTouchSeedShapeTool,
   isTwoPointDrawTool,
@@ -173,12 +178,14 @@ export function PriceChart({
   showBollinger = true,
   showIchimoku = false,
   drawTool = null,
+  measureActive = false,
   onDrawingComplete,
   onDrawingChange,
   onDrawingChangeEnd,
   onDrawingDelete,
   onSelectionChange,
   onDrawToolCancel,
+  onMeasureCancel,
   onPolylineComplete,
   onPolylineChange,
   onPolylineChangeEnd,
@@ -210,6 +217,7 @@ export function PriceChart({
   showBollinger?: boolean
   showIchimoku?: boolean
   drawTool?: DrawTool
+  measureActive?: boolean
   onDrawingComplete?: (input: {
     kind: ChartDrawingKind
     p1: DrawingPoint
@@ -221,6 +229,7 @@ export function PriceChart({
   onDrawingDelete?: (id: string) => void
   onSelectionChange?: (id: string | null) => void
   onDrawToolCancel?: () => void
+  onMeasureCancel?: () => void
   onPolylineComplete?: (input: { points: DrawingPoint[] }) => void
   onPolylineChange?: (id: string, points: DrawingPoint[]) => void
   onPolylineChangeEnd?: (id: string) => void
@@ -239,6 +248,9 @@ export function PriceChart({
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
   const drawToolRef = useRef(drawTool)
+  const measureActiveRef = useRef(measureActive)
+  const measurementStateRef = useRef<PriceMeasurementState>({ status: 'idle' })
+  const cancelMeasurementRef = useRef<(() => void) | null>(null)
   const seedCoarseTwoPointRef = useRef<((tool: TwoPointToolKind) => boolean) | null>(null)
   const seedCoarseThreePointRef = useRef<(() => boolean) | null>(null)
   const interactionCancelRef = useRef<(() => void) | null>(null)
@@ -261,6 +273,7 @@ export function PriceChart({
   const onDeleteRef = useRef(onDrawingDelete)
   const onSelectionChangeRef = useRef(onSelectionChange)
   const onDrawToolCancelRef = useRef(onDrawToolCancel)
+  const onMeasureCancelRef = useRef(onMeasureCancel)
   const onPolylineCompleteRef = useRef(onPolylineComplete)
   const onPolylineChangeRef = useRef(onPolylineChange)
   const onPolylineChangeEndRef = useRef(onPolylineChangeEnd)
@@ -290,12 +303,14 @@ export function PriceChart({
   onLoadOlderRef.current = onLoadOlder
   axesVisibleRef.current = axesVisible
   drawToolRef.current = drawTool
+  measureActiveRef.current = measureActive
   onCompleteRef.current = onDrawingComplete
   onChangeRef.current = onDrawingChange
   onChangeEndRef.current = onDrawingChangeEnd
   onDeleteRef.current = onDrawingDelete
   onSelectionChangeRef.current = onSelectionChange
   onDrawToolCancelRef.current = onDrawToolCancel
+  onMeasureCancelRef.current = onMeasureCancel
   onPolylineCompleteRef.current = onPolylineComplete
   onPolylineChangeRef.current = onPolylineChange
   onPolylineChangeEndRef.current = onPolylineChangeEnd
@@ -315,8 +330,8 @@ export function PriceChart({
   const syncDrawOverlay = () => {
     const overlay = drawOverlayRef.current
     if (!overlay) return
-    const drawing = drawToolRef.current != null
-    overlay.style.pointerEvents = drawing ? 'auto' : 'none'
+    const interacting = drawToolRef.current != null || measureActiveRef.current
+    overlay.style.pointerEvents = interacting ? 'auto' : 'none'
   }
 
   const syncInteractionLock = () => {
@@ -324,7 +339,7 @@ export function PriceChart({
     if (!handle) return
     const drawing = drawToolRef.current != null
     const dragging = editSessionRef.current?.isDragging ?? false
-    const locked = drawing || dragging
+    const locked = drawing || measureActiveRef.current || dragging
     handle.chart.applyOptions({
       handleScroll: !locked,
       handleScale: !locked,
@@ -608,6 +623,170 @@ export function PriceChart({
   }, [sessionSlotEnabled, epoch])
 
   useEffect(() => {
+    const handle = handleRef.current
+    const overlay = drawOverlayRef.current
+    if (!handle || !overlay) return
+
+    const setMeasurementState = (state: PriceMeasurementState) => {
+      measurementStateRef.current = state
+      handle.measurement.setState(state)
+    }
+    const cancelMeasurement = (notify: boolean) => {
+      setMeasurementState({ status: 'idle' })
+      if (notify) onMeasureCancelRef.current?.()
+    }
+    cancelMeasurementRef.current = () => cancelMeasurement(true)
+
+    if (!measureActive) {
+      cancelMeasurement(false)
+      syncInteractionLock()
+      syncDrawOverlay()
+      return () => {
+        cancelMeasurementRef.current = null
+      }
+    }
+
+    selectDrawing(null)
+    const rect = () => overlay.getBoundingClientRect()
+    const pointAt = (x: number, y: number): PriceMeasurementPoint | null => {
+      const price = handle.price.coordinateToPrice(y)
+      if (price == null || !Number.isFinite(Number(price))) return null
+      return { x, price: Number(price) }
+    }
+    const bounds = rect()
+    const center = pointAt(bounds.width / 2, bounds.height / 2)
+    if (!center) {
+      cancelMeasurement(true)
+      return () => {
+        cancelMeasurementRef.current = null
+      }
+    }
+    setMeasurementState(
+      pointerCoarseRef.current
+        ? {
+            status: 'placing',
+            pointer: 'coarse',
+            phase: 'placing_p1',
+            start: center,
+            end: center,
+          }
+        : { status: 'armed', pointer: 'fine' },
+    )
+    syncInteractionLock()
+    syncDrawOverlay()
+
+    let gesture: {
+      pointerId: number
+      clientX: number
+      clientY: number
+      origin: { x: number; y: number }
+      moved: boolean
+    } | null = null
+
+    const localPoint = (event: PointerEvent) => {
+      const box = rect()
+      return { x: event.clientX - box.left, y: event.clientY - box.top }
+    }
+    const dispatch = (event: Parameters<typeof reducePriceMeasurement>[1]) => {
+      setMeasurementState(reducePriceMeasurement(measurementStateRef.current, event))
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      event.preventDefault()
+      if (measurementStateRef.current.status === 'complete') return
+      const state = measurementStateRef.current
+      const active = state.status === 'placing'
+        ? state.pointer === 'coarse' && state.phase === 'placing_p1'
+          ? state.start
+          : state.end
+        : null
+      const activeY = active ? handle.price.priceToCoordinate(active.price) : null
+      const point = localPoint(event)
+      gesture = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        origin: active && activeY != null ? { x: active.x, y: Number(activeY) } : point,
+        moved: false,
+      }
+      try { overlay.setPointerCapture(event.pointerId) } catch { /* capture may be unavailable */ }
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      event.preventDefault()
+      const state = measurementStateRef.current
+      if (state.status === 'placing' && state.pointer === 'fine') {
+        const point = localPoint(event)
+        const mapped = pointAt(point.x, point.y)
+        if (mapped) dispatch({ type: 'move', point: mapped })
+        return
+      }
+      if (!gesture || gesture.pointerId !== event.pointerId || state.status !== 'placing' || state.pointer !== 'coarse') return
+      const dx = event.clientX - gesture.clientX
+      const dy = event.clientY - gesture.clientY
+      if (!gesture.moved && Math.hypot(dx, dy) <= 12) return
+      gesture.moved = true
+      const mapped = pointAt(gesture.origin.x + dx, gesture.origin.y + dy)
+      if (mapped) dispatch({ type: 'move', point: mapped })
+    }
+    const release = (event: PointerEvent) => {
+      try { overlay.releasePointerCapture(event.pointerId) } catch { /* capture may already be lost */ }
+    }
+    const onPointerUp = (event: PointerEvent) => {
+      event.preventDefault()
+      release(event)
+      const state = measurementStateRef.current
+      if (state.status === 'complete') {
+        gesture = null
+        cancelMeasurement(true)
+        return
+      }
+      const currentGesture = gesture
+      gesture = null
+      if (state.status === 'placing' && state.pointer === 'coarse') {
+        if (!currentGesture || currentGesture.pointerId !== event.pointerId || currentGesture.moved) return
+        if (state.phase === 'placing_p1') {
+          const startY = handle.price.priceToCoordinate(state.start.price)
+          if (startY == null) return
+          const candidateY = Number(startY) > 56 ? Number(startY) - 48 : Number(startY) + 48
+          const defaultEnd = pointAt(state.start.x, candidateY)
+          if (defaultEnd) dispatch({ type: 'confirm', point: defaultEnd })
+          return
+        }
+        dispatch({ type: 'confirm', point: state.end })
+        return
+      }
+      const point = localPoint(event)
+      const mapped = pointAt(point.x, point.y)
+      if (mapped) dispatch({ type: 'confirm', point: mapped })
+    }
+    const onPointerCancel = (event: PointerEvent) => {
+      release(event)
+      gesture = null
+      cancelMeasurement(true)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      cancelMeasurement(true)
+    }
+
+    overlay.addEventListener('pointerdown', onPointerDown, { passive: false })
+    overlay.addEventListener('pointermove', onPointerMove, { passive: false })
+    overlay.addEventListener('pointerup', onPointerUp, { passive: false })
+    overlay.addEventListener('pointercancel', onPointerCancel, { passive: false })
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      overlay.removeEventListener('pointerdown', onPointerDown)
+      overlay.removeEventListener('pointermove', onPointerMove)
+      overlay.removeEventListener('pointerup', onPointerUp)
+      overlay.removeEventListener('pointercancel', onPointerCancel)
+      window.removeEventListener('keydown', onKeyDown)
+      gesture = null
+      setMeasurementState({ status: 'idle' })
+      cancelMeasurementRef.current = null
+    }
+  }, [measureActive, epoch])
+
+  useEffect(() => {
     editSessionRef.current?.cancelActive()
     releaseActivePointerCapture()
     interactionCancelRef.current?.()
@@ -624,7 +803,7 @@ export function PriceChart({
         seedCoarseThreePointRef.current?.()
       }
     }
-  }, [drawTool, epoch])
+  }, [drawTool, measureActive, epoch])
 
   useEffect(() => {
     const handle = handleRef.current
@@ -643,7 +822,7 @@ export function PriceChart({
 
   useEffect(() => {
     syncDrawOverlay()
-  }, [drawTool])
+  }, [drawTool, measureActive])
 
   useEffect(() => {
     if (!selectedIdRef.current) return
@@ -871,19 +1050,19 @@ export function PriceChart({
   return (
     <div
       className="relative h-full min-h-0 w-full"
-      style={drawTool ? { overscrollBehavior: 'none' } : undefined}
+      style={drawTool || measureActive ? { overscrollBehavior: 'none' } : undefined}
     >
       <div ref={ref} className="h-full min-h-0 w-full" />
       <div
         ref={drawOverlayRef}
-        className={`absolute inset-0 z-10 touch-none${drawTool ? ' cursor-crosshair' : ''}`}
+        className={`absolute inset-0 z-10 touch-none${drawTool || measureActive ? ' cursor-crosshair' : ''}`}
         style={{
-          pointerEvents: drawTool ? 'auto' : 'none',
-          ...(drawTool ? { overscrollBehavior: 'none' as const, touchAction: 'none' as const } : null),
+          pointerEvents: drawTool || measureActive ? 'auto' : 'none',
+          ...(drawTool || measureActive ? { overscrollBehavior: 'none' as const, touchAction: 'none' as const } : null),
         }}
-        aria-hidden={!drawTool}
+        aria-hidden={!drawTool && !measureActive}
       />
-      {drawTool && pointerCoarse ? (
+      {(drawTool || measureActive) && pointerCoarse ? (
         <Button
           type="button"
           variant="secondary"
@@ -895,7 +1074,8 @@ export function PriceChart({
           }}
           onClick={(event) => {
             event.stopPropagation()
-            cancelDrawTool()
+            if (measureActive) cancelMeasurementRef.current?.()
+            else cancelDrawTool()
           }}
         >
           <X />
