@@ -22,7 +22,6 @@ export async function hardReloadMarketQueries(queryClient: QueryClient) {
   }
   await queryClient.refetchQueries({ queryKey: MARKET_QUERY_KEY, type: 'active' })
 }
-
 export const MARKET_SYMBOL = 'EURUSD'
 export const MARKET_RECENT_REFETCH_MS = 30_000
 const MARKET_RECENT_STALE_MS = 25_000
@@ -60,7 +59,6 @@ export function marketHistoryInfiniteOptions(timeframe: string) {
     gcTime: MARKET_GC_TIME_MS,
   })
 }
-
 export function marketRecentQueryOptions(timeframe: string) {
   return queryOptions({
     queryKey: marketRecentKey(timeframe),
@@ -112,30 +110,3 @@ export function volumeProfileQueryOptions(
   })
 }
 
-export function keyLevelVolumeQueryOptions(
-  fromMsc: number,
-  toMsc: number,
-  intervalSec: number,
-  timeframe: string,
-) {
-  return queryOptions({
-    queryKey: ['market', 'key-level-volume', MARKET_SYMBOL, timeframe, fromMsc, toMsc, intervalSec] as const,
-    queryFn: async ({ signal }): Promise<VolumeProfilePayload> => {
-      const params = new URLSearchParams({
-        symbol: MARKET_SYMBOL,
-        from_msc: String(fromMsc),
-        to_msc: String(toMsc),
-        timeframe,
-        interval_sec: String(intervalSec),
-        time_only: '1',
-      })
-      const response = await fetch(`/api/volume-profile?${params}`, { signal })
-      if (!response.ok) throw new Error('key-level-volume')
-      const body = (await response.json()) as { data?: VolumeProfilePayload }
-      return body.data ?? { price: [], time: [] }
-    },
-    staleTime: Infinity,
-    gcTime: MARKET_GC_TIME_MS,
-    placeholderData: (previous) => previous,
-  })
-}

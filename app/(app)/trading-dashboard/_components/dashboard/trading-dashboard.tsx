@@ -61,10 +61,10 @@ import {
   detectBaselineEngulfing,
   detectBaselineForce,
   calculateForceScores,
+  closedCandlesAt,
   detectKeyLevels,
   detectRegimeSegments,
   keyLevelVolumeBarCount,
-  type VolumeCandle,
 } from '../../_lib/overlays/baseline-indicators'
 import {
   calculateBaseLineBias,
@@ -84,7 +84,6 @@ import {
   hardReloadMarketQueries,
   marketHistoryInfiniteOptions,
   marketRecentQueryOptions,
-  keyLevelVolumeQueryOptions,
   volumeProfileQueryOptions,
 } from '../../_lib/market-queries'
 import { buildVolumeProfile } from '../../_lib/chart/volume-profile'
@@ -99,6 +98,7 @@ import {
   ListChecks,
   NotebookPen,
   RefreshCw,
+  RotateCcw,
   Shrink,
   MapPin,
   Spline,
@@ -185,9 +185,13 @@ function Dashboard() {
   const [guidesOpen, setGuidesOpen] = useState(false)
   const [executionOpen, setExecutionOpen] = useState(false)
   const [marketReloading, setMarketReloading] = useState(false)
+  const [resetLayoutEpoch, setResetLayoutEpoch] = useState(0)
+  const [appliedResetLayoutEpochs, setAppliedResetLayoutEpochs] = useState<
+    Partial<Record<PaneId, number>>
+  >({})
   const tablet = useTabletUp()
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
-  const [globalChartType, setGlobalChartType] = useState<ChartType>('line')
+  const [globalChartType, setGlobalChartType] = useState<ChartType>('candlestick')
   const queryClient = useQueryClient()
   const router = useRouter()
   const visiblePanes =
@@ -235,6 +239,14 @@ function Dashboard() {
               onClick={() => void reloadMarketData()}
             >
               <RefreshCw className={marketReloading ? 'animate-spin' : undefined} />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setResetLayoutEpoch((current) => current + 1)}
+            >
+              <RotateCcw />
+              Reset layout
             </Button>
             {expanded == null &&
               GLOBAL_CHART_TYPES.map((type) => (
@@ -327,6 +339,10 @@ function Dashboard() {
 
           const compact = !isExpanded && !tablet
           const paneToggles = paneIndicators(overlaySettings, pane.id)
+          const paneResetLayoutEpoch =
+            (appliedResetLayoutEpochs[pane.id] ?? 0) < resetLayoutEpoch
+              ? resetLayoutEpoch
+              : 0
           return (
             <DashboardPane
               key={pane.id}
@@ -335,6 +351,12 @@ function Dashboard() {
               compact={compact}
               chartType={chartType}
               axesVisible={isExpanded || tablet}
+              resetLayoutEpoch={paneResetLayoutEpoch}
+              onResetLayoutApplied={(epoch) => {
+                setAppliedResetLayoutEpochs((current) =>
+                  current[pane.id] === epoch ? current : { ...current, [pane.id]: epoch },
+                )
+              }}
               showVolumeProfile={overlaySettings.volumeProfile}
               sessionSlotEnabled={sessionSlotEnabled}
               showBollinger={paneToggles.bollinger}
@@ -388,6 +410,8 @@ function DashboardPane({
   compact,
   chartType,
   axesVisible,
+  resetLayoutEpoch,
+  onResetLayoutApplied,
   showVolumeProfile,
   sessionSlotEnabled,
   showBollinger,
@@ -404,6 +428,8 @@ function DashboardPane({
   compact: boolean
   chartType: ChartType
   axesVisible: boolean
+  resetLayoutEpoch: number
+  onResetLayoutApplied: (epoch: number) => void
   showVolumeProfile: boolean
   sessionSlotEnabled: ReadonlySet<string>
   showBollinger: boolean
@@ -458,26 +484,14 @@ function DashboardPane({
     enabled: volumeProfileWindow != null && showVolumeProfile,
   })
   const keyLevelBarCount = keyLevelVolumeBarCount(pane.id)
-  const keyLevelWindow = useMemo(
-    () =>
-      volumeProfileWindowFromCandles(
-        closedBars,
-        pane.id as CandleTimeframe,
-        keyLevelBarCount,
-      ),
-    [closedBars, keyLevelBarCount, pane.id],
+  const keyLevelCandles = useMemo(
+    () => closedCandlesAt(
+      candles,
+      CANDLE_TIMEFRAMES[pane.id],
+      Math.floor(Date.now() / 1000),
+    ),
+    [candles, pane.id],
   )
-  const keyLevelVolumeQuery = useQuery({
-    ...(keyLevelWindow
-      ? keyLevelVolumeQueryOptions(
-          keyLevelWindow.fromMsc,
-          keyLevelWindow.toMsc,
-          keyLevelWindow.intervalSec,
-          pane.id,
-        )
-      : keyLevelVolumeQueryOptions(0, 1, CANDLE_TIMEFRAMES[pane.id], pane.id)),
-    enabled: showKeyLevels && keyLevelWindow != null,
-  })
   const loadOlder = () => {
     if (loadingOlder.current || !history.hasNextPage || history.isFetchingNextPage) return
     loadingOlder.current = true
@@ -507,19 +521,9 @@ function DashboardPane({
     [closedBars, showRegime],
   )
   const keyLevels = useMemo(() => {
-    if (!showKeyLevels || !keyLevelWindow) return []
-    const aligned = alignTimeBinsToCandleOpens(
-      keyLevelVolumeQuery.data?.time ?? [],
-      keyLevelWindow.candleTimes,
-      keyLevelWindow.intervalSec,
-    )
-    const volumeByTime = new Map(aligned.map((bin) => [bin.time, bin.tickCount]))
-    const volumeBars: VolumeCandle[] = closedBars.slice(-keyLevelBarCount).map((bar) => ({
-      ...bar,
-      volume: volumeByTime.get(bar.time) ?? 0,
-    }))
-    return detectKeyLevels(volumeBars, keyLevelWindow.intervalSec)
-  }, [closedBars, keyLevelBarCount, keyLevelVolumeQuery.data, keyLevelWindow, showKeyLevels])
+    if (!showKeyLevels) return []
+    return detectKeyLevels(keyLevelCandles.slice(-keyLevelBarCount))
+  }, [keyLevelBarCount, keyLevelCandles, showKeyLevels])
 
   const volumeProfile = useMemo(() => {
     if (!showVolumeProfile || (pane.id !== '15m' && pane.id !== '3m')) return null
@@ -1012,6 +1016,8 @@ function DashboardPane({
             timeframe={pane.id}
             onLoadOlder={loadOlder}
             axesVisible={axesVisible}
+            resetLayoutEpoch={resetLayoutEpoch}
+            onResetLayoutApplied={onResetLayoutApplied}
             trendlines={trendlineDrawings}
             rectangles={rectangleDrawings}
             fibonacciRanges={fibonacciRangeDrawings}

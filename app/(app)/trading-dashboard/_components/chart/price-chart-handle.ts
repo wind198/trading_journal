@@ -13,6 +13,7 @@ import {
   PRICE_FORMAT,
   VIEWPORT,
 } from '../../_lib/chart/price-chart-style'
+import { DEFAULT_PRICE_SCALE_MARGIN } from '../../_lib/chart/chart-default-layout'
 import { IchimokuCloudPrimitive } from './_components/indicators/ichimoku/ichimoku-cloud-primitive'
 import type { ChartType } from '../../_lib/chart/price-chart-series'
 import { IndicatorLayer } from './_components/indicators/indicator-layer'
@@ -159,7 +160,15 @@ export function initPriceChart(
       tickMarkFormatter: (time: Time, tickMarkType: number) =>
         formatChartTickMark(time, tickMarkType),
     },
-    rightPriceScale: { borderVisible: false, visible: options.axesVisible },
+    rightPriceScale: {
+      autoScale: true,
+      borderVisible: false,
+      visible: options.axesVisible,
+      scaleMargins: {
+        top: DEFAULT_PRICE_SCALE_MARGIN,
+        bottom: DEFAULT_PRICE_SCALE_MARGIN,
+      },
+    },
   })
 
   const { chartType } = options

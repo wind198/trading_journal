@@ -27,17 +27,22 @@ export type BaselineEngulfingEvent = {
   srcClose: number
   score: number
 }
-export type KeyLevelZone = {
+type KeyLevelBase = {
   lower: number
   upper: number
   center: number
-  strength: number
-  state: 'SUPPORT_CANDIDATE' | 'RESISTANCE_CANDIDATE' | 'INSIDE_ZONE'
-  startTime: number
-  endTime: number
+  score: number
+  retests: number
+  avgReversal: number
 }
-export type VolumeCandle = LightweightCandle & { volume: number }
-
+export type KeyLevelZone =
+  | (KeyLevelBase & {
+      type: 'Boundary'
+      side: 'high' | 'low'
+      events: number
+      outerBonus: number
+    })
+  | (KeyLevelBase & { type: 'Density' })
 const REGIME_KIJUN_PERIOD = 52
 const REGIME_ONSET_CONFIRMATION_BARS = 10
 const REGIME_ONSET_DOMINANCE = 0.70
@@ -295,210 +300,318 @@ export function detectRegimeSegments(bars: readonly LightweightCandle[]): Regime
   return result
 }
 
-type Swing = { kind: 'H' | 'L'; pivot: number; price: number; confirmedAt: number; threshold: number }
-type SwingConfig = { lookback: number; sma: number; left: number; right: number; refine: number; minBars: number; move: number }
-
-/** Mirrors swing_algo/config/swings/dense.json (M5, ~3× density). */
-const DENSE_SWING_CONFIG: SwingConfig = {
-  lookback: 100,
-  sma: 2,
-  left: 1,
-  right: 1,
-  refine: 3,
-  minBars: 1,
-  move: 0.55,
-}
-
-/** Mirrors swing_algo/config/swings/major.json */
-const MAJOR_SWING_CONFIG: SwingConfig = {
-  lookback: 100,
-  sma: 5,
-  left: 2,
-  right: 2,
-  refine: 5,
-  minBars: 12,
-  move: 2.75,
-}
-
-function detectSwings(bars: readonly VolumeCandle[], cfg: SwingConfig): Swing[] {
-  const smooth = bars.map((_, i) => i + 1 < cfg.sma ? Number.NaN : bars.slice(i - cfg.sma + 1, i + 1).reduce((s, b) => s + b.close, 0) / cfg.sma)
-  const moves = bars.map((bar, i) => i === 0 ? Number.NaN : Math.abs(bar.close - bars[i - 1]!.close))
-  const candidates: Swing[] = []
-  const first = Math.max(cfg.lookback, cfg.sma - 1) + cfg.left
-  for (let i = first; i < bars.length - cfg.right; i++) {
-    const window = smooth.slice(i - cfg.left, i + cfg.right + 1)
-    if (window.some((value) => !Number.isFinite(value))) continue
-    const center = window[cfg.left]!
-    const kind = center === Math.max(...window) ? 'H' : center === Math.min(...window) ? 'L' : null
-    if (!kind) continue
-    const start = Math.max(0, i - cfg.refine)
-    let pivot = start
-    for (let j = start + 1; j <= i; j++) {
-      if ((kind === 'H' && bars[j]!.high > bars[pivot]!.high) || (kind === 'L' && bars[j]!.low < bars[pivot]!.low)) pivot = j
-    }
-    const threshold = quantile(moves.slice(i - cfg.lookback + 1, i + 1), 0.60) * cfg.move
-    if (!(threshold > 0)) continue
-    candidates.push({ kind, pivot, price: kind === 'H' ? bars[pivot]!.high : bars[pivot]!.low, confirmedAt: i + cfg.right, threshold })
-  }
-  candidates.sort((a, b) => a.pivot - b.pivot || a.confirmedAt - b.confirmedAt)
-  const accepted: Swing[] = []
-  for (const item of candidates) {
-    const previous = accepted.at(-1)
-    if (!previous) { accepted.push(item); continue }
-    if (item.pivot <= previous.pivot) continue
-    if (item.kind === previous.kind) {
-      const stronger = item.kind === 'H' ? item.price > previous.price : item.price < previous.price
-      if (stronger) accepted[accepted.length - 1] = item
-    } else if (item.pivot - previous.pivot >= cfg.minBars && Math.abs(item.price - previous.price) >= Math.max(item.threshold, previous.threshold)) {
-      accepted.push(item)
-    }
-  }
-  return accepted
-}
-
 export type KeyLevelDetectConfig = {
+  atrPeriod: number
+  atrMultiplier: number
+  rangeMultiplier: number
+  bin: number
+  smoothing: number
+  separation: number
+  width: number
+  maxZones: number
+  reactionWeight: number
+  pivot: number
+  cluster: number
+  lookahead: number
+  minReversal: number
+  retestGap: number
+  boundarySlots: number
   lookbackBars: number
-  minWarmupBars: number
-  minIndependentTouches: number
-  minTouchSeparationBars: number
-  clusterProximityFactor: number
-  maxZoneWidthFactor: number
-  minZoneGapFactor: number
-  spacingPenaltyFactor: number
-  minAdjustedScore: number
-  maxLevels: number
-  rejectionHorizonBars: number
 }
 
-/** Mirrors swing_algo/config/swings/zones.json (M5 baseline). */
-const DEFAULT_KEY_LEVEL_CONFIG: KeyLevelDetectConfig = {
-  lookbackBars: 1000,
-  minWarmupBars: 120,
-  minIndependentTouches: 2,
-  minTouchSeparationBars: 4,
-  clusterProximityFactor: 3.5,
-  maxZoneWidthFactor: 8,
-  minZoneGapFactor: 3.5,
-  spacingPenaltyFactor: 12,
-  minAdjustedScore: 6,
-  maxLevels: 30,
-  rejectionHorizonBars: 8,
+/** Mirrors the tuned settings in eurusd-zone-tuning-v4.json. */
+const KEY_LEVEL_CONFIG: KeyLevelDetectConfig = {
+  atrPeriod: 10,
+  atrMultiplier: 0.35,
+  rangeMultiplier: 0.04,
+  bin: 0.1,
+  smoothing: 0.4,
+  separation: 1.5,
+  width: 0.5,
+  maxZones: 7,
+  reactionWeight: 0.55,
+  pivot: 3,
+  cluster: 1,
+  lookahead: 12,
+  minReversal: 0.6,
+  retestGap: 6,
+  boundarySlots: 2,
+  lookbackBars: 288,
 }
 
-/** 3m pane: same zone geometry as M5; cap displayed levels for chart density. */
-const KEY_LEVEL_3M_CONFIG: KeyLevelDetectConfig = {
-  ...DEFAULT_KEY_LEVEL_CONFIG,
-  lookbackBars: 500,
-  minAdjustedScore: 0,
-  maxLevels: 10,
+export function keyLevelDetectConfig(): KeyLevelDetectConfig {
+  return { ...KEY_LEVEL_CONFIG }
 }
 
-export function keyLevelDetectConfig(intervalSec: number): KeyLevelDetectConfig {
-  return intervalSec <= 180 ? KEY_LEVEL_3M_CONFIG : DEFAULT_KEY_LEVEL_CONFIG
-}
-
-export function keyLevelVolumeBarCount(paneId: string): number {
-  return paneId === '3m' ? 500 : 1000
+export function keyLevelVolumeBarCount(_paneId: string): number {
+  return KEY_LEVEL_CONFIG.lookbackBars
 }
 
 /** @deprecated use keyLevelVolumeBarCount */
-export const KEY_LEVEL_CANDLE_COUNT = 500
+export const KEY_LEVEL_CANDLE_COUNT = 288
 
-export function detectKeyLevels(
-  bars: readonly VolumeCandle[],
+export function closedCandlesAt(
+  candles: readonly LightweightCandle[],
   intervalSec: number,
-  config: KeyLevelDetectConfig = keyLevelDetectConfig(intervalSec),
-): KeyLevelZone[] {
-  const window = bars.slice(-config.lookbackBars)
-  if (window.length < config.minWarmupBars) return []
-  const dense = detectSwings(window, DENSE_SWING_CONFIG)
-  const major = detectSwings(window, MAJOR_SWING_CONFIG)
-  void major
-  const moves = window.slice(-101).map((bar, i, arr) => i === 0 ? Number.NaN : Math.abs(bar.close - arr[i - 1]!.close))
-  const scale = quantile(moves, 0.60)
-  if (!(scale > 0) || dense.length === 0) return []
-  const proximity = config.clusterProximityFactor * scale
-  const maxWidth = config.maxZoneWidthFactor * scale
-  const sorted = [...dense].sort((a, b) => a.price - b.price)
-  const groups: Swing[][] = []
-  for (const swing of sorted) {
-    const group = groups.at(-1)
-    if (group && swing.price - group[0]!.price <= maxWidth && swing.price - group.at(-1)!.price <= proximity) {
-      group.push(swing)
-    } else {
-      groups.push([swing])
+  nowSec: number,
+): readonly LightweightCandle[] {
+  const last = candles.at(-1)
+  return last && last.time + intervalSec > nowSec ? candles.slice(0, -1) : candles
+}
+
+type Pivot = { index: number; price: number; side: 'high' | 'low'; reversal: number }
+type BoundaryCluster = { side: Pivot['side']; points: Pivot[]; center: number }
+type ScaleMetrics = { atr: number; range: number; scale: number }
+
+function clamp(value: number, lower: number, upper: number): number {
+  return Math.max(lower, Math.min(upper, value))
+}
+
+function smoothProfile(values: readonly number[], sigma: number): number[] {
+  if (sigma <= 0) return [...values]
+  const radius = Math.ceil(3 * sigma)
+  const kernel = Array.from(
+    { length: radius * 2 + 1 },
+    (_, index) => Math.exp(-0.5 * ((index - radius) / sigma) ** 2),
+  )
+  const sum = kernel.reduce((total, value) => total + value, 0)
+  return values.map((_, index) =>
+    kernel.reduce(
+      (total, weight, kernelIndex) =>
+        total + weight * values[clamp(index + kernelIndex - radius, 0, values.length - 1)]! / sum,
+      0,
+    ),
+  )
+}
+
+function keyLevelScaleMetrics(
+  candles: readonly LightweightCandle[],
+  config: KeyLevelDetectConfig,
+): ScaleMetrics {
+  const trueRanges = candles.map((candle, index) => Math.max(
+    candle.high - candle.low,
+    index > 0 ? Math.abs(candle.high - candles[index - 1]!.close) : 0,
+    index > 0 ? Math.abs(candle.low - candles[index - 1]!.close) : 0,
+  ))
+  const period = Math.min(config.atrPeriod, trueRanges.length)
+  let atr = trueRanges.slice(0, period).reduce((sum, value) => sum + value, 0) / period
+  for (let index = period; index < trueRanges.length; index++) {
+    atr = (atr * (period - 1) + trueRanges[index]!) / period
+  }
+  const minimum = Math.min(...candles.map((candle) => candle.low))
+  const maximum = Math.max(...candles.map((candle) => candle.high))
+  const range = maximum - minimum
+  return {
+    atr,
+    range,
+    scale: Math.max(config.atrMultiplier * atr, config.rangeMultiplier * range),
+  }
+}
+
+function detectPivots(
+  candles: readonly LightweightCandle[],
+  config: KeyLevelDetectConfig,
+  metrics: ScaleMetrics,
+): Pivot[] {
+  const result: Pivot[] = []
+  const radius = config.pivot
+  for (let index = radius; index < candles.length - radius; index++) {
+    const candle = candles[index]!
+    const window = candles.slice(index - radius, index + radius + 1)
+    for (const side of ['high', 'low'] as const) {
+      const price = candle[side]
+      const extreme = side === 'high'
+        ? Math.max(...window.map((item) => item.high))
+        : Math.min(...window.map((item) => item.low))
+      if (Math.abs(price - extreme) > 1e-9) continue
+      const ahead = candles.slice(index + 1, Math.min(candles.length, index + 1 + config.lookahead))
+      if (!ahead.length) continue
+      const reversal = side === 'high'
+        ? (price - Math.min(...ahead.map((item) => item.low))) / metrics.atr
+        : (Math.max(...ahead.map((item) => item.high)) - price) / metrics.atr
+      if (reversal >= config.minReversal) result.push({ index, price, side, reversal })
     }
   }
-  const raw: Array<KeyLevelZone & { volumeScore: number; reactionCount: number; reaction: number; recency: number }> = []
-  const halfPad = Math.max(scale * 0.25, 1e-7)
-  for (const group of groups) {
-    const chronological = [...group].sort((a, b) => a.pivot - b.pivot || a.confirmedAt - b.confirmedAt)
-    const touches: Swing[] = []
-    for (const swing of chronological) {
-      if (!touches.length || swing.pivot - touches.at(-1)!.pivot >= config.minTouchSeparationBars) {
-        touches.push(swing)
+  return result
+}
+
+function buildBoundaryZones(
+  candles: readonly LightweightCandle[],
+  pivots: readonly Pivot[],
+  config: KeyLevelDetectConfig,
+  metrics: ScaleMetrics,
+): KeyLevelZone[] {
+  const clusters: BoundaryCluster[] = []
+  const tolerance = config.cluster * metrics.scale
+  for (const side of ['high', 'low'] as const) {
+    const points = pivots.filter((point) => point.side === side).sort((a, b) => a.price - b.price)
+    for (const point of points) {
+      let nearest: BoundaryCluster | undefined
+      let distance = Infinity
+      for (const cluster of clusters) {
+        if (cluster.side !== side) continue
+        const candidateDistance = Math.abs(point.price - cluster.center)
+        if (candidateDistance <= tolerance && candidateDistance < distance) {
+          nearest = cluster
+          distance = candidateDistance
+        }
+      }
+      if (!nearest) {
+        nearest = { side, points: [], center: point.price }
+        clusters.push(nearest)
+      }
+      nearest.points.push(point)
+      const weightedPrice = nearest.points.reduce(
+        (total, item) => total + item.price * Math.min(item.reversal, 3),
+        0,
+      )
+      const weights = nearest.points.reduce((total, item) => total + Math.min(item.reversal, 3), 0)
+      nearest.center = weightedPrice / weights
+    }
+  }
+
+  const minimum = Math.min(...candles.map((candle) => candle.low))
+  const maximum = Math.max(...candles.map((candle) => candle.high))
+  const range = Math.max(maximum - minimum, Number.EPSILON)
+  return clusters.map((cluster) => {
+    const points = [...cluster.points].sort((a, b) => a.index - b.index)
+    const events: Pivot[] = []
+    for (const point of points) {
+      const previous = events.at(-1)
+      if (!previous || point.index - previous.index >= config.retestGap) events.push(point)
+      else if (point.reversal > previous.reversal) events[events.length - 1] = point
+    }
+    const avgReversal = events.reduce((total, item) => total + item.reversal, 0) / Math.max(1, events.length)
+    const retests = Math.max(0, events.length - 1)
+    const boundaryDistance = cluster.side === 'high'
+      ? (maximum - cluster.center) / range
+      : (cluster.center - minimum) / range
+    const outerBonus = Math.exp(-boundaryDistance / 0.2)
+    const score =
+      0.35 * Math.min(1, avgReversal / 2) +
+      0.35 * Math.min(1, retests / 3) +
+      0.3 * outerBonus
+    const prices = cluster.points.map((item) => item.price)
+    const padding = metrics.scale * 0.1
+    const lower = prices.length >= 3
+      ? quantile(prices, 0.15) - padding
+      : cluster.center - config.width * metrics.scale
+    const upper = prices.length >= 3
+      ? quantile(prices, 0.85) + padding
+      : cluster.center + config.width * metrics.scale
+    return {
+      type: 'Boundary' as const,
+      side: cluster.side,
+      center: cluster.center,
+      lower,
+      upper,
+      score,
+      retests,
+      avgReversal,
+      events: events.length,
+      outerBonus,
+    }
+  }).sort((a, b) => b.score - a.score)
+}
+
+function buildDensityZones(
+  candles: readonly LightweightCandle[],
+  pivots: readonly Pivot[],
+  config: KeyLevelDetectConfig,
+  metrics: ScaleMetrics,
+): KeyLevelZone[] {
+  const minimum = Math.min(...candles.map((candle) => candle.low))
+  const maximum = Math.max(...candles.map((candle) => candle.high))
+  const step = metrics.scale * config.bin
+  const start = Math.floor(minimum / step) * step
+  const count = Math.ceil((maximum - start) / step) + 1
+  const prices = Array.from({ length: count }, (_, index) => start + index * step)
+  const occupancy = Array<number>(count).fill(0)
+  const reaction = Array<number>(count).fill(0)
+  const bump = (price: number, weight: number) => {
+    const center = (price - start) / step
+    const sigma = Math.max(1, 0.75 / config.bin)
+    for (
+      let index = Math.max(0, Math.floor(center - 4 * sigma));
+      index <= Math.min(count - 1, Math.ceil(center + 4 * sigma));
+      index++
+    ) {
+      reaction[index] += weight * Math.exp(-0.5 * ((index - center) / sigma) ** 2)
+    }
+  }
+
+  for (const candle of candles) {
+    const first = clamp(Math.floor((candle.low - start) / step), 0, count - 1)
+    const last = clamp(Math.ceil((candle.high - start) / step), 0, count - 1)
+    const bodyLow = Math.min(candle.open, candle.close)
+    const bodyHigh = Math.max(candle.open, candle.close)
+    const bodyBins: number[] = []
+    for (let index = first; index <= last; index++) {
+      if (prices[index]! >= bodyLow - step / 2 && prices[index]! <= bodyHigh + step / 2) {
+        bodyBins.push(index)
       }
     }
-    if (touches.length < config.minIndependentTouches) continue
-    const prices = group.map((item) => item.price).sort((a, b) => a - b)
-    const center = quantile(prices, 0.5)
-    const lower = prices[0]! - halfPad
-    const upper = prices.at(-1)! + halfPad
-    if (upper - lower > maxWidth + 2 * halfPad) continue
-    let volume = 0
-    for (const bar of window) {
-      const overlap = Math.max(0, Math.min(bar.high, upper) - Math.max(bar.low, lower))
-      volume += bar.high > bar.low ? bar.volume * overlap / (bar.high - bar.low) : 0
+    for (let index = first; index <= last; index++) occupancy[index] += 0.4 / (last - first + 1)
+    for (const index of bodyBins) occupancy[index] += 0.6 / Math.max(1, bodyBins.length)
+    const span = Math.max(step, candle.high - candle.low)
+    const upperWick = (candle.high - bodyHigh) / span
+    const lowerWick = (bodyLow - candle.low) / span
+    if (upperWick > 0.08) bump(candle.high, upperWick)
+    if (lowerWick > 0.08) bump(candle.low, lowerWick)
+  }
+  for (const pivot of pivots) bump(pivot.price, Math.min(2, pivot.reversal / 8))
+
+  const smoothedOccupancy = smoothProfile(occupancy, config.smoothing / config.bin)
+  const smoothedReaction = smoothProfile(reaction, config.smoothing / config.bin)
+  const maxOccupancy = Math.max(1e-9, ...smoothedOccupancy)
+  const maxReaction = Math.max(1e-9, ...smoothedReaction)
+  const scores = smoothedOccupancy.map(
+    (value, index) =>
+      (1 - config.reactionWeight) * value / maxOccupancy +
+      config.reactionWeight * smoothedReaction[index]! / maxReaction,
+  )
+  const zones: KeyLevelZone[] = []
+  for (let index = 1; index < count - 1; index++) {
+    if (scores[index]! >= scores[index - 1]! && scores[index]! > scores[index + 1]! && scores[index]! > 0.13) {
+      const center = prices[index]!
+      zones.push({
+        type: 'Density',
+        center,
+        lower: center - config.width * metrics.scale,
+        upper: center + config.width * metrics.scale,
+        score: scores[index]!,
+        retests: 0,
+        avgReversal: 0,
+      })
     }
-    const reactions = touches.map((swing) => {
-      const after = window.slice(
-        swing.pivot + 1,
-        Math.min(window.length, swing.pivot + config.rejectionHorizonBars),
-      )
-      if (!after.length) return 0
-      return swing.kind === 'H' ? Math.max(0, swing.price - Math.min(...after.map((b) => b.low))) / scale : Math.max(0, Math.max(...after.map((b) => b.high)) - swing.price) / scale
-    })
-    const detectedAt = Math.max(...touches.map((item) => item.confirmedAt))
-    const lastClose = window.at(-1)!.close
-    raw.push({
-      lower, upper, center, strength: 0,
-      state: lastClose > upper ? 'SUPPORT_CANDIDATE' : lastClose < lower ? 'RESISTANCE_CANDIDATE' : 'INSIDE_ZONE',
-      startTime: window[Math.min(detectedAt, window.length - 1)]!.time,
-      endTime: window.at(-1)!.time + 50 * intervalSec,
-      volumeScore: volume / Math.max(upper - lower, 1e-12),
-      reactionCount: 1 - Math.exp(-(touches.length - 1) / 3),
-      reaction: 1 - Math.exp(-quantile(reactions, 0.5) / 3),
-      recency: Math.exp(
-        -(window.length - 1 - Math.max(...touches.map((item) => item.pivot))) / Math.max(1, config.lookbackBars / 3),
-      ),
-    })
   }
-  const maxVolume = Math.max(0, ...raw.map((item) => item.volumeScore))
-  for (const item of raw) {
-    item.strength =
-      100 *
-      (0.40 * item.reactionCount +
-        0.25 * (maxVolume ? item.volumeScore / maxVolume : 0) +
-        0.25 * item.reaction +
-        0.10 * item.recency)
+  return zones.sort((a, b) => b.score - a.score)
+}
+
+export function detectKeyLevels(
+  bars: readonly LightweightCandle[],
+  config: KeyLevelDetectConfig = keyLevelDetectConfig(),
+): KeyLevelZone[] {
+  if (bars.length < config.lookbackBars) return []
+  const candles = bars.slice(-config.lookbackBars)
+  const metrics = keyLevelScaleMetrics(candles, config)
+  if (!(metrics.atr > 0) || !(metrics.scale > 0)) return []
+  const pivots = detectPivots(candles, config, metrics)
+  const boundary = buildBoundaryZones(candles, pivots, config, metrics)
+  const density = buildDensityZones(candles, pivots, config, metrics)
+  const selected: KeyLevelZone[] = []
+  const nonOverlapping = (zone: KeyLevelZone) => selected.every(
+    (current) =>
+      Math.abs(current.center - zone.center) >= config.separation * metrics.scale &&
+      (current.upper < zone.lower || zone.upper < current.lower),
+  )
+  for (const zone of boundary) {
+    if (selected.filter((item) => item.type === 'Boundary').length >= config.boundarySlots) break
+    if (nonOverlapping(zone)) selected.push(zone)
   }
-  const minGap = config.minZoneGapFactor * scale
-  const spacing = config.spacingPenaltyFactor * scale
-  const remaining = [...raw].sort((a, b) => b.strength - a.strength)
-  const selected: typeof raw = []
-  while (remaining.length && selected.length < config.maxLevels) {
-    if (!selected.length) { selected.push(remaining.shift()!); continue }
-    const eligible = remaining.map((item, index) => {
-      const gaps = selected.map((kept) => Math.max(0, item.lower - kept.upper, kept.lower - item.upper))
-      if (gaps.some((gap) => gap < minGap)) return null
-      const adjusted = item.strength * (1 - Math.exp(-Math.min(...gaps) / Math.max(spacing, 1e-12)))
-      return adjusted >= config.minAdjustedScore ? { item, index, adjusted } : null
-    }).filter((item): item is NonNullable<typeof item> => item != null)
-    if (!eligible.length) break
-    eligible.sort((a, b) => b.adjusted - a.adjusted || a.item.center - b.item.center)
-    const best = eligible[0]!
-    selected.push(best.item)
-    remaining.splice(best.index, 1)
+  for (const zone of density) {
+    if (selected.length >= config.maxZones) break
+    if (nonOverlapping(zone)) selected.push(zone)
   }
-  return selected.sort((a, b) => a.center - b.center).map(({ volumeScore: _v, reactionCount: _c, reaction: _r, recency: _e, ...zone }) => zone)
+  return selected.sort((a, b) => a.center - b.center)
 }

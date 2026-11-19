@@ -17,6 +17,7 @@ import {
 } from '../../_lib/chart/extend-candles-to-chart-eod'
 import { diffCandles } from '../../_lib/chart/candle-sync-diff'
 import { VIEWPORT } from '../../_lib/chart/price-chart-style'
+import { defaultChartLayout } from '../../_lib/chart/chart-default-layout'
 import {
   readViewport,
   writeViewport,
@@ -152,6 +153,8 @@ export function PriceChart({
   timeframe,
   onLoadOlder,
   axesVisible,
+  resetLayoutEpoch = 0,
+  onResetLayoutApplied,
   trendlines = [],
   rectangles = [],
   fibonacciRanges = [],
@@ -186,6 +189,8 @@ export function PriceChart({
   timeframe: string
   onLoadOlder?: () => void
   axesVisible: boolean
+  resetLayoutEpoch?: number
+  onResetLayoutApplied?: (epoch: number) => void
   trendlines?: readonly TrendlineDrawing[]
   rectangles?: readonly RectangleDrawing[]
   fibonacciRanges?: readonly FibonacciRangeDrawing[]
@@ -222,6 +227,7 @@ export function PriceChart({
   onPolylineLabelEdit?: (id: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const appliedResetLayoutEpochRef = useRef(0)
   const drawOverlayRef = useRef<HTMLDivElement>(null)
   const pointerCaptureElRef = useRef<HTMLElement | null>(null)
   const handleRef = useRef<ChartHandle | null>(null)
@@ -586,12 +592,6 @@ export function PriceChart({
   useEffect(() => {
     const handle = handleRef.current
     if (!handle) return
-    handle.indicators.setCurrentPrice(candles.at(-1)?.close ?? null)
-  }, [candles, epoch])
-
-  useEffect(() => {
-    const handle = handleRef.current
-    if (!handle) return
     handle.indicators.setForceScores(forceScores)
   }, [forceScores, epoch])
 
@@ -844,6 +844,29 @@ export function PriceChart({
       }
     }
   }, [candles, timeframe, chartType, epoch, showBollinger, showIchimoku])
+
+  useEffect(() => {
+    if (resetLayoutEpoch <= appliedResetLayoutEpochRef.current) return
+    const handle = handleRef.current
+    if (!handle || candles.length === 0) return
+    appliedResetLayoutEpochRef.current = resetLayoutEpoch
+    const layout = defaultChartLayout(candles.length)
+    handle.price.priceScale().applyOptions({
+      autoScale: true,
+      scaleMargins: layout.scaleMargins,
+    })
+    handle.chart.timeScale().setVisibleLogicalRange(layout.logicalRange)
+    handle.fitted = true
+    onResetLayoutApplied?.(resetLayoutEpoch)
+    requestAnimationFrame(() => {
+      if (handleRef.current !== handle) return
+      handle.price.priceScale().applyOptions({
+        autoScale: true,
+        scaleMargins: layout.scaleMargins,
+      })
+      handle.chart.timeScale().setVisibleLogicalRange(layout.logicalRange)
+    })
+  }, [candles.length, epoch, onResetLayoutApplied, resetLayoutEpoch])
 
   return (
     <div

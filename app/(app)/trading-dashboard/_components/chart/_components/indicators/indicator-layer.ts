@@ -72,10 +72,6 @@ export class IndicatorLayer {
     this.marketContext.setLevels(levels)
   }
 
-  setCurrentPrice(price: number | null): void {
-    this.marketContext.setCurrentPrice(price)
-  }
-
   setForceScores(scores: readonly ForceScorePoint[]): void {
     this.forceScore.setScores(scores)
   }
