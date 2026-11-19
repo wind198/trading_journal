@@ -24,9 +24,11 @@ import {
   parseChartOverlaySettings,
   setIndicatorAllPanes,
   setPaneIndicator,
+  regimeIndicatorVisibility,
   type ChartOverlaySettings,
   type DashboardPaneId,
 } from '../../_lib/chart/chart-indicator-pane-settings'
+import type { Regime } from '../../_lib/overlays/baseline-indicators'
 
 export type { ChartOverlaySettings }
 
@@ -51,6 +53,7 @@ export function sessionSlotsEnabledSet(
 
 type ChartOverlaySettingsMenuProps = {
   settings: ChartOverlaySettings
+  autoRegimesByPane: Partial<Record<DashboardPaneId, Regime | null>>
   onSettingsChange: (
     update: ChartOverlaySettings | ((current: ChartOverlaySettings) => ChartOverlaySettings),
   ) => void
@@ -67,19 +70,36 @@ function IndicatorBulkRow({
   label,
   onAll,
   offAll,
+  manualDisabled = false,
+  auto,
 }: {
   label: string
   onAll: () => void
   offAll: () => void
+  manualDisabled?: boolean
+  auto?: { enabled: boolean; onToggle: () => void }
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-2 py-1">
       <span className="text-xs font-medium text-foreground">{label}</span>
       <div className="flex gap-0.5">
-        <Button type="button" variant="ghost" size="xs" className="h-6 px-1.5" onClick={onAll}>
+        {auto && (
+          <Button
+            type="button"
+            variant={auto.enabled ? 'secondary' : 'ghost'}
+            size="xs"
+            className="h-6 px-1.5"
+            aria-label="Auto Bollinger and Ichimoku by regime"
+            aria-pressed={auto.enabled}
+            onClick={auto.onToggle}
+          >
+            Auto
+          </Button>
+        )}
+        <Button type="button" variant="ghost" size="xs" className="h-6 px-1.5" onClick={onAll} disabled={manualDisabled}>
           All on
         </Button>
-        <Button type="button" variant="ghost" size="xs" className="h-6 px-1.5" onClick={offAll}>
+        <Button type="button" variant="ghost" size="xs" className="h-6 px-1.5" onClick={offAll} disabled={manualDisabled}>
           All off
         </Button>
       </div>
@@ -98,6 +118,7 @@ const INDICATORS = [
 
 export function ChartOverlaySettingsMenu({
   settings,
+  autoRegimesByPane,
   onSettingsChange,
 }: ChartOverlaySettingsMenuProps) {
   return (
@@ -150,6 +171,14 @@ export function ChartOverlaySettingsMenu({
           <IndicatorBulkRow
             key={key}
             label={label}
+            manualDisabled={settings.autoIndicatorsByRegime && (key === 'bollinger' || key === 'ichimoku')}
+            auto={key === 'bollinger' ? {
+              enabled: settings.autoIndicatorsByRegime,
+              onToggle: () => onSettingsChange((current) => ({
+                ...current,
+                autoIndicatorsByRegime: !current.autoIndicatorsByRegime,
+              })),
+            } : undefined}
             onAll={() => onSettingsChange((current) => setIndicatorAllPanes(current, key, true))}
             offAll={() => onSettingsChange((current) => setIndicatorAllPanes(current, key, false))}
           />
@@ -169,9 +198,18 @@ export function ChartOverlaySettingsMenu({
                     checked={
                       key === 'regime' && (paneId === '4h' || paneId === '1h')
                         ? false
+                        : (key === 'bollinger' || key === 'ichimoku') && settings.autoIndicatorsByRegime
+                          ? regimeIndicatorVisibility(
+                              true,
+                              autoRegimesByPane[paneId] ?? null,
+                              settings.indicatorsByPane[paneId],
+                            )[key]
                         : settings.indicatorsByPane[paneId][key]
                     }
-                    disabled={key === 'regime' && (paneId === '4h' || paneId === '1h')}
+                    disabled={
+                      (key === 'regime' && (paneId === '4h' || paneId === '1h')) ||
+                      (settings.autoIndicatorsByRegime && (key === 'bollinger' || key === 'ichimoku'))
+                    }
                     onCheckedChange={(checked) => onSettingsChange((current) => setPaneIndicator(current, paneId, key, checked === true))}
                     aria-label={`${label} on ${paneId}`}
                   />

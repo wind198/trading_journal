@@ -2,6 +2,7 @@ import {
   defaultSessionSlotEnabled,
   type SessionSlotId,
 } from './chart-timezone'
+import type { Regime } from '../overlays/baseline-indicators'
 
 export const DASHBOARD_PANE_IDS = ['4h', '1h', '15m', '3m'] as const
 export type DashboardPaneId = (typeof DASHBOARD_PANE_IDS)[number]
@@ -17,6 +18,7 @@ export type PaneIndicatorToggles = {
 
 export type ChartOverlaySettings = {
   volumeProfile: boolean
+  autoIndicatorsByRegime: boolean
   sessionSlots: Record<SessionSlotId, boolean>
   indicatorsByPane: Record<DashboardPaneId, PaneIndicatorToggles>
 }
@@ -48,6 +50,7 @@ export function defaultIndicatorsByPane(): Record<DashboardPaneId, PaneIndicator
 
 export const DEFAULT_OVERLAY_SETTINGS: ChartOverlaySettings = {
   volumeProfile: true,
+  autoIndicatorsByRegime: false,
   sessionSlots: defaultSessionSlotEnabled(),
   indicatorsByPane: defaultIndicatorsByPane(),
 }
@@ -112,11 +115,24 @@ export function parseChartOverlaySettings(raw: string): ChartOverlaySettings {
         typeof parsed.volumeProfile === 'boolean'
           ? parsed.volumeProfile
           : DEFAULT_OVERLAY_SETTINGS.volumeProfile,
+      autoIndicatorsByRegime: parsed.autoIndicatorsByRegime === true,
       sessionSlots: slots,
       indicatorsByPane: parseIndicatorsByPane(parsed),
     }
   } catch {
     return DEFAULT_OVERLAY_SETTINGS
+  }
+}
+
+export function regimeIndicatorVisibility(
+  auto: boolean,
+  regime: Regime | null,
+  manual: Pick<PaneIndicatorToggles, 'bollinger' | 'ichimoku'>,
+): Pick<PaneIndicatorToggles, 'bollinger' | 'ichimoku'> {
+  if (!auto) return { bollinger: manual.bollinger, ichimoku: manual.ichimoku }
+  return {
+    bollinger: regime === 'CHOPPY',
+    ichimoku: regime === 'UP' || regime === 'DOWN',
   }
 }
 

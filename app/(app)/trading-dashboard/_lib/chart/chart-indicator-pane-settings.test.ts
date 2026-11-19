@@ -5,6 +5,7 @@ import {
   parseChartOverlaySettings,
   setIndicatorAllPanes,
   paneIndicators,
+  regimeIndicatorVisibility,
   DEFAULT_OVERLAY_SETTINGS,
 } from './chart-indicator-pane-settings'
 
@@ -73,4 +74,19 @@ test('paneIndicators forces regime off on higher timeframes', () => {
   assert.equal(paneIndicators(settings, '1h').regime, false)
   assert.equal(paneIndicators(settings, '15m').regime, true)
   assert.equal(paneIndicators(settings, '3m').regime, true)
+})
+
+test('auto indicator setting defaults off and survives persisted settings', () => {
+  assert.equal(parseChartOverlaySettings('{}').autoIndicatorsByRegime, false)
+  assert.equal(parseChartOverlaySettings('{"autoIndicatorsByRegime":true}').autoIndicatorsByRegime, true)
+})
+
+test('auto regime visibility overrides but preserves saved manual choices', () => {
+  const manual = { bollinger: false, ichimoku: true }
+  assert.deepEqual(regimeIndicatorVisibility(false, 'CHOPPY', manual), manual)
+  assert.deepEqual(regimeIndicatorVisibility(true, 'CHOPPY', manual), { bollinger: true, ichimoku: false })
+  assert.deepEqual(regimeIndicatorVisibility(true, 'UP', manual), { bollinger: false, ichimoku: true })
+  assert.deepEqual(regimeIndicatorVisibility(true, 'DOWN', manual), { bollinger: false, ichimoku: true })
+  assert.deepEqual(regimeIndicatorVisibility(true, null, manual), { bollinger: false, ichimoku: false })
+  assert.deepEqual(manual, { bollinger: false, ichimoku: true })
 })

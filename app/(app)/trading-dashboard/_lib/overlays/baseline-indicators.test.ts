@@ -8,6 +8,7 @@ import {
   detectBaselineForce,
   detectKeyLevels,
   detectRegimeSegments,
+  detectCurrentRegime,
   keyLevelDetectConfig,
   keyLevelVolumeBarCount,
 } from './baseline-indicators'
@@ -42,6 +43,16 @@ test('regime detector returns causal up segments after warmup', () => {
   assert.equal(segments[0]?.regime, 'UP')
   assert.equal(segments[0]?.startTime, bars[151]?.time)
   assert.equal(segments[0]?.endTime, bars[179]?.time)
+})
+
+test('current regime uses the latest causal closed-bar classification', () => {
+  const rising = Array.from({ length: 180 }, (_, i) => bar(i, 1 + i * 0.0001, 1.00008 + i * 0.0001))
+  assert.equal(detectCurrentRegime(rising.slice(0, 151)), null)
+  assert.equal(detectCurrentRegime(rising), 'UP')
+  const falling = Array.from({ length: 180 }, (_, i) => bar(i, 1.2 - i * 0.0001, 1.19992 - i * 0.0001))
+  assert.equal(detectCurrentRegime(falling), 'DOWN')
+  const flat = Array.from({ length: 180 }, (_, i) => bar(i, 1.1, 1.1, 0.0001))
+  assert.equal(detectCurrentRegime(flat), 'CHOPPY')
 })
 
 test('detectKeyLevels requires the full 288-candle tuning window', () => {

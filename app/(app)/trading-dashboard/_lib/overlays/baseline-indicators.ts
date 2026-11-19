@@ -269,7 +269,10 @@ export function backfillRegimeOnsets(
   return display
 }
 
-export function detectRegimeSegments(bars: readonly LightweightCandle[]): RegimeSegment[] {
+function regimeInputsForBars(bars: readonly LightweightCandle[]): {
+  positions: (number | null)[]
+  causalRegimes: (Regime | null)[]
+} {
   const positions: (number | null)[] = bars.map((bar, i) => {
     if (i < REGIME_KIJUN_PERIOD - 1) return null
     const window = bars.slice(i - REGIME_KIJUN_PERIOD + 1, i + 1)
@@ -284,6 +287,15 @@ export function detectRegimeSegments(bars: readonly LightweightCandle[]): Regime
     const below = window.filter((value) => value === -1).length / 100
     return above >= 0.70 ? 'UP' : below >= 0.70 ? 'DOWN' : 'CHOPPY'
   })
+  return { positions, causalRegimes }
+}
+
+export function detectCurrentRegime(bars: readonly LightweightCandle[]): Regime | null {
+  return regimeInputsForBars(bars).causalRegimes.at(-1) ?? null
+}
+
+export function detectRegimeSegments(bars: readonly LightweightCandle[]): RegimeSegment[] {
+  const { positions, causalRegimes } = regimeInputsForBars(bars)
   const regimes = backfillRegimeOnsets(positions, causalRegimes)
   const result: RegimeSegment[] = []
   let start = -1

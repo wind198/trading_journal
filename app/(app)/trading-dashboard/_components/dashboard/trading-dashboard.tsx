@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -25,7 +25,7 @@ import {
   useChartOverlaySettings,
   useSessionSlotsEnabled,
 } from './chart-overlay-settings-menu'
-import { paneIndicators } from '../../_lib/chart/chart-indicator-pane-settings'
+import { paneIndicators, regimeIndicatorVisibility } from '../../_lib/chart/chart-indicator-pane-settings'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import { DrawingLabelSession, type DrawingLabelState } from '../chart/_sessions/configure/drawing-label-session'
 import {
@@ -64,8 +64,10 @@ import {
   closedCandlesAt,
   detectKeyLevels,
   detectRegimeSegments,
+  detectCurrentRegime,
   keyLevelVolumeBarCount,
 } from '../../_lib/overlays/baseline-indicators'
+import type { Regime } from '../../_lib/overlays/baseline-indicators'
 import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
@@ -181,6 +183,12 @@ function Dashboard() {
   const [fullScreen, setFullScreen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const [overlaySettings, setOverlaySettings] = useChartOverlaySettings()
+  const [autoRegimesByPane, setAutoRegimesByPane] = useState<Partial<Record<PaneId, Regime | null>>>({})
+  const onPaneRegimeChange = useCallback((paneId: PaneId, regime: Regime | null) => {
+    setAutoRegimesByPane((current) =>
+      current[paneId] === regime ? current : { ...current, [paneId]: regime },
+    )
+  }, [])
   const [notesOpen, setNotesOpen] = useState(false)
   const [guidesOpen, setGuidesOpen] = useState(false)
   const [executionOpen, setExecutionOpen] = useState(false)
@@ -276,6 +284,7 @@ function Dashboard() {
             </Button>
             <ChartOverlaySettingsMenu
               settings={overlaySettings}
+              autoRegimesByPane={autoRegimesByPane}
               onSettingsChange={setOverlaySettings}
             />
             <Button
@@ -361,6 +370,8 @@ function Dashboard() {
               sessionSlotEnabled={sessionSlotEnabled}
               showBollinger={paneToggles.bollinger}
               showIchimoku={paneToggles.ichimoku}
+              autoIndicatorsByRegime={overlaySettings.autoIndicatorsByRegime}
+              onRegimeChange={onPaneRegimeChange}
               showRegime={paneToggles.regime}
               showForce={paneToggles.force}
               showEngulfing={paneToggles.engulfing}
@@ -416,6 +427,8 @@ function DashboardPane({
   sessionSlotEnabled,
   showBollinger,
   showIchimoku,
+  autoIndicatorsByRegime,
+  onRegimeChange,
   showRegime,
   showForce,
   showEngulfing,
@@ -434,6 +447,8 @@ function DashboardPane({
   sessionSlotEnabled: ReadonlySet<string>
   showBollinger: boolean
   showIchimoku: boolean
+  autoIndicatorsByRegime: boolean
+  onRegimeChange: (paneId: PaneId, regime: Regime | null) => void
   showRegime: boolean
   showForce: boolean
   showEngulfing: boolean
@@ -465,6 +480,16 @@ function DashboardPane({
     closedBarsRef.current = { key: closedKey, bars: closedCandidate }
   }
   const closedBars = closedBarsRef.current.bars
+  const currentRegime = useMemo(() => detectCurrentRegime(closedBars), [closedBars])
+  useEffect(() => {
+    onRegimeChange(pane.id, currentRegime)
+    return () => onRegimeChange(pane.id, null)
+  }, [pane.id, currentRegime, onRegimeChange])
+  const indicatorVisibility = regimeIndicatorVisibility(
+    autoIndicatorsByRegime,
+    currentRegime,
+    { bollinger: showBollinger, ichimoku: showIchimoku },
+  )
   const volumeProfileWindow = useMemo(() => {
     if (pane.id !== '15m' && pane.id !== '3m') return null
     return volumeProfileWindowFromCandles(candles, pane.id as CandleTimeframe)
@@ -1033,8 +1058,8 @@ function DashboardPane({
             keyLevels={keyLevels}
             volumeProfile={volumeProfile}
             sessionSlotEnabled={sessionSlotEnabled}
-            showBollinger={showBollinger}
-            showIchimoku={showIchimoku}
+            showBollinger={indicatorVisibility.bollinger}
+            showIchimoku={indicatorVisibility.ichimoku}
             drawTool={drawTool}
             onDrawingComplete={onDrawingComplete}
             onDrawingChange={onDrawingChange}
