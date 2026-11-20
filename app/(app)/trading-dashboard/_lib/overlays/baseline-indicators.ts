@@ -1,32 +1,19 @@
 import type { LightweightCandle } from '@/lib/ticks/candles'
+import { quantile } from './candle-features'
+
+export type {
+  BaselineDirection,
+  BaselineForceEvent,
+  ForceScorePoint,
+} from './force-candles'
+export { calculateForceScores, detectBaselineForce } from './force-candles'
+export type { BaselineEngulfingEvent } from './engulfing'
+export { detectBaselineEngulfing, geometryScore } from './engulfing'
+export type { BaselineDojiEvent } from './doji'
+export { detectBaselineDoji } from './doji'
 
 export type Regime = 'UP' | 'DOWN' | 'CHOPPY'
 export type RegimeSegment = { startTime: number; endTime: number; regime: Regime }
-export type BaselineDirection = 'BULLISH' | 'BEARISH'
-export type BaselineForceEvent = {
-  eventId: number
-  time: number
-  direction: BaselineDirection
-  srcOpen: number
-  srcHigh: number
-  srcLow: number
-  srcClose: number
-  score: number
-}
-export type ForceScorePoint = {
-  time: number
-  score: number
-  direction: BaselineDirection
-}
-export type BaselineEngulfingEvent = {
-  time: number
-  direction: BaselineDirection
-  srcOpen: number
-  srcHigh: number
-  srcLow: number
-  srcClose: number
-  score: number
-}
 type KeyLevelBase = {
   lower: number
   upper: number
@@ -46,165 +33,6 @@ export type KeyLevelZone =
 const REGIME_KIJUN_PERIOD = 52
 const REGIME_ONSET_CONFIRMATION_BARS = 10
 const REGIME_ONSET_DOMINANCE = 0.70
-
-function quantile(values: readonly number[], q: number): number {
-  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b)
-  if (sorted.length === 0) return Number.NaN
-  const position = (sorted.length - 1) * q
-  const lower = Math.floor(position)
-  const fraction = position - lower
-  return sorted[lower]! + fraction * ((sorted[lower + 1] ?? sorted[lower]!) - sorted[lower]!)
-}
-
-function rollingQuantile(values: readonly number[], index: number, lookback: number, q: number) {
-  if (index < lookback) return Number.NaN
-  return quantile(values.slice(index - lookback, index), q)
-}
-
-type Features = {
-  body: number
-  range: number
-  bodyRatio: number
-  directionalClose: number
-  oppositeWickRatio: number
-  direction: -1 | 0 | 1
-}
-
-function features(bar: LightweightCandle): Features {
-  const range = bar.high - bar.low
-  const body = Math.abs(bar.close - bar.open)
-  const direction = bar.close > bar.open ? 1 : bar.close < bar.open ? -1 : 0
-  const closePosition = range > 0 ? (bar.close - bar.low) / range : Number.NaN
-  return {
-    body,
-    range,
-    bodyRatio: range > 0 ? body / range : Number.NaN,
-    directionalClose: direction > 0 ? closePosition : direction < 0 ? 1 - closePosition : Number.NaN,
-    oppositeWickRatio:
-      direction > 0
-        ? (bar.high - bar.close) / range
-        : direction < 0
-          ? (bar.close - bar.low) / range
-          : Number.NaN,
-    direction,
-  }
-}
-
-function forceScore(feature: Features, bodyFactor: number, rangeFactor: number): number {
-  return 100 * (
-    0.30 * Math.min(1, bodyFactor / 2.5) +
-    0.25 * Math.min(1, rangeFactor / 2.5) +
-    0.30 * Math.min(1, feature.bodyRatio / 0.85) +
-    0.15 * feature.directionalClose
-  )
-}
-
-export function calculateForceScores(bars: readonly LightweightCandle[]): ForceScorePoint[] {
-  const fs = bars.map(features)
-  const bodies = fs.map((item) => item.body)
-  const ranges = fs.map((item) => item.range)
-  const scores: ForceScorePoint[] = []
-  for (let i = 100; i < bars.length; i++) {
-    const feature = fs[i]!
-    if (feature.direction === 0) continue
-    const bodyBase = rollingQuantile(bodies, i, 100, 0.60)
-    const rangeBase = rollingQuantile(ranges, i, 100, 0.60)
-    if (!(bodyBase > 0) || !(rangeBase > 0)) continue
-    scores.push({
-      time: bars[i]!.time,
-      score: Math.max(0, Math.min(100, forceScore(feature, feature.body / bodyBase, feature.range / rangeBase))),
-      direction: feature.direction > 0 ? 'BULLISH' : 'BEARISH',
-    })
-  }
-  return scores
-}
-
-export function detectBaselineForce(bars: readonly LightweightCandle[]): BaselineForceEvent[] {
-  const fs = bars.map(features)
-  const bodies = fs.map((item) => item.body)
-  const ranges = fs.map((item) => item.range)
-  const events: BaselineForceEvent[] = []
-  for (let i = 100; i < bars.length; i++) {
-    const feature = fs[i]!
-    const bodyBase = rollingQuantile(bodies, i, 100, 0.60)
-    const rangeBase = rollingQuantile(ranges, i, 100, 0.60)
-    if (!(bodyBase > 0) || !(rangeBase > 0) || feature.direction === 0) continue
-    const bodyFactor = feature.body / bodyBase
-    const rangeFactor = feature.range / rangeBase
-    const score = forceScore(feature, bodyFactor, rangeFactor)
-    if (
-      feature.bodyRatio < 0.65 ||
-      bodyFactor < 1 ||
-      rangeFactor < 1 ||
-      feature.directionalClose < 0.80 ||
-      feature.oppositeWickRatio > 0.20 ||
-      score < 65
-    ) continue
-    const bar = bars[i]!
-    events.push({
-      eventId: i + 1,
-      time: bar.time,
-      direction: feature.direction > 0 ? 'BULLISH' : 'BEARISH',
-      srcOpen: bar.open,
-      srcHigh: bar.high,
-      srcLow: bar.low,
-      srcClose: bar.close,
-      score,
-    })
-  }
-  return events
-}
-
-export function detectBaselineEngulfing(bars: readonly LightweightCandle[]): BaselineEngulfingEvent[] {
-  const fs = bars.map(features)
-  const bodies = fs.map((item) => item.body)
-  const ranges = fs.map((item) => item.range)
-  const events: BaselineEngulfingEvent[] = []
-  for (let i = 101; i < bars.length; i++) {
-    const prior = bars[i - 1]!
-    const bar = bars[i]!
-    const f1 = fs[i - 1]!
-    const f2 = fs[i]!
-    if (f1.direction === 0 || f2.direction === 0 || f1.direction === f2.direction) continue
-    const bodyBase1 = rollingQuantile(bodies, i - 1, 100, 0.60)
-    const rangeBase1 = rollingQuantile(ranges, i - 1, 100, 0.60)
-    const bodyBase2 = rollingQuantile(bodies, i, 100, 0.60)
-    const rangeBase2 = rollingQuantile(ranges, i, 100, 0.60)
-    if (!(bodyBase1 > 0) || !(rangeBase1 > 0) || !(bodyBase2 > 0) || !(rangeBase2 > 0)) continue
-    const previousBodyFactor = f1.body / bodyBase1
-    if (previousBodyFactor < 0.5) continue
-    let penetration: number
-    if (f2.direction > 0) {
-      if (bar.open > prior.close) continue
-      const denominator = prior.open - prior.close
-      if (!(denominator > 0)) continue
-      penetration = (bar.close - prior.close) / denominator
-    } else {
-      if (bar.open < prior.close) continue
-      const denominator = prior.close - prior.open
-      if (!(denominator > 0)) continue
-      penetration = (prior.close - bar.close) / denominator
-    }
-    if (penetration < 0.60) continue
-    const bodyFactor = f2.body / bodyBase2
-    const rangeFactor = f2.range / rangeBase2
-    const score = forceScore(f2, bodyFactor, rangeFactor)
-    if (f2.bodyRatio < 0.55 || bodyFactor < 1 || rangeFactor < 1 || f2.directionalClose < 0.70 || score < 50) continue
-    const geometryScore = 100 * Math.max(0, Math.min(1, (penetration - 0.60) / 0.40))
-    const patternScore = 0.40 * geometryScore + 0.60 * score
-    if (patternScore < 60) continue
-    events.push({
-      time: bar.time,
-      direction: f2.direction > 0 ? 'BULLISH' : 'BEARISH',
-      srcOpen: bar.open,
-      srcHigh: bar.high,
-      srcLow: bar.low,
-      srcClose: bar.close,
-      score: patternScore,
-    })
-  }
-  return events
-}
 
 /**
  * Retrospective display-only onset estimation. This deliberately does not alter

@@ -17,6 +17,7 @@ test('defaultIndicatorsByPane: migrated indicators default on where supported', 
     assert.equal(map[id].regime, id === '15m' || id === '3m')
     assert.equal(map[id].force, true)
     assert.equal(map[id].engulfing, true)
+    assert.equal(map[id].doji, true)
     assert.equal(map[id].keyLevels, true)
   }
 })
@@ -57,6 +58,7 @@ test('paneIndicators unknown pane uses defaults', () => {
     regime: true,
     force: true,
     engulfing: true,
+    doji: true,
     keyLevels: true,
   })
 })

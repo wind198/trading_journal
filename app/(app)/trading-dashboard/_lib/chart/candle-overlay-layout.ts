@@ -6,6 +6,7 @@
 export const CANDLE_OVERLAY_STACK = {
   force: 0,
   engulfing: 1,
+  doji: 2,
 } as const
 
 export type CandleOverlayStackKey = keyof typeof CANDLE_OVERLAY_STACK

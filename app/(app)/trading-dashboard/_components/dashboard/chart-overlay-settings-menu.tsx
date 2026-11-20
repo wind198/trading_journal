@@ -113,6 +113,7 @@ const INDICATORS = [
   ['regime', 'Regime'],
   ['force', 'Force candles'],
   ['engulfing', 'Engulfing'],
+  ['doji', 'Doji'],
   ['keyLevels', 'Key levels'],
 ] as const
 

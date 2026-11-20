@@ -26,6 +26,7 @@ import {
 import { ichimokuForChart } from '../../_lib/chart/price-chart-ichimoku'
 import { bollinger, pricePoint, type BandLevel, type ChartType } from '../../_lib/chart/price-chart-series'
 import type { EngulfingOverlayEvent } from './_components/indicators/engulfing/engulfing-overlay-primitive'
+import type { DojiOverlayEvent } from './_components/indicators/doji/doji-overlay-primitive'
 import type { ForceOverlayEvent } from './_components/indicators/force/force-overlay-primitive'
 import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
 import type { ForceScorePoint, KeyLevelZone, RegimeSegment } from '../../_lib/overlays/baseline-indicators'
@@ -170,6 +171,7 @@ export function PriceChart({
   textAnchors = [],
   forceEvents = [],
   engulfingEvents = [],
+  dojiEvents = [],
   regimeSegments = [],
   keyLevels = [],
   forceScores = [],
@@ -208,6 +210,7 @@ export function PriceChart({
   textAnchors?: readonly TextAnchorDrawing[]
   forceEvents?: readonly ForceOverlayEvent[]
   engulfingEvents?: readonly EngulfingOverlayEvent[]
+  dojiEvents?: readonly DojiOverlayEvent[]
   regimeSegments?: readonly RegimeSegment[]
   keyLevels?: readonly KeyLevelZone[]
   forceScores?: readonly ForceScorePoint[]
@@ -591,6 +594,12 @@ export function PriceChart({
     if (!handle) return
     handle.indicators.setEngulfingEvents(engulfingEvents)
   }, [engulfingEvents, epoch])
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+    handle.indicators.setDojiEvents(dojiEvents)
+  }, [dojiEvents, epoch])
 
   useEffect(() => {
     const handle = handleRef.current

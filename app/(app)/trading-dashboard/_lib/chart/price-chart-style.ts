@@ -71,6 +71,11 @@ export const ENGULFING = {
   bearish: '#4F46E5',
 } as const
 
+export const DOJI = {
+  fill: 'rgba(148, 163, 184, 0.92)',
+  stroke: 'rgba(71, 85, 105, 0.85)',
+} as const
+
 /** Rolling tick volume profile (15m / 3m): right-side bars by price. */
 export const VOLUME_PROFILE = {
   bar: 'rgba(5, 15, 26, 0.16)',

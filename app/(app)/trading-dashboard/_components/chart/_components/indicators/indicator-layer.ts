@@ -11,6 +11,8 @@ import { MarketContextPrimitive } from './market-context/market-context-primitiv
 import type { KeyLevelZone, RegimeSegment } from '../../../../_lib/overlays/baseline-indicators'
 import type { ForceScorePoint } from '../../../../_lib/overlays/baseline-indicators'
 import { ForceScorePrimitive } from './force-score/force-score-primitive'
+import { DojiIndicator } from './doji/doji-indicator'
+import type { DojiOverlayEvent } from './doji/doji-overlay-primitive'
 
 /** Attaches indicators in the existing paint order and forwards their changing inputs. */
 export class IndicatorLayer {
@@ -18,6 +20,7 @@ export class IndicatorLayer {
   readonly forceScore = new ForceScorePrimitive()
   readonly force = new ForceIndicator()
   readonly engulfing = new EngulfingIndicator()
+  readonly doji = new DojiIndicator()
   readonly volumeProfile: VolumeProfileIndicator | null
   readonly sessionGrid: SessionGridIndicator | null
   private readonly detachCallbacks: (() => void)[] = []
@@ -34,6 +37,8 @@ export class IndicatorLayer {
     this.detachCallbacks.push(() => price.detachPrimitive(this.force.primitive))
     price.attachPrimitive(this.engulfing.primitive)
     this.detachCallbacks.push(() => price.detachPrimitive(this.engulfing.primitive))
+    price.attachPrimitive(this.doji.primitive)
+    this.detachCallbacks.push(() => price.detachPrimitive(this.doji.primitive))
     price.attachPrimitive(this.forceScore)
     this.detachCallbacks.push(() => price.detachPrimitive(this.forceScore))
 
@@ -62,6 +67,10 @@ export class IndicatorLayer {
 
   setEngulfingEvents(events: readonly EngulfingOverlayEvent[]): void {
     this.engulfing.setEvents(events)
+  }
+
+  setDojiEvents(events: readonly DojiOverlayEvent[]): void {
+    this.doji.setEvents(events)
   }
 
   setRegimeSegments(segments: readonly RegimeSegment[]): void {

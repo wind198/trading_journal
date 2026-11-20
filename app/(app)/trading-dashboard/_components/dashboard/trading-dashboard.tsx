@@ -60,6 +60,7 @@ import { useDebouncedDrawingPersist } from '../../_hooks/useDebouncedDrawingPers
 import {
   detectBaselineEngulfing,
   detectBaselineForce,
+  detectBaselineDoji,
   calculateForceScores,
   closedCandlesAt,
   detectKeyLevels,
@@ -376,6 +377,7 @@ function Dashboard() {
               showRegime={paneToggles.regime}
               showForce={paneToggles.force}
               showEngulfing={paneToggles.engulfing}
+              showDoji={paneToggles.doji}
               showKeyLevels={paneToggles.keyLevels}
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
@@ -433,6 +435,7 @@ function DashboardPane({
   showRegime,
   showForce,
   showEngulfing,
+  showDoji,
   showKeyLevels,
   onChartType,
   onToggleExpand,
@@ -453,6 +456,7 @@ function DashboardPane({
   showRegime: boolean
   showForce: boolean
   showEngulfing: boolean
+  showDoji: boolean
   showKeyLevels: boolean
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
@@ -541,6 +545,10 @@ function DashboardPane({
   const engulfingEvents = useMemo(
     () => showEngulfing ? detectBaselineEngulfing(closedBars) : [],
     [closedBars, showEngulfing],
+  )
+  const dojiEvents = useMemo(
+    () => (showDoji ? detectBaselineDoji(closedBars) : []),
+    [closedBars, showDoji],
   )
   const regimeSegments = useMemo(
     () => showRegime ? detectRegimeSegments(closedBars) : [],
@@ -1079,6 +1087,7 @@ function DashboardPane({
             forceEvents={forceEvents}
             forceScores={forceScores}
             engulfingEvents={engulfingEvents}
+            dojiEvents={dojiEvents}
             regimeSegments={regimeSegments}
             keyLevels={keyLevels}
             volumeProfile={volumeProfile}

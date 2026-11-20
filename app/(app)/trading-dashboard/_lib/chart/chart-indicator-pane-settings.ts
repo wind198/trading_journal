@@ -13,6 +13,7 @@ export type PaneIndicatorToggles = {
   regime: boolean
   force: boolean
   engulfing: boolean
+  doji: boolean
   keyLevels: boolean
 }
 
@@ -29,6 +30,7 @@ const PANE_DEFAULTS: PaneIndicatorToggles = {
   regime: true,
   force: true,
   engulfing: true,
+  doji: true,
   keyLevels: true,
 }
 
@@ -92,6 +94,7 @@ function parseIndicatorsByPane(
     if (typeof row.regime === 'boolean') out[id].regime = row.regime
     if (typeof row.force === 'boolean') out[id].force = row.force
     if (typeof row.engulfing === 'boolean') out[id].engulfing = row.engulfing
+    if (typeof row.doji === 'boolean') out[id].doji = row.doji
     if (typeof row.keyLevels === 'boolean') out[id].keyLevels = row.keyLevels
   }
 
