@@ -12,7 +12,8 @@ import { createAlertConfigDebouncer } from '../_lib/alerts/alert-config-debounce
 function sameConfig(a: AlertConfig, b: AlertConfig): boolean {
   return a.forceCandle === b.forceCandle &&
     a.doublePattern === b.doublePattern &&
-    a.engulfing === b.engulfing
+    a.engulfing === b.engulfing &&
+    a.doji === b.doji
 }
 
 export function useAlertConfig() {

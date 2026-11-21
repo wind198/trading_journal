@@ -230,6 +230,7 @@ export function ChartOverlaySettingsMenu({
             ['forceCandle', 'Force candle'],
             ['doublePattern', 'Double pattern'],
             ['engulfing', 'Engulfing'],
+            ['doji', 'High-quality Doji'],
           ] as const).map(([key, label]) => (
             <label key={key} className="flex items-center justify-between gap-4">
               <span>{label}</span>
