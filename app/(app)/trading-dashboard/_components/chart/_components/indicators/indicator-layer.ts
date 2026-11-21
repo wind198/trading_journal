@@ -13,6 +13,9 @@ import type { ForceScorePoint } from '../../../../_lib/overlays/baseline-indicat
 import { ForceScorePrimitive } from './force-score/force-score-primitive'
 import { DojiIndicator } from './doji/doji-indicator'
 import type { DojiOverlayEvent } from './doji/doji-overlay-primitive'
+import { DoublePatternPrimitive } from './double-pattern/double-pattern-primitive'
+import type { LightweightCandle } from '@/lib/ticks/candles'
+import type { DoublePattern } from '../../../../_lib/overlays/double-pattern'
 
 /** Attaches indicators in the existing paint order and forwards their changing inputs. */
 export class IndicatorLayer {
@@ -21,6 +24,7 @@ export class IndicatorLayer {
   readonly force = new ForceIndicator()
   readonly engulfing = new EngulfingIndicator()
   readonly doji = new DojiIndicator()
+  readonly doublePattern = new DoublePatternPrimitive()
   readonly volumeProfile: VolumeProfileIndicator | null
   readonly sessionGrid: SessionGridIndicator | null
   private readonly detachCallbacks: (() => void)[] = []
@@ -39,6 +43,8 @@ export class IndicatorLayer {
     this.detachCallbacks.push(() => price.detachPrimitive(this.engulfing.primitive))
     price.attachPrimitive(this.doji.primitive)
     this.detachCallbacks.push(() => price.detachPrimitive(this.doji.primitive))
+    price.attachPrimitive(this.doublePattern)
+    this.detachCallbacks.push(() => price.detachPrimitive(this.doublePattern))
     price.attachPrimitive(this.forceScore)
     this.detachCallbacks.push(() => price.detachPrimitive(this.forceScore))
 
@@ -71,6 +77,10 @@ export class IndicatorLayer {
 
   setDojiEvents(events: readonly DojiOverlayEvent[]): void {
     this.doji.setEvents(events)
+  }
+
+  setDoublePatterns(bars: readonly LightweightCandle[], patterns: readonly DoublePattern[]): void {
+    this.doublePattern.setData(bars, patterns)
   }
 
   setRegimeSegments(segments: readonly RegimeSegment[]): void {

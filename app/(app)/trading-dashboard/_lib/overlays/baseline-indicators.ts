@@ -159,15 +159,15 @@ export type KeyLevelDetectConfig = {
   lookbackBars: number
 }
 
-/** Mirrors the tuned settings in eurusd-zone-tuning-v4.json. */
+/** Mirrors trading_algorithms_python/trading_algorithms/price_zone.py. */
 const KEY_LEVEL_CONFIG: KeyLevelDetectConfig = {
-  atrPeriod: 10,
+  atrPeriod: 14,
   atrMultiplier: 0.35,
-  rangeMultiplier: 0.04,
+  rangeMultiplier: 0.06,
   bin: 0.1,
   smoothing: 0.4,
   separation: 1.5,
-  width: 0.5,
+  width: 0.4,
   maxZones: 7,
   reactionWeight: 0.55,
   pivot: 3,

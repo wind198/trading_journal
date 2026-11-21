@@ -18,6 +18,7 @@ test('defaultIndicatorsByPane: migrated indicators default on where supported', 
     assert.equal(map[id].force, true)
     assert.equal(map[id].engulfing, true)
     assert.equal(map[id].doji, true)
+    assert.equal(map[id].doublePattern, false)
     assert.equal(map[id].keyLevels, true)
   }
 })
@@ -50,6 +51,14 @@ test('parseOverlaySettings: partial pane map fills defaults', () => {
   assert.equal(parsed.indicatorsByPane['4h'].ichimoku, false)
 })
 
+test('double pattern knob persists per pane and defaults off elsewhere', () => {
+  const parsed = parseChartOverlaySettings(JSON.stringify({
+    indicatorsByPane: { '3m': { doublePattern: true } },
+  }))
+  assert.equal(parsed.indicatorsByPane['3m'].doublePattern, true)
+  assert.equal(parsed.indicatorsByPane['15m'].doublePattern, false)
+})
+
 test('paneIndicators unknown pane uses defaults', () => {
   const toggles = paneIndicators(DEFAULT_OVERLAY_SETTINGS, '5m')
   assert.deepEqual(toggles, {
@@ -59,6 +68,7 @@ test('paneIndicators unknown pane uses defaults', () => {
     force: true,
     engulfing: true,
     doji: true,
+    doublePattern: false,
     keyLevels: true,
   })
 })

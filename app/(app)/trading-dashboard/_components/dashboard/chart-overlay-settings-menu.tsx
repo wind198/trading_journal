@@ -29,6 +29,7 @@ import {
   type DashboardPaneId,
 } from '../../_lib/chart/chart-indicator-pane-settings'
 import type { Regime } from '../../_lib/overlays/baseline-indicators'
+import type { useAlertConfig } from '../../_hooks/useAlertConfig'
 
 export type { ChartOverlaySettings }
 
@@ -53,6 +54,7 @@ export function sessionSlotsEnabledSet(
 
 type ChartOverlaySettingsMenuProps = {
   settings: ChartOverlaySettings
+  alertConfig: ReturnType<typeof useAlertConfig>
   autoRegimesByPane: Partial<Record<DashboardPaneId, Regime | null>>
   onSettingsChange: (
     update: ChartOverlaySettings | ((current: ChartOverlaySettings) => ChartOverlaySettings),
@@ -114,11 +116,13 @@ const INDICATORS = [
   ['force', 'Force candles'],
   ['engulfing', 'Engulfing'],
   ['doji', 'Doji'],
+  ['doublePattern', 'Double pattern'],
   ['keyLevels', 'Key levels'],
 ] as const
 
 export function ChartOverlaySettingsMenu({
   settings,
+  alertConfig,
   autoRegimesByPane,
   onSettingsChange,
 }: ChartOverlaySettingsMenuProps) {
@@ -168,7 +172,7 @@ export function ChartOverlaySettingsMenu({
         })}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Indicators</DropdownMenuLabel>
-        {INDICATORS.map(([key, label]) => (
+        {/* {INDICATORS.map(([key, label]) => (
           <IndicatorBulkRow
             key={key}
             label={label}
@@ -183,7 +187,7 @@ export function ChartOverlaySettingsMenu({
             onAll={() => onSettingsChange((current) => setIndicatorAllPanes(current, key, true))}
             offAll={() => onSettingsChange((current) => setIndicatorAllPanes(current, key, false))}
           />
-        ))}
+        ))} */}
         <div
           className="grid grid-cols-[auto_repeat(4,1fr)] items-center gap-x-3 gap-y-2 px-2 py-2 text-xs text-muted-foreground"
           onPointerDown={(event) => event.stopPropagation()}
@@ -218,6 +222,37 @@ export function ChartOverlaySettingsMenu({
               ))}
             </div>
           ))}
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Alert config</DropdownMenuLabel>
+        <div className="space-y-2 px-2 py-2 text-xs" onPointerDown={(event) => event.stopPropagation()}>
+          {([
+            ['forceCandle', 'Force candle'],
+            ['doublePattern', 'Double pattern'],
+            ['engulfing', 'Engulfing'],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="flex items-center justify-between gap-4">
+              <span>{label}</span>
+              <Checkbox
+                checked={alertConfig.config[key]}
+                disabled={alertConfig.loading || alertConfig.saving || (alertConfig.error?.startsWith('Unable to load') ?? false)}
+                onCheckedChange={(checked) => alertConfig.setAlert(key, checked === true)}
+                aria-label={`${label} alert`}
+              />
+            </label>
+          ))}
+          {alertConfig.loading && <p className="text-muted-foreground">Loading alert config…</p>}
+          {alertConfig.saving && <p className="text-muted-foreground">Saving alert config…</p>}
+          {alertConfig.error && (
+            <div className="flex items-center gap-2 text-destructive" role="alert">
+              <span>{alertConfig.error}</span>
+              {alertConfig.error.startsWith('Unable to load') && (
+                <Button type="button" variant="ghost" size="xs" onClick={() => void alertConfig.reload()}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

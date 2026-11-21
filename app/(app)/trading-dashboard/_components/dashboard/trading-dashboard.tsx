@@ -26,6 +26,7 @@ import {
   useSessionSlotsEnabled,
 } from './chart-overlay-settings-menu'
 import { paneIndicators, regimeIndicatorVisibility } from '../../_lib/chart/chart-indicator-pane-settings'
+import { useAlertConfig } from '../../_hooks/useAlertConfig'
 import { PriceChart, type ChartType, type DrawTool } from '../chart/price-chart'
 import { DrawingLabelSession, type DrawingLabelState } from '../chart/_sessions/configure/drawing-label-session'
 import {
@@ -69,6 +70,7 @@ import {
   keyLevelVolumeBarCount,
 } from '../../_lib/overlays/baseline-indicators'
 import type { Regime } from '../../_lib/overlays/baseline-indicators'
+import { detectDoublePatterns, DOUBLE_PATTERN_CONFIG } from '../../_lib/overlays/double-pattern'
 import {
   calculateBaseLineBias,
   DEFAULT_BASE_LINE_BIAS_CONFIG,
@@ -93,6 +95,8 @@ import { buildVolumeProfile } from '../../_lib/chart/volume-profile'
 import {
   ArrowDown,
   ArrowUp,
+  ChartCandlestick,
+  ChartNoAxesCombined,
   Expand,
   Focus,
   Maximize2,
@@ -185,6 +189,7 @@ function Dashboard() {
   const [fullScreen, setFullScreen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const [overlaySettings, setOverlaySettings] = useChartOverlaySettings()
+  const alertConfig = useAlertConfig()
   const [autoRegimesByPane, setAutoRegimesByPane] = useState<Partial<Record<PaneId, Regime | null>>>({})
   const onPaneRegimeChange = useCallback((paneId: PaneId, regime: Regime | null) => {
     setAutoRegimesByPane((current) =>
@@ -238,9 +243,9 @@ function Dashboard() {
             {/* <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1> */}
           </div>
           <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+            {/* <Button variant="ghost" size="sm" onClick={() => void signOut()}>
               Sign out
-            </Button>
+            </Button> */}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -267,6 +272,7 @@ function Dashboard() {
                   aria-pressed={globalChartType === type.id}
                   onClick={() => setGlobalChartType(type.id)}
                 >
+                  {type.id === 'candlestick' ? <ChartCandlestick /> : <ChartNoAxesCombined />}
                   {type.label}
                 </Button>
               ))}
@@ -281,11 +287,12 @@ function Dashboard() {
                 <Focus />
               </Toggle>
             )}
-            <Button size="sm" variant="outline" onClick={() => setExecutionOpen(true)}>
+            {/* <Button size="sm" variant="outline" onClick={() => setExecutionOpen(true)}>
               Execute
-            </Button>
+            </Button> */}
             <ChartOverlaySettingsMenu
               settings={overlaySettings}
+              alertConfig={alertConfig}
               autoRegimesByPane={autoRegimesByPane}
               onSettingsChange={setOverlaySettings}
             />
@@ -378,6 +385,7 @@ function Dashboard() {
               showForce={paneToggles.force}
               showEngulfing={paneToggles.engulfing}
               showDoji={paneToggles.doji}
+              showDoublePattern={paneToggles.doublePattern}
               showKeyLevels={paneToggles.keyLevels}
               onChartType={(type) =>
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
@@ -436,6 +444,7 @@ function DashboardPane({
   showForce,
   showEngulfing,
   showDoji,
+  showDoublePattern,
   showKeyLevels,
   onChartType,
   onToggleExpand,
@@ -457,6 +466,7 @@ function DashboardPane({
   showForce: boolean
   showEngulfing: boolean
   showDoji: boolean
+  showDoublePattern: boolean
   showKeyLevels: boolean
   onChartType: (type: ChartType) => void
   onToggleExpand: () => void
@@ -549,6 +559,13 @@ function DashboardPane({
   const dojiEvents = useMemo(
     () => (showDoji ? detectBaselineDoji(closedBars) : []),
     [closedBars, showDoji],
+  )
+  const doublePatterns = useMemo(
+    () => showDoublePattern
+      ? detectDoublePatterns(closedBars).filter((pattern) =>
+        pattern.state === 'CONFIRMED' && pattern.score >= DOUBLE_PATTERN_CONFIG.minScore)
+      : [],
+    [closedBars, showDoublePattern],
   )
   const regimeSegments = useMemo(
     () => showRegime ? detectRegimeSegments(closedBars) : [],
@@ -911,6 +928,7 @@ function DashboardPane({
                 variant={chartType === type.id ? 'default' : 'outline'}
                 onClick={() => onChartType(type.id)}
               >
+                {type.id === 'candlestick' ? <ChartCandlestick /> : <ChartNoAxesCombined />}
                 {type.label}
               </Button>
             ))}
@@ -1088,6 +1106,7 @@ function DashboardPane({
             forceScores={forceScores}
             engulfingEvents={engulfingEvents}
             dojiEvents={dojiEvents}
+            doublePatterns={doublePatterns}
             regimeSegments={regimeSegments}
             keyLevels={keyLevels}
             volumeProfile={volumeProfile}

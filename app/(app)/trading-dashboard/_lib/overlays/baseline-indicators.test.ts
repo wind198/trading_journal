@@ -73,15 +73,15 @@ test('v4 detector returns no zones when ATR and window range are zero', () => {
   assert.deepEqual(detectKeyLevels(bars), [])
 })
 
-test('key level config matches the exported EURUSD v4 tuning settings', () => {
+test('key level config matches Python Price Zone v4 tuning settings', () => {
   assert.deepEqual(keyLevelDetectConfig(), {
-    atrPeriod: 10,
+    atrPeriod: 14,
     atrMultiplier: 0.35,
-    rangeMultiplier: 0.04,
+    rangeMultiplier: 0.06,
     bin: 0.1,
     smoothing: 0.4,
     separation: 1.5,
-    width: 0.5,
+    width: 0.4,
     maxZones: 7,
     reactionWeight: 0.55,
     pivot: 3,
@@ -109,6 +109,23 @@ test('v4 detector returns separated, sorted boundary and density zones', () => {
   assert.ok(zones.some((zone) => zone.type === 'Boundary'))
   assert.ok(zones.some((zone) => zone.type === 'Density'))
   assert.ok(zones.filter((zone) => zone.type === 'Boundary').length <= 2)
+  const pythonZones = [
+    ['Boundary', 1.11802, 1.11798424, 1.11805576, 1],
+    ['Density', 1.1193595199999935, 1.1192164799999935, 1.1195025599999935, 0.9629052594341072],
+    ['Density', 1.1204323199999935, 1.1202892799999935, 1.1205753599999935, 0.9955223501049116],
+    ['Density', 1.1215766399999936, 1.1214335999999936, 1.1217196799999936, 0.9702410197397714],
+    ['Density', 1.1226136799999935, 1.1224706399999935, 1.1227567199999935, 0.9482600310142777],
+    ['Boundary', 1.12398, 1.12394424, 1.12401576, 1],
+  ] as const
+  assert.equal(zones.length, pythonZones.length)
+  zones.forEach((zone, index) => {
+    const [type, center, lower, upper, score] = pythonZones[index]!
+    assert.equal(zone.type, type)
+    assert.ok(Math.abs(zone.center - center) < 1e-9)
+    assert.ok(Math.abs(zone.lower - lower) < 1e-9)
+    assert.ok(Math.abs(zone.upper - upper) < 1e-9)
+    assert.ok(Math.abs(zone.score - score) < 1e-9)
+  })
   assert.deepEqual(zones.map((zone) => zone.center), [...zones].map((zone) => zone.center).sort((a, b) => a - b))
   for (let i = 1; i < zones.length; i++) {
     const previous = zones[i - 1]!
