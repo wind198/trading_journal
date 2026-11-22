@@ -15,7 +15,6 @@ export const DEFAULT_ALERT_CONFIG: AlertConfig = {
 }
 
 type AlertConfigRow = {
-  created_at: string
   force_candle: boolean
   double_pattern: boolean
   engulfing: boolean
@@ -31,35 +30,53 @@ function fromRow(row: AlertConfigRow): AlertConfig {
   }
 }
 
-async function loadFirstRow(supabase: ReturnType<typeof createClient>): Promise<AlertConfigRow | null> {
+async function requireAuthenticated(supabase: ReturnType<typeof createClient>): Promise<string> {
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error || !user) throw new Error('Sign in to edit alert config')
+  return user.id
+}
+
+export async function loadAlertConfigWithClient(
+  supabase: ReturnType<typeof createClient>,
+): Promise<AlertConfig> {
+  const userId = await requireAuthenticated(supabase)
   const { data, error } = await supabase
     .from('alert_config')
-    .select('created_at, force_candle, double_pattern, engulfing, doji')
-    .order('created_at', { ascending: true })
-    .limit(1)
+    .select('force_candle, double_pattern, engulfing, doji')
+    .eq('user_id', userId)
     .maybeSingle()
   if (error) throw error
-  return data
+  return data ? fromRow(data as AlertConfigRow) : { ...DEFAULT_ALERT_CONFIG }
 }
 
 export async function loadAlertConfig(): Promise<AlertConfig> {
-  const row = await loadFirstRow(createClient())
-  return row ? fromRow(row) : { ...DEFAULT_ALERT_CONFIG }
+  return loadAlertConfigWithClient(createClient())
 }
 
 export async function saveAlertConfig(config: AlertConfig): Promise<void> {
-  const supabase = createClient()
-  const row = await loadFirstRow(supabase)
+  await saveAlertConfigWithClient(createClient(), config)
+}
+
+export async function saveAlertConfigWithClient(
+  supabase: ReturnType<typeof createClient>,
+  config: AlertConfig,
+): Promise<void> {
+  const userId = await requireAuthenticated(supabase)
+
   const values = {
+    user_id: userId,
     force_candle: config.forceCandle,
     double_pattern: config.doublePattern,
     engulfing: config.engulfing,
     doji: config.doji,
     updated_at: new Date().toISOString(),
   }
-  const table = supabase.from('alert_config')
-  const { error } = row
-    ? await table.update(values).eq('created_at', row.created_at)
-    : await table.insert(values)
+
+  const { error } = await supabase
+    .from('alert_config')
+    .upsert(values, { onConflict: 'user_id' })
+    .select('user_id')
+    .single()
+
   if (error) throw error
 }

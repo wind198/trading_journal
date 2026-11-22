@@ -236,7 +236,7 @@ export function ChartOverlaySettingsMenu({
               <span>{label}</span>
               <Checkbox
                 checked={alertConfig.config[key]}
-                disabled={alertConfig.loading || alertConfig.saving || (alertConfig.error?.startsWith('Unable to load') ?? false)}
+                disabled={alertConfig.loading || alertConfig.saving || alertConfig.error === 'Sign in to edit alert config' || (alertConfig.error?.startsWith('Unable to load') ?? false)}
                 onCheckedChange={(checked) => alertConfig.setAlert(key, checked === true)}
                 aria-label={`${label} alert`}
               />

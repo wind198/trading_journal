@@ -1,13 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDebounceCallback } from 'usehooks-ts'
 import {
   DEFAULT_ALERT_CONFIG,
   loadAlertConfig,
   saveAlertConfig,
   type AlertConfig,
 } from '../_lib/alerts/alert-config'
-import { createAlertConfigDebouncer } from '../_lib/alerts/alert-config-debounce'
 
 function sameConfig(a: AlertConfig, b: AlertConfig): boolean {
   return a.forceCandle === b.forceCandle &&
@@ -23,6 +23,20 @@ export function useAlertConfig() {
   const [error, setError] = useState<string | null>(null)
   const lastSaved = useRef<AlertConfig>(DEFAULT_ALERT_CONFIG)
 
+  const persist = useCallback((next: AlertConfig) => {
+    setSaving(true)
+    void saveAlertConfig(next)
+      .then(() => { lastSaved.current = next })
+      .catch((cause: unknown) => {
+        setConfig(lastSaved.current)
+        setError(cause instanceof Error && cause.message === 'Sign in to edit alert config'
+          ? cause.message
+          : 'Unable to save alert config. Your changes were restored.')
+      })
+      .finally(() => setSaving(false))
+  }, [])
+  const debouncedPersist = useDebounceCallback(persist, 2_000)
+
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -30,8 +44,10 @@ export function useAlertConfig() {
       const loaded = await loadAlertConfig()
       lastSaved.current = loaded
       setConfig(loaded)
-    } catch {
-      setError('Unable to load alert config. Try again.')
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message === 'Sign in to edit alert config'
+        ? cause.message
+        : 'Unable to load alert config. Try again.')
     } finally {
       setLoading(false)
     }
@@ -41,19 +57,9 @@ export function useAlertConfig() {
 
   useEffect(() => {
     if (loading || saving || error || sameConfig(config, lastSaved.current)) return
-    const debouncer = createAlertConfigDebouncer(() => {
-      setSaving(true)
-      void saveAlertConfig(config)
-        .then(() => { lastSaved.current = config })
-        .catch(() => {
-          setConfig(lastSaved.current)
-          setError('Unable to save alert config. Your changes were restored.')
-        })
-        .finally(() => setSaving(false))
-    })
-    debouncer.schedule()
-    return () => debouncer.cancel()
-  }, [config, loading, saving, error])
+    debouncedPersist(config)
+    return () => debouncedPersist.cancel()
+  }, [config, loading, saving, error, debouncedPersist])
 
   const setAlert = useCallback((key: keyof AlertConfig, enabled: boolean) => {
     setError(null)
