@@ -5,6 +5,7 @@ export type DashboardNote = {
   symbol: string
   title: string
   body: string
+  pinned: boolean
   createdAt: string
   updatedAt: string
 }
@@ -14,11 +15,12 @@ type DashboardNoteRow = {
   symbol: string
   title: string
   body: string
+  pinned: boolean
   created_at: string
   updated_at: string
 }
 
-const NOTE_SELECT = 'id, symbol, title, body, created_at, updated_at'
+const NOTE_SELECT = 'id, symbol, title, body, pinned, created_at, updated_at'
 
 function rowToNote(row: DashboardNoteRow): DashboardNote {
   return {
@@ -26,9 +28,17 @@ function rowToNote(row: DashboardNoteRow): DashboardNote {
     symbol: row.symbol,
     title: row.title,
     body: row.body,
+    pinned: row.pinned,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+}
+
+export function sortNotes(notes: DashboardNote[]): DashboardNote[] {
+  return [...notes].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+    return b.createdAt.localeCompare(a.createdAt)
+  })
 }
 
 export async function loadDashboardNotes(): Promise<DashboardNote[]> {
@@ -38,7 +48,7 @@ export async function loadDashboardNotes(): Promise<DashboardNote[]> {
     .select(NOTE_SELECT)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data as DashboardNoteRow[] | null)?.map(rowToNote) ?? []
+  return sortNotes((data as DashboardNoteRow[] | null)?.map(rowToNote) ?? [])
 }
 
 export async function insertDashboardNote(input: {
@@ -60,6 +70,7 @@ export async function insertDashboardNote(input: {
         symbol: input.symbol,
         title: input.title,
         body: input.body ?? '',
+        pinned: false,
       },
     ])
     .select(NOTE_SELECT)
@@ -70,14 +81,15 @@ export async function insertDashboardNote(input: {
 
 export async function updateDashboardNote(
   id: string,
-  input: { title?: string; body?: string },
+  input: { title?: string; body?: string; pinned?: boolean },
 ): Promise<void> {
   const supabase = createClient()
-  const payload: Record<string, string> = {
+  const payload: Record<string, string | boolean> = {
     updated_at: new Date().toISOString(),
   }
   if (input.title !== undefined) payload.title = input.title
   if (input.body !== undefined) payload.body = input.body
+  if (input.pinned !== undefined) payload.pinned = input.pinned
   const { error } = await supabase.from('dashboard_notes').update(payload).eq('id', id)
   if (error) throw error
 }

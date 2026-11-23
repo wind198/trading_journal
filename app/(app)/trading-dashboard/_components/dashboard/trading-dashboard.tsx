@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
-import { NotesSidebar } from '../notes/notes-sidebar'
+import { DASHBOARD_NOTES_QUERY_KEY, NotesSidebar } from '../notes/notes-sidebar'
+import { loadDashboardNotes } from '../../_lib/notes/dashboard-notes'
 import { GuidesSidebar } from '../guides/guides-sidebar'
 import { NonTradeWarningBanner } from './non-trade-warning-banner'
 import { ExecutionOrderDrawer } from '../execution/execution-order-drawer'
@@ -197,6 +198,18 @@ function Dashboard() {
     )
   }, [])
   const [notesOpen, setNotesOpen] = useState(false)
+  const didAutoOpenNotesRef = useRef(false)
+  const notesQuery = useQuery({
+    queryKey: DASHBOARD_NOTES_QUERY_KEY,
+    queryFn: loadDashboardNotes,
+  })
+  useEffect(() => {
+    if (didAutoOpenNotesRef.current) return
+    if (!notesQuery.isSuccess) return
+    if (!notesQuery.data.some((note) => note.pinned)) return
+    didAutoOpenNotesRef.current = true
+    setNotesOpen(true)
+  }, [notesQuery.isSuccess, notesQuery.data])
   const [guidesOpen, setGuidesOpen] = useState(false)
   const [executionOpen, setExecutionOpen] = useState(false)
   const [marketReloading, setMarketReloading] = useState(false)
