@@ -1,10 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
 import {
@@ -15,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
 import { DASHBOARD_NOTES_QUERY_KEY, NotesSidebar } from '../notes/notes-sidebar'
 import { loadDashboardNotes } from '../../_lib/notes/dashboard-notes'
 import { GuidesSidebar } from '../guides/guides-sidebar'
@@ -221,7 +218,6 @@ function Dashboard() {
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
   const [globalChartType, setGlobalChartType] = useState<ChartType>('candlestick')
   const queryClient = useQueryClient()
-  const router = useRouter()
   const visiblePanes =
     expanded == null && focusMode
       ? PANES.filter((pane) =>
@@ -229,11 +225,6 @@ function Dashboard() {
         )
       : PANES
   const sessionSlotEnabled = useSessionSlotsEnabled(overlaySettings.sessionSlots)
-
-  const signOut = async () => {
-    await createClient().auth.signOut()
-    router.push('/login')
-  }
 
   const reloadMarketData = async () => {
     if (marketReloading) return
@@ -248,17 +239,14 @@ function Dashboard() {
   }
 
   return (
-    <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-background">
+    <div data-workspace-fullscreen={fullScreen ? "true" : undefined} className="relative flex h-full min-h-0 flex-col overflow-hidden overscroll-none bg-background">
       {!fullScreen && (
-        <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-2 py-1.5 sm:gap-2 sm:px-3">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <AppNavLinks className="shrink-0" />
-            {/* <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1> */}
+        <header className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-card px-2 py-1 sm:px-3">
+          <div className="flex shrink-0 items-center gap-2 text-xs font-medium">
+            <span>EURUSD</span>
+            <span className="hidden text-muted-foreground lg:inline">Workspace</span>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-            {/* <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-              Sign out
-            </Button> */}
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
             <Button
               variant="ghost"
               size="icon-sm"
@@ -355,10 +343,10 @@ function Dashboard() {
         <div
           className={
             expanded
-              ? 'flex h-full min-h-0 overflow-hidden p-2'
+              ? 'flex h-full min-h-0 overflow-hidden p-1'
               : focusMode
-                ? 'grid h-full min-h-0 grid-cols-1 grid-rows-2 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-1'
-                : 'grid h-full min-h-0 grid-cols-1 grid-rows-4 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2'
+                ? 'grid h-full min-h-0 grid-cols-1 grid-rows-2 gap-1 overflow-hidden p-1 md:grid-cols-2 md:grid-rows-1'
+                : 'grid h-full min-h-0 grid-cols-1 grid-rows-4 gap-1 overflow-hidden p-1 md:grid-cols-2 md:grid-rows-2'
           }
         >
         {visiblePanes.map((pane) => {
@@ -905,8 +893,8 @@ function DashboardPane({
     <section
       className={
         isExpanded
-          ? 'relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-border'
-          : 'relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-border'
+          ? 'relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-sm border border-border'
+          : 'relative flex min-h-0 flex-col overflow-hidden rounded-sm border border-border'
       }
     >
       <div
