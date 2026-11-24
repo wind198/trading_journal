@@ -168,3 +168,28 @@
 
 /* Inset outline does not change the chart grid dimensions. */
 [data-active-chart="true"]::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--primary); pointer-events: none; z-index: 15; }
+
+/* Keep fullscreen exit outside the scroll region, even at 320px. */
+.workspace-toolbar { min-height: 37px; padding-inline: max(4px, env(safe-area-inset-left)) max(4px, env(safe-area-inset-right)); }
+.workspace-toolbar-scroll { scrollbar-width: none; overscroll-behavior-x: contain; }
+.workspace-toolbar-scroll::-webkit-scrollbar { display: none; }
+.workspace-fullscreen-button { margin-inline-start: 2px; }
+.workspace-active-timeframe { font-variant-numeric: tabular-nums; }
+.app-shell { padding-bottom: env(safe-area-inset-bottom); }
+@media (max-width: 767px), (max-height: 500px) {
+  .workspace-symbol { display: none; }
+  .workspace-toolbar-scroll { gap: 2px; }
+  .workspace-toolbar-scroll > div { gap: 2px; }
+  .workspace-toolbar-scroll [data-slot="button"], .workspace-fullscreen-button { min-width: 36px; min-height: 36px; }
+  .workspace-pane-label { min-height: 28px; min-width: 32px; }
+  .workspace-pane-expand { width: 36px; height: 36px; }
+  .workspace-drawing-menu [role="menuitem"] { min-height: 36px; }
+  .workspace-inspector { width: min(100%, 24rem); }
+  .workspace-inspector-header { min-height: 40px; }
+  .workspace-inspector-tabs [role="tab"] { min-height: 44px; }
+  .workspace-inspector textarea, .workspace-inspector input { font-size: 16px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .workspace-inspector { width: min(100%, 22rem); }
+  .workspace-inspector-tabs [role="tab"] { min-height: 36px; }
+}

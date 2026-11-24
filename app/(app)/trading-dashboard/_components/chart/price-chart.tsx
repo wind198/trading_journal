@@ -1090,8 +1090,8 @@ export function PriceChart({
           type="button"
           variant="secondary"
           size="icon-lg"
-          className="absolute right-3 bottom-3 z-20 size-11 shadow-md"
-          aria-label="Cancel drawing"
+          className="workspace-drawing-cancel absolute right-1 bottom-1 z-20 size-9 shadow-sm"
+          aria-label={measureActive ? "Cancel measurement" : "Cancel drawing"}
           onPointerDown={(event) => {
             event.stopPropagation()
           }}

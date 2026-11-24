@@ -1,0 +1,5 @@
+# Mobile workspace refinement — PR 06
+
+Keep two/four panes visible and the compact toolbar in fullscreen. The fullscreen button is outside the scrollable toolbar so it remains reachable at narrow widths. The active timeframe replaces the repeated symbol label on compact viewports; drawing trigger reflects the selected tool. Pane overlay controls are above the drawing canvas, and touch cancel is a compact floating control. Inspector opens on demand, cancels armed tools and suppresses global chart keyboard deletion while open. Inspector focus restoration avoids scrolling; tabs and menu items have larger touch targets, notes input uses 16px text to avoid common iOS focus zoom. Safe-area padding accounts for device insets. No new dependencies, algorithms, data contracts or layout persistence changes.
+
+Regression checklist: 320×568, 390×844, 844×390, tablet; both layouts and fullscreen; horizontal toolbar scrolling while exit stays visible; active timeframe change; touch drawing and cancel; inspector open/close, notes editing, Escape, and keyboard delete isolation. Validate browser/device behavior; no browser checks claimed.
