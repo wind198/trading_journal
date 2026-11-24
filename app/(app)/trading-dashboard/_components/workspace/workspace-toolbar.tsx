@@ -55,7 +55,7 @@ export function WorkspaceToolbar({
                     {focusMode ? '2' : '4'}<span className="hidden lg:inline"> charts</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-auto max-h-[75dvh] overflow-y-auto p-2">
+                <PopoverContent align="end" className="w-auto min-w-20 max-h-[75dvh] overflow-y-auto p-2">
                   <div className="flex gap-1 px-2 pb-1">
                     <Button size="sm" variant={!focusMode ? 'default' : 'outline'} aria-pressed={!focusMode} onClick={() => onFocusChange(false)}>4 charts</Button>
                     <Button size="sm" variant={focusMode ? 'default' : 'outline'} aria-pressed={focusMode} onClick={() => onFocusChange(true)}>2 charts</Button>

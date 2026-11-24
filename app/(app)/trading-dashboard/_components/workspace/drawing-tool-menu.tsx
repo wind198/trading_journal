@@ -31,8 +31,8 @@ export function DrawingToolMenu({ paneId, mode, onMode, favorites, onToggleFavor
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="workspace-drawing-menu max-h-[min(70dvh,28rem)] overflow-y-auto overscroll-contain">
-        <DropdownMenuItem onSelect={onToggleFavorites}><Star />{favorites.visible ? 'Hide favorites toolbar' : 'Show favorites toolbar'}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={onEditFavorites}>Customize favorites…</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onToggleFavorites}>{favorites.visible ? 'Hide favorites' : 'Show favorites'}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onEditFavorites}>Customize</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Draw on {paneId.toUpperCase()}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => onMode({ kind: 'idle' })}><MousePointer2 />Cursor / cancel</DropdownMenuItem>
