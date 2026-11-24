@@ -22,28 +22,29 @@ export function WorkspaceInspector({ open, tab, onTab, onClose, activePane, sett
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
+  const inspectorRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!open) return
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    closeRef.current?.focus()
-    return () => { previousFocus.current?.focus() }
+    closeRef.current?.focus({ preventScroll: true })
+    return () => { previousFocus.current?.focus({ preventScroll: true }) }
   }, [open])
   return (
-    <aside hidden={!open} aria-label="Workspace inspector" id="workspace-inspector"
-      className={open ? "absolute inset-y-0 right-0 z-30 flex w-80 max-w-full flex-col border-l bg-background shadow-lg" : "hidden"}
-      onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.stopPropagation(); onClose() } }}>
-      <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
+    <aside ref={inspectorRef} hidden={!open} aria-label="Workspace inspector" id="workspace-inspector"
+      className={open ? "workspace-inspector absolute inset-y-0 right-0 z-30 flex w-80 max-w-full flex-col border-l bg-background shadow-lg" : "hidden"}
+      onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); onClose() } }}>
+      <div className="workspace-inspector-header flex h-9 shrink-0 items-center justify-between border-b px-2">
         <span className="text-xs font-semibold">Inspector · {activePane.toUpperCase()}</span>
         <Button ref={closeRef} variant="ghost" size="icon-sm" aria-label="Close inspector" onClick={onClose}><X /></Button>
       </div>
       <Tabs.Root value={tab} onValueChange={value => onTab(value as InspectorTab)} className="flex min-h-0 flex-1 flex-col">
-        <Tabs.List className="grid shrink-0 grid-cols-5 border-b" aria-label="Inspector sections">
+        <Tabs.List className="workspace-inspector-tabs grid shrink-0 grid-cols-5 border-b" aria-label="Inspector sections">
           {tabs.map(({id, label, icon: Icon}) => <Tabs.Trigger key={id} value={id} title={label} aria-label={label}
             className="flex h-10 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-primary">
             <Icon className="size-4" aria-hidden />{label}
           </Tabs.Trigger>)}
         </Tabs.List>
-        <Tabs.Content value="market" className="min-h-0 flex-1 overflow-y-auto p-3">
+        <Tabs.Content value="market" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
           <h3 className="text-sm font-semibold">{SYMBOL} · Market regime</h3>
           <div className="mt-2 divide-y">
             {PANES.map(pane => <div key={pane.id} className="flex items-center justify-between py-2 text-xs">

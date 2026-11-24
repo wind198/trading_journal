@@ -33,10 +33,10 @@ export function DrawingToolMenu({ paneId, mode, onMode, disabled }: {
       <DropdownMenuTrigger asChild>
         <Button variant={active ? 'default' : 'ghost'} size="icon-sm" className="size-9" disabled={disabled}
           aria-label={label + ' — ' + paneId.toUpperCase()} title={label + ' — ' + paneId.toUpperCase()}>
-          {mode.kind === 'measure' ? <Ruler /> : <Pencil />}
+          {mode.kind === 'measure' ? <Ruler /> : mode.kind === 'draw' ? (() => { const Icon = TOOLS.find(t => t.tool === mode.tool)?.icon ?? Pencil; return <Icon /> })() : <Pencil />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-h-[min(70dvh,28rem)] overflow-y-auto">
+      <DropdownMenuContent align="end" className="workspace-drawing-menu max-h-[min(70dvh,28rem)] overflow-y-auto overscroll-contain">
         <DropdownMenuLabel>Draw on {paneId.toUpperCase()}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => onMode({ kind: 'idle' })}><MousePointer2 />Cursor / cancel</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onMode({ kind: 'measure' })}><Ruler />Measure{mode.kind === 'measure' && <Check className="ml-auto" />}</DropdownMenuItem>

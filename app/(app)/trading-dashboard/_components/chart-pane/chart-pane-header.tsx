@@ -54,14 +54,14 @@ export function ChartPaneHeader({
     <div
         className={
           compact
-            ? 'pointer-events-none absolute inset-x-0.5 top-0.5 z-10 flex items-start justify-between'
+            ? 'workspace-pane-overlay pointer-events-none absolute inset-x-0.5 top-0.5 z-20 flex items-start justify-between'
             : 'flex min-w-0 shrink-0 items-center gap-1 border-b border-border px-1'
         }
       >
         <button type="button" aria-label={'Activate ' + pane.label + ' chart'} aria-pressed={active} onClick={onActivate}
           className={
             compact
-              ? 'pointer-events-auto flex min-h-6 items-center gap-1 rounded bg-background/90 px-1 text-[11px] font-medium'
+              ? 'workspace-pane-label pointer-events-auto flex min-h-6 items-center gap-1 rounded bg-background/90 px-1 text-[11px] font-medium'
               : 'flex shrink-0 items-center gap-1 text-xs font-medium'
           }
         >
@@ -93,7 +93,7 @@ export function ChartPaneHeader({
           <Button
             variant="ghost"
             size={compact ? 'icon-sm' : 'icon'}
-            className={compact ? 'size-8 bg-background/80' : 'sticky right-0 ml-auto bg-background'}
+            className={compact ? 'workspace-pane-expand size-8 bg-background/90' : 'sticky right-0 ml-auto bg-background'}
             aria-label={isExpanded ? 'Collapse window' : 'Expand window'}
             onClick={onToggleExpand}
           >

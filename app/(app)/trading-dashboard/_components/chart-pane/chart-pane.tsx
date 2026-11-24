@@ -27,7 +27,7 @@ import { ChartPaneHeader } from './chart-pane-header'
 
 export function ChartPane({
   pane,
-  active, drawingMode, onActivate, onCancelMode,
+  active, keyboardEnabled, drawingMode, onActivate, onCancelMode,
   isExpanded,
   compact,
   chartType,
@@ -51,6 +51,7 @@ export function ChartPane({
 }: {
   pane: PaneDefinition
   active: boolean
+  keyboardEnabled: boolean
   drawingMode: DrawingMode
   onActivate: () => void
   onCancelMode: (kind: DrawingMode['kind']) => void
@@ -523,7 +524,7 @@ export function ChartPane({
             sessionSlotEnabled={sessionSlotEnabled}
             showBollinger={indicatorVisibility.bollinger}
             showIchimoku={indicatorVisibility.ichimoku}
-            keyboardActive={active}
+            keyboardActive={active && keyboardEnabled}
             drawTool={drawTool}
             measureActive={measureActive}
             onDrawingComplete={onDrawingComplete}

@@ -98,7 +98,7 @@ export function TradingWorkspace() {
           onReloadMarketData={() => void reloadMarketData()}
           onResetLayout={() => setResetLayoutEpoch(current => current + 1)}
           onChartTypeChange={setGlobalChartType}
-          onToggleInspector={() => setInspector(toggleInspector)}
+          onToggleInspector={() => { setDrawingControl(current => ({ ...current, mode: IDLE_MODE })); setInspector(toggleInspector) }}
           onFullscreen={() => setFullScreen(current => !current)}
         />
       {!fullScreen && <NonTradeWarningBanner />}
@@ -121,6 +121,7 @@ export function TradingWorkspace() {
               key={pane.id}
               pane={pane}
               active={control.paneId === pane.id}
+              keyboardEnabled={!inspector.open}
               drawingMode={control.paneId === pane.id ? control.mode : IDLE_MODE}
               onActivate={() => selectPane(pane.id)}
               onCancelMode={(kind) => setDrawingControl(current => cancelPaneMode(current, pane.id, kind))}

@@ -35,10 +35,12 @@ export function WorkspaceToolbar({
   onFullscreen: () => void
 }) {
   return (
-    <header className="workspace-toolbar flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-1 sm:px-2">
+    <header className="workspace-toolbar flex min-w-0 shrink-0 items-center gap-0 border-b border-border bg-card">
+          <div className="workspace-toolbar-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {!fullScreen && <div className="workspace-app-menu hidden shrink-0"><AppMenu /></div>}
           <div className="flex shrink-0 items-center gap-1 text-xs font-medium">
-            <span>{SYMBOL}</span>
+            <span className="workspace-symbol">{SYMBOL}</span>
+            <span className="workspace-active-timeframe rounded bg-primary/10 px-1 py-0.5 text-primary" aria-label={"Active chart " + drawingControl.paneId}>{drawingControl.paneId.toUpperCase()}</span>
             
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
@@ -89,10 +91,13 @@ export function WorkspaceToolbar({
               <PanelRight />
             </Button>
             
-            <Button
+
+          </div>
+          </div>
+          <Button
               variant="ghost"
               size="icon-sm"
-              className="size-9"
+              className="workspace-fullscreen-button size-9 shrink-0"
               aria-label={fullScreen ? "Exit fullscreen" : "Enter fullscreen"}
               title={fullScreen ? "Exit fullscreen" : "Enter fullscreen"}
               aria-pressed={fullScreen}
@@ -100,7 +105,6 @@ export function WorkspaceToolbar({
             >
               {fullScreen ? <Shrink /> : <Expand />}
             </Button>
-          </div>
         </header>
   )
 }
