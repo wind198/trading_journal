@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { registerChartScreenshot } from '../../_lib/workspace/chart-screenshot-source'
 import type { IChartApi, ITimeScaleApi, LogicalRange, Time } from 'lightweight-charts'
 import { useDebounceCallback } from 'usehooks-ts'
 import { Button } from '@/components/ui/button'
@@ -424,6 +425,7 @@ export function PriceChart({
     const el = ref.current
     if (!el) return
 
+    let unregisterScreenshot: (() => void) | undefined
     let cancelled = false
     let createdChart: IChartApi | null = null
     let removePointerHandlers: (() => void) | null = null
@@ -447,6 +449,7 @@ export function PriceChart({
       }
 
       handleRef.current = handle
+      unregisterScreenshot = registerChartScreenshot(el, () => handle.chart.takeScreenshot(true, false))
       syncDrawingBars(handle, candlesRef.current)
       removePointerHandlers = bindPriceChartInteraction({
         handle,
@@ -510,6 +513,7 @@ export function PriceChart({
     })
 
     return () => {
+      unregisterScreenshot?.()
       cancelled = true
       persistViewportRef.current.flush()
       unsubscribeRange?.()
@@ -1075,7 +1079,7 @@ export function PriceChart({
       className="relative h-full min-h-0 w-full"
       style={drawTool || measureActive ? { overscrollBehavior: 'none' } : undefined}
     >
-      <div ref={ref} className="h-full min-h-0 w-full" />
+      <div ref={ref} data-chart-screenshot-host className="h-full min-h-0 w-full" />
       <div
         ref={drawOverlayRef}
         className={`absolute inset-0 z-10 touch-none${drawTool || measureActive ? ' cursor-crosshair' : ''}`}

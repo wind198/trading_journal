@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode, Ref } from 'react'
 import type { WorkspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
 import { portraitTracks, splitTracks, type LayoutPreferences } from '../../_lib/workspace/layout-preferences'
 
@@ -8,7 +8,7 @@ const layoutClasses: Record<WorkspaceLayoutMode, string> = {
   four: 'workspace-grid workspace-grid-four grid h-full min-h-0 min-w-0 overflow-hidden',
 }
 
-export function WorkspaceLayout({ mode, preferences, children }: { mode: WorkspaceLayoutMode; preferences: LayoutPreferences; children: ReactNode }) {
+export function WorkspaceLayout({ mode, preferences, children, captureRef }: { mode: WorkspaceLayoutMode; preferences: LayoutPreferences; children: ReactNode; captureRef?: Ref<HTMLDivElement> }) {
   const style = {
     '--workspace-portrait-four': portraitTracks(preferences.fourPortrait),
     '--workspace-portrait-two': splitTracks(preferences.focusPortrait),
@@ -16,5 +16,5 @@ export function WorkspaceLayout({ mode, preferences, children }: { mode: Workspa
     '--workspace-wide-columns': splitTracks(preferences.fourWide.column),
     '--workspace-wide-focus': splitTracks(preferences.focusWide),
   } as CSSProperties
-  return <div className={layoutClasses[mode]} style={style}>{children}</div>
+  return <div ref={captureRef} className={layoutClasses[mode]} style={style}>{children}</div>
 }

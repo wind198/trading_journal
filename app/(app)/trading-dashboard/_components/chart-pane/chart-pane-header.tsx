@@ -52,10 +52,11 @@ export function ChartPaneHeader({
 }) {
   return (
     <div
+        data-pane-header
         className={
           compact
             ? 'workspace-pane-overlay pointer-events-none absolute inset-x-0.5 top-0.5 z-20 flex items-start justify-between'
-            : 'flex min-w-0 shrink-0 items-center gap-1 border-b border-border px-1'
+            : 'relative z-20 flex min-w-0 shrink-0 items-center gap-1 border-b border-border px-1'
         }
       >
         <button type="button" aria-label={'Activate ' + pane.label + ' chart'} aria-pressed={active} onClick={onActivate}
@@ -72,9 +73,10 @@ export function ChartPaneHeader({
           className={
             compact
               ? 'pointer-events-auto flex items-center'
-              : 'flex min-w-0 flex-1 items-center justify-start gap-0.5 overflow-x-auto'
+              : 'flex min-w-0 flex-1 items-center justify-start gap-0.5'
           }
         >
+          <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
           {isExpanded &&
             CHART_TYPES.map((type) => (
               <Button
@@ -90,12 +92,14 @@ export function ChartPaneHeader({
           {selectedDrawingId && (
             <Button variant="destructive" size="icon-sm" aria-label="Delete selected drawing" onClick={deleteSelectedDrawing}><Trash2 /></Button>
           )}
+          </div>
           <Button
             variant="ghost"
             size={compact ? 'icon-sm' : 'icon'}
-            className={compact ? 'workspace-pane-expand size-8 bg-background/90' : 'sticky right-0 ml-auto bg-background'}
+            type="button"
+            className={compact ? 'workspace-pane-expand pointer-events-auto size-9 shrink-0 touch-manipulation bg-background/90' : 'workspace-pane-expand size-9 shrink-0 touch-manipulation ml-auto bg-background'}
             aria-label={isExpanded ? 'Collapse window' : 'Expand window'}
-            onClick={onToggleExpand}
+            onClick={(event) => { event.stopPropagation(); onToggleExpand() }}
           >
             {isExpanded ? <Minimize2 /> : <Maximize2 />}
           </Button>

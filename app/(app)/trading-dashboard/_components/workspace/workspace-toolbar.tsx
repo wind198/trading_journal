@@ -1,10 +1,12 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
+
 import { AppMenu } from '@/app/(app)/_components/app-shell/app-menu'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { type ChartType } from '../chart/price-chart'
-import { ChartCandlestick, ChartNoAxesCombined, Expand, PanelRight, RefreshCw, RotateCcw, Shrink } from 'lucide-react'
+import { Camera, ChartCandlestick, ChartNoAxesCombined, Expand, PanelRight, RefreshCw, RotateCcw, Shrink } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { LayoutSizeControls } from './layout-size-controls'
 import type { LayoutPreferences } from '../../_lib/workspace/layout-preferences'
@@ -14,9 +16,11 @@ import type { DrawingControl, DrawingMode } from '../../_lib/workspace/drawing-c
 import { CHART_TYPES, SYMBOL, type PaneId } from '../../_lib/workspace/workspace-layout'
 
 export function WorkspaceToolbar({
-  preferences, onPreferencesChange, wideLayout, fullScreen, expanded, focusMode, marketReloading, globalChartType,
+  onCaptureScreenshot, capturingScreenshot, preferences, onPreferencesChange, wideLayout, fullScreen, expanded, focusMode, marketReloading, globalChartType,
   favorites, onToggleFavorites, onEditFavorites, drawingControl, onDrawingMode, inspectorOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleInspector, onFullscreen,
 }: {
+  onCaptureScreenshot: () => void
+  capturingScreenshot: boolean
   preferences: LayoutPreferences
   onPreferencesChange: (update: (current: LayoutPreferences) => LayoutPreferences) => void
   wideLayout: boolean
@@ -38,6 +42,24 @@ export function WorkspaceToolbar({
   onToggleInspector: () => void
   onFullscreen: () => void
 }) {
+  const [layoutOpen, setLayoutOpen] = useState(false)
+  const layoutTriggerRef = useRef<HTMLButtonElement>(null)
+  const outsideDismissRef = useRef(false)
+  const layoutContentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!layoutOpen) return
+    // Capture before chart gesture handlers can prevent a synthesized touch click.
+    const dismissOutside = (event: PointerEvent) => {
+      const path = event.composedPath()
+      if (layoutTriggerRef.current && path.includes(layoutTriggerRef.current)) return
+      if (layoutContentRef.current && path.includes(layoutContentRef.current)) return
+      outsideDismissRef.current = true
+      setLayoutOpen(false)
+    }
+    document.addEventListener('pointerdown', dismissOutside, true)
+    return () => document.removeEventListener('pointerdown', dismissOutside, true)
+  }, [layoutOpen])
+  useEffect(() => { if (expanded != null) setLayoutOpen(false) }, [expanded])
   return (
     <header className="workspace-toolbar flex min-w-0 shrink-0 items-center gap-0 border-b border-border bg-card">
           <div className="workspace-toolbar-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
@@ -49,13 +71,13 @@ export function WorkspaceToolbar({
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
             {expanded == null && (
-              <Popover>
+              <Popover open={layoutOpen} onOpenChange={open => { if (open) outsideDismissRef.current = false; setLayoutOpen(open) }}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 min-w-9 px-2" aria-label="Chart layout and pane sizes">
+                  <Button ref={layoutTriggerRef} variant="outline" size="sm" className="h-9 min-w-9 px-2" aria-label="Chart layout and pane sizes">
                     {focusMode ? '2' : '4'}<span className="hidden lg:inline"> charts</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-auto min-w-20 max-h-[75dvh] overflow-y-auto p-2">
+                <PopoverContent ref={layoutContentRef} align="end" onCloseAutoFocus={event => { if (outsideDismissRef.current) event.preventDefault() }} className="w-auto min-w-20 max-h-[75dvh] overflow-y-auto p-2">
                   <div className="flex gap-1 px-2 pb-1">
                     <Button size="sm" variant={!focusMode ? 'default' : 'outline'} aria-pressed={!focusMode} onClick={() => onFocusChange(false)}>4 charts</Button>
                     <Button size="sm" variant={focusMode ? 'default' : 'outline'} aria-pressed={focusMode} onClick={() => onFocusChange(true)}>2 charts</Button>
@@ -82,6 +104,7 @@ export function WorkspaceToolbar({
               </DropdownMenuContent>
             </DropdownMenu>
             
+            <Button type="button" variant="ghost" size="icon-sm" className="size-9 shrink-0" aria-label="Capture screenshot" title="Capture screenshot" disabled={capturingScreenshot} onClick={onCaptureScreenshot}><Camera /></Button>
             <DrawingToolMenu paneId={drawingControl.paneId} mode={drawingControl.mode} onMode={onDrawingMode} favorites={favorites} onToggleFavorites={onToggleFavorites} onEditFavorites={onEditFavorites} />
             <Button
               variant={inspectorOpen ? 'secondary' : 'ghost'}

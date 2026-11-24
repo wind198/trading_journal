@@ -25,11 +25,15 @@ import { useFavoriteTools } from '../../_hooks/useFavoriteTools'
 import { toggleFavorite } from '../../_lib/workspace/favorite-tools'
 import { FloatingFavoriteToolbar } from './floating-favorite-toolbar'
 import { FavoriteToolsDialog } from './favorite-tools-dialog'
+import { captureWorkspace, saveWorkspaceScreenshot, screenshotFilename } from '../../_lib/workspace/workspace-screenshot'
 import { ChartPane } from '../chart-pane/chart-pane'
 
 const SMALL_SCREEN_QUERY = '(min-width: 1600px)'
 
 export function TradingWorkspace() {
+  const captureRef = useRef<HTMLDivElement>(null)
+  const capturingRef = useRef(false)
+  const [capturingScreenshot, setCapturingScreenshot] = useState(false)
   const [favorites, setFavorites] = useFavoriteTools()
   const [editFavorites, setEditFavorites] = useState(false)
   const [drawingControl, setDrawingControl] = useState<DrawingControl>({ paneId: '15m', mode: IDLE_MODE })
@@ -80,6 +84,22 @@ export function TradingWorkspace() {
   }
   const sessionSlotEnabled = useSessionSlotsEnabled(overlaySettings.sessionSlots)
 
+  const captureScreenshot = async () => {
+    if (capturingRef.current || !captureRef.current) return
+    capturingRef.current = true
+    setCapturingScreenshot(true)
+    try {
+      // Freeze the displayed frame before opening the picker; do not await before requesting user activation.
+      const canvas = captureWorkspace(captureRef.current)
+      await saveWorkspaceScreenshot(canvas, screenshotFilename(SYMBOL, visiblePanes.length))
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('Unable to save screenshot')
+    } finally {
+      capturingRef.current = false
+      setCapturingScreenshot(false)
+    }
+  }
+
   const reloadMarketData = async () => {
     if (marketReloading) return
     setMarketReloading(true)
@@ -95,6 +115,7 @@ export function TradingWorkspace() {
   return (
     <div data-workspace-fullscreen={fullScreen ? "true" : undefined} className="relative flex h-full min-h-0 flex-col overflow-hidden overscroll-none bg-background">
         <WorkspaceToolbar
+          capturingScreenshot={capturingScreenshot} onCaptureScreenshot={() => void captureScreenshot()}
           preferences={preferences} onPreferencesChange={setPreferences} wideLayout={wideLayout}
           fullScreen={fullScreen}
           expanded={expanded} focusMode={focusMode} marketReloading={marketReloading}
@@ -110,7 +131,7 @@ export function TradingWorkspace() {
         />
       {!fullScreen && <NonTradeWarningBanner />}
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <WorkspaceLayout mode={workspaceLayoutMode(expanded, focusMode)} preferences={preferences}>
+        <WorkspaceLayout captureRef={captureRef} mode={workspaceLayoutMode(expanded, focusMode)} preferences={preferences}>
         {visiblePanes.map((pane) => {
           const isExpanded = expanded === pane.id
           const chartType = isExpanded
@@ -159,12 +180,8 @@ export function TradingWorkspace() {
               }
               onToggleExpand={() => {
                 setDrawingControl({ paneId: pane.id, mode: IDLE_MODE })
-                if (isExpanded) {
-                  setExpanded(null)
-                  return
-                }
-                setExpanded(pane.id)
-                setChartTypes((current) => ({ ...current, [pane.id]: 'candlestick' }))
+                setExpanded(current => current === pane.id ? null : pane.id)
+                if (!isExpanded) setChartTypes(current => ({ ...current, [pane.id]: 'candlestick' }))
               }}
             />
           )
