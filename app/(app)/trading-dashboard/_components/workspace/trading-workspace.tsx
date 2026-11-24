@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useMediaQuery } from 'usehooks-ts'
-import { Button } from '@/components/ui/button'
 import { DASHBOARD_NOTES_QUERY_KEY, NotesSidebar } from '../notes/notes-sidebar'
 import { loadDashboardNotes } from '../../_lib/notes/dashboard-notes'
 import { GuidesSidebar } from '../guides/guides-sidebar'
@@ -16,7 +15,6 @@ import { useAlertConfig } from '../../_hooks/useAlertConfig'
 import { type ChartType } from '../chart/price-chart'
 import type { Regime } from '../../_lib/overlays/baseline-indicators'
 import { hardReloadMarketQueries } from '../../_lib/market-queries'
-import { Shrink } from 'lucide-react'
 import { SYMBOL, type PaneId, visibleWorkspacePanes, workspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
 import { WorkspaceToolbar } from './workspace-toolbar'
 import { WorkspaceLayout } from './workspace-layout'
@@ -87,8 +85,8 @@ export function TradingWorkspace() {
 
   return (
     <div data-workspace-fullscreen={fullScreen ? "true" : undefined} className="relative flex h-full min-h-0 flex-col overflow-hidden overscroll-none bg-background">
-      {!fullScreen && (
         <WorkspaceToolbar
+          fullScreen={fullScreen}
           expanded={expanded} focusMode={focusMode} marketReloading={marketReloading}
           globalChartType={globalChartType} overlaySettings={overlaySettings} alertConfig={alertConfig}
           autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings}
@@ -104,9 +102,8 @@ export function TradingWorkspace() {
               return next
             })
           }}
-          onFullscreen={() => { setDrawingControl(current => ({ ...current, mode: IDLE_MODE })); setFullScreen(true) }}
+          onFullscreen={() => setFullScreen(current => !current)}
         />
-      )}
       {!fullScreen && <NonTradeWarningBanner />}
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <WorkspaceLayout mode={workspaceLayoutMode(expanded, focusMode)}>
@@ -171,18 +168,6 @@ export function TradingWorkspace() {
         {notesOpen && <NotesSidebar symbol={SYMBOL} onClose={() => setNotesOpen(false)} />}
         {guidesOpen && <GuidesSidebar onClose={() => setGuidesOpen(false)} />}
       </div>
-      {fullScreen && (
-        <Button
-          variant="secondary"
-          size="sm"
-          className="absolute bottom-1 right-1 z-20 bg-background/90 shadow-sm"
-          aria-label="Exit fullscreen"
-          onClick={() => setFullScreen(false)}
-        >
-          <Shrink />
-          <span className="sr-only">Exit fullscreen</span>
-        </Button>
-      )}
       <ExecutionOrderDrawer
         open={executionOpen}
         onOpenChange={setExecutionOpen}
