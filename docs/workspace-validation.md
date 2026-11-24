@@ -1,0 +1,10 @@
+# Workspace validation — PR 07
+
+## Repeatable checks
+Node 24 and pnpm. Run pnpm install --frozen-lockfile, pnpm test:ui, pnpm build with normal build configuration. Browser harness is isolated from the application lockfile: npm install --prefix tooling/browser --no-package-lock; npm exec --prefix tooling/browser -- playwright install chromium; pnpm test:browser. It starts a localhost-only Next dev instance at port 4317 with existing local auth bypass and dummy Supabase URL; intercepts chart APIs and Supabase reads with synthetic data; aborts external browser traffic and unmocked API requests. Never use production credentials or data. No changes to auth code. Screenshots and JSON geometry report are under artifacts/browser (ignored). Fixtures do not prove actual Supabase integration, writes, touch drawing placement, or production performance.
+
+## Performance review
+Use the report to compare pane dimensions and clipping across 320×568, 390×844, 844×390, 768×1024, 1440×900. Browser tests assert canvas presence, visible pane counts, viewport bounds, fullscreen exit, layout persistence, active pane and tool cancellation, inspector reachability and absence of uncaught page errors. Run on a production build separately for timing baselines; dev compilation makes timings misleading. Record p50/p95 interaction latency, long tasks (>50ms), chart frame time during pan and resize, memory after repeated expansion, and network requests per poll. Use Chrome Performance/React Profiler before adding memoization or changing chart algorithms. No performance improvement is claimed without a baseline. Capture real-device iOS/Android touch confirmation and verify note/alert/drawing persistence in a dedicated test tenant separately.
+
+## Acceptance
+All tests pass; no page errors or clipped panes; 2/4 layouts retain chart area; fullscreen exit stays visible; no unintentional drawing on another timeframe. Review screenshot artifacts manually. Browser runner is a local smoke suite, not a visual pixel-diff baseline.

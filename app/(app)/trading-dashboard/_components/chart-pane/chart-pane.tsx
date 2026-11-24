@@ -467,6 +467,7 @@ export function ChartPane({
 
   return (
     <section
+      data-chart-pane={pane.id}
       data-active-chart={active ? 'true' : undefined}
       onPointerDownCapture={onActivate}
       onFocusCapture={onActivate}
