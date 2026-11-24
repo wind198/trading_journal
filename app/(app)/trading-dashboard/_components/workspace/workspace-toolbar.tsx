@@ -26,12 +26,12 @@ export function WorkspaceToolbar({
   globalChartType: ChartType
   drawingControl: DrawingControl
   onDrawingMode: (mode: DrawingMode) => void
-  notesOpen: boolean
+  inspectorOpen: boolean
   onFocusChange: (value: boolean) => void
   onReloadMarketData: () => void
   onResetLayout: () => void
   onChartTypeChange: (type: ChartType) => void
-  onToggleNotes: () => void
+  onToggleInspector: () => void
   onFullscreen: () => void
 }) {
   return (
@@ -78,14 +78,15 @@ export function WorkspaceToolbar({
             
             <DrawingToolMenu paneId={drawingControl.paneId} mode={drawingControl.mode} onMode={onDrawingMode} />
             <Button
-              variant={notesOpen ? 'secondary' : 'ghost'}
+              variant={inspectorOpen ? 'secondary' : 'ghost'}
               size="icon-sm"
               className="size-9"
-              aria-label={notesOpen ? 'Close inspector' : 'Open inspector'}
-              aria-pressed={notesOpen}
-              onClick={onToggleNotes}
+              aria-label={inspectorOpen ? 'Close inspector' : 'Open inspector'}
+              aria-expanded={inspectorOpen}
+              aria-controls="workspace-inspector"
+              onClick={onToggleInspector}
             >
-              <NotebookPen />
+              <PanelRight />
             </Button>
             
             <Button

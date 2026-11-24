@@ -267,41 +267,23 @@ export function useSessionSlotsEnabled(
 }
 
 export function IndicatorSettingsPanel({ settings, autoRegimesByPane, onSettingsChange }: Omit<ChartOverlaySettingsMenuProps, 'alertConfig'>) {
-  return <div className="space-y-1">        <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Overlays</h3>
-        <label className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs"><span>onSettingsChange((current) => ({
-              ...current,
-              volumeProfile: checked === true,
-            }))
-          }
-          onSelect={(event) => event.preventDefault()}
-        >
-          Volume profile</span><Checkbox
-          checked={settings.volumeProfile}
-          onCheckedChange={(checked) = /></label>
-        <hr className="border-border" />
-        <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Session lines</h3>
-        {SESSION_LINE_SLOTS.map((slot) => {
-          const id = sessionSlotId(slot)
-          return (
-            <label className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs"><span>onSettingsChange((current) => ({
-                  ...current,
-                  sessionSlots: {
-                    ...current.sessionSlots,
-                    [id]: checked === true,
-                  },
-                }))
-              }
-              onSelect={(event) => event.preventDefault()}
-            >
-              {sessionSlotLabel(slot)}</span><Checkbox
-              key={id}
-              checked={settings.sessionSlots[id] ?? true}
-              onCheckedChange={(checked) = /></label>
-          )
-        })}
-        <hr className="border-border" />
-        <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Indicators</h3>
-        
+  return <div className="space-y-1">
+    <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Overlays</h3>
+    <label className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
+      <span>Volume profile</span>
+      <Checkbox checked={settings.volumeProfile} onCheckedChange={checked => onSettingsChange(current => ({ ...current, volumeProfile: checked === true }))} />
+    </label>
+    <hr className="border-border" />
+    <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Session lines</h3>
+    {SESSION_LINE_SLOTS.map(slot => {
+      const id = sessionSlotId(slot)
+      return <label key={id} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
+        <span>{sessionSlotLabel(slot)}</span>
+        <Checkbox checked={settings.sessionSlots[id] ?? true} onCheckedChange={checked => onSettingsChange(current => ({ ...current, sessionSlots: { ...current.sessionSlots, [id]: checked === true } }))} />
+      </label>
+    })}
+    <hr className="border-border" />
+    <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Indicators</h3>
         <div
           className="grid grid-cols-[auto_repeat(4,1fr)] items-center gap-x-3 gap-y-2 px-2 py-2 text-xs text-muted-foreground"
           onPointerDown={(event) => event.stopPropagation()}
