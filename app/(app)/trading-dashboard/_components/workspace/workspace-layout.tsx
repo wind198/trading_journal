@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { WorkspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
+import { portraitTracks, splitTracks, type LayoutPreferences } from '../../_lib/workspace/layout-preferences'
 
 const layoutClasses: Record<WorkspaceLayoutMode, string> = {
   expanded: 'flex h-full min-h-0 overflow-hidden',
@@ -7,6 +8,13 @@ const layoutClasses: Record<WorkspaceLayoutMode, string> = {
   four: 'workspace-grid workspace-grid-four grid h-full min-h-0 min-w-0 overflow-hidden',
 }
 
-export function WorkspaceLayout({ mode, children }: { mode: WorkspaceLayoutMode; children: ReactNode }) {
-  return <div className={layoutClasses[mode]}>{children}</div>
+export function WorkspaceLayout({ mode, preferences, children }: { mode: WorkspaceLayoutMode; preferences: LayoutPreferences; children: ReactNode }) {
+  const style = {
+    '--workspace-portrait-four': portraitTracks(preferences.fourPortrait),
+    '--workspace-portrait-two': splitTracks(preferences.focusPortrait),
+    '--workspace-wide-rows': splitTracks(preferences.fourWide.row),
+    '--workspace-wide-columns': splitTracks(preferences.fourWide.column),
+    '--workspace-wide-focus': splitTracks(preferences.focusWide),
+  } as CSSProperties
+  return <div className={layoutClasses[mode]} style={style}>{children}</div>
 }

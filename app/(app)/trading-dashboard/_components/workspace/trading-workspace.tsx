@@ -19,6 +19,7 @@ import { SYMBOL, type PaneId, visibleWorkspacePanes, workspaceLayoutMode } from 
 import { WorkspaceToolbar } from './workspace-toolbar'
 import { WorkspaceLayout } from './workspace-layout'
 import { activatePane, resolveDrawingControl, toggleDrawingMode, cancelPaneMode, IDLE_MODE, type DrawingControl, type DrawingMode } from '../../_lib/workspace/drawing-control'
+import { useWorkspaceLayoutPreferences } from '../../_hooks/useWorkspaceLayoutPreferences'
 import { ChartPane } from '../chart-pane/chart-pane'
 
 const SMALL_SCREEN_QUERY = '(min-width: 1600px)'
@@ -27,7 +28,9 @@ export function TradingWorkspace() {
   const [drawingControl, setDrawingControl] = useState<DrawingControl>({ paneId: '15m', mode: IDLE_MODE })
   const [expanded, setExpanded] = useState<PaneId | null>(null)
   const [fullScreen, setFullScreen] = useState(false)
-  const [focusMode, setFocusMode] = useState(false)
+  const [preferences, setPreferences] = useWorkspaceLayoutPreferences()
+  const focusMode = preferences.focusMode
+  const wideLayout = useMediaQuery('(min-width: 768px), (orientation: landscape)', { initializeWithValue: false })
   const [overlaySettings, setOverlaySettings] = useChartOverlaySettings()
   const alertConfig = useAlertConfig()
   const [autoRegimesByPane, setAutoRegimesByPane] = useState<Partial<Record<PaneId, Regime | null>>>({})
@@ -66,7 +69,7 @@ export function TradingWorkspace() {
   const chooseMode = (mode: DrawingMode) => setDrawingControl(current =>
     toggleDrawingMode(resolveDrawingControl(current, visiblePanes.map(p => p.id)), mode))
   const changeFocus = (focus: boolean) => {
-    setFocusMode(focus)
+    setPreferences(current => ({ ...current, focusMode: focus }))
     setDrawingControl(current => ({ ...resolveDrawingControl(current, visibleWorkspacePanes(null, focus).map(p => p.id)), mode: IDLE_MODE }))
   }
   const sessionSlotEnabled = useSessionSlotsEnabled(overlaySettings.sessionSlots)
@@ -86,6 +89,7 @@ export function TradingWorkspace() {
   return (
     <div data-workspace-fullscreen={fullScreen ? "true" : undefined} className="relative flex h-full min-h-0 flex-col overflow-hidden overscroll-none bg-background">
         <WorkspaceToolbar
+          preferences={preferences} onPreferencesChange={setPreferences} wideLayout={wideLayout}
           fullScreen={fullScreen}
           expanded={expanded} focusMode={focusMode} marketReloading={marketReloading}
           globalChartType={globalChartType} overlaySettings={overlaySettings} alertConfig={alertConfig}
@@ -106,7 +110,7 @@ export function TradingWorkspace() {
         />
       {!fullScreen && <NonTradeWarningBanner />}
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <WorkspaceLayout mode={workspaceLayoutMode(expanded, focusMode)}>
+        <WorkspaceLayout mode={workspaceLayoutMode(expanded, focusMode)} preferences={preferences}>
         {visiblePanes.map((pane) => {
           const isExpanded = expanded === pane.id
           const chartType = isExpanded

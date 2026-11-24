@@ -155,12 +155,11 @@
 .workspace-toolbar::-webkit-scrollbar { display: none; }
 .workspace-grid { gap: 1px; background: var(--border); grid-template-columns: minmax(0, 1fr); }
 .workspace-grid > section { background: var(--background); }
-.workspace-grid-two { grid-template-rows: repeat(2, minmax(0, 1fr)); }
-.workspace-grid-four { grid-template-rows: repeat(4, minmax(0, 1fr)); }
+.workspace-grid-two { grid-template-rows: var(--workspace-portrait-two, repeat(2, minmax(0, 1fr))); }
+.workspace-grid-four { grid-template-rows: var(--workspace-portrait-four, repeat(4, minmax(0, 1fr))); }
 @media (min-width: 768px), (orientation: landscape) {
-  .workspace-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .workspace-grid-two { grid-template-rows: minmax(0, 1fr); }
-  .workspace-grid-four { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+  .workspace-grid-two { grid-template-columns: var(--workspace-wide-focus, repeat(2, minmax(0, 1fr))); grid-template-rows: minmax(0, 1fr); }
+  .workspace-grid-four { grid-template-columns: var(--workspace-wide-columns, repeat(2, minmax(0, 1fr))); grid-template-rows: var(--workspace-wide-rows, repeat(2, minmax(0, 1fr))); }
 }
 @media (max-width: 767px), (max-height: 500px) {
   .app-shell-header[data-workspace-route="true"] { display: none; }
