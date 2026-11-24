@@ -11,7 +11,7 @@
     "test:execution": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/execution/validate.test.ts",
     "contracts:validate": "cd contracts && pnpm run validate",
     "contracts:generate": "cd contracts && pnpm run generate",
-    "test:workspace": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test \"app/(app)/trading-dashboard/_lib/workspace/workspace-layout.test.ts\" \"app/(app)/trading-dashboard/_lib/workspace/drawing-control.test.ts\" \"app/(app)/trading-dashboard/_lib/workspace/layout-preferences.test.ts\""
+    "test:workspace": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./lib/ticks/register-ts.mjs --test \"app/(app)/trading-dashboard/_lib/workspace/workspace-layout.test.ts\" \"app/(app)/trading-dashboard/_lib/workspace/drawing-control.test.ts\" \"app/(app)/trading-dashboard/_lib/workspace/layout-preferences.test.ts\" \"app/(app)/trading-dashboard/_lib/workspace/inspector-state.test.ts\""
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",

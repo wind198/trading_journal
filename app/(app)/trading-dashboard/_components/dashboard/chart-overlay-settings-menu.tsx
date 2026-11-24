@@ -52,7 +52,7 @@ export function sessionSlotsEnabledSet(
   return enabled
 }
 
-type ChartOverlaySettingsMenuProps = {
+export type ChartOverlaySettingsMenuProps = {
   settings: ChartOverlaySettings
   alertConfig: ReturnType<typeof useAlertConfig>
   autoRegimesByPane: Partial<Record<DashboardPaneId, Regime | null>>
@@ -265,3 +265,112 @@ export function useSessionSlotsEnabled(
 ): ReadonlySet<string> {
   return useMemo(() => sessionSlotsEnabledSet(sessionSlots), [sessionSlots])
 }
+
+export function IndicatorSettingsPanel({ settings, autoRegimesByPane, onSettingsChange }: Omit<ChartOverlaySettingsMenuProps, 'alertConfig'>) {
+  return <div className="space-y-1">        <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Overlays</h3>
+        <label className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs"><span>onSettingsChange((current) => ({
+              ...current,
+              volumeProfile: checked === true,
+            }))
+          }
+          onSelect={(event) => event.preventDefault()}
+        >
+          Volume profile</span><Checkbox
+          checked={settings.volumeProfile}
+          onCheckedChange={(checked) = /></label>
+        <hr className="border-border" />
+        <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Session lines</h3>
+        {SESSION_LINE_SLOTS.map((slot) => {
+          const id = sessionSlotId(slot)
+          return (
+            <label className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs"><span>onSettingsChange((current) => ({
+                  ...current,
+                  sessionSlots: {
+                    ...current.sessionSlots,
+                    [id]: checked === true,
+                  },
+                }))
+              }
+              onSelect={(event) => event.preventDefault()}
+            >
+              {sessionSlotLabel(slot)}</span><Checkbox
+              key={id}
+              checked={settings.sessionSlots[id] ?? true}
+              onCheckedChange={(checked) = /></label>
+          )
+        })}
+        <hr className="border-border" />
+        <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Indicators</h3>
+        
+        <div
+          className="grid grid-cols-[auto_repeat(4,1fr)] items-center gap-x-3 gap-y-2 px-2 py-2 text-xs text-muted-foreground"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <span />
+          {DASHBOARD_PANE_IDS.map((paneId) => <span key={paneId} className="text-center font-medium text-foreground">{PANE_LABELS[paneId]}</span>)}
+          {INDICATORS.map(([key, label]) => (
+            <div key={key} className="contents">
+              <span className="font-medium text-foreground">{label}</span>
+              {DASHBOARD_PANE_IDS.map((paneId) => (
+                <label key={paneId} className="flex justify-center">
+                  <Checkbox
+                    checked={
+                      key === 'regime' && (paneId === '4h' || paneId === '1h')
+                        ? false
+                        : (key === 'bollinger' || key === 'ichimoku') && settings.autoIndicatorsByRegime
+                          ? regimeIndicatorVisibility(
+                              true,
+                              autoRegimesByPane[paneId] ?? null,
+                              settings.indicatorsByPane[paneId],
+                            )[key]
+                        : settings.indicatorsByPane[paneId][key]
+                    }
+                    disabled={
+                      (key === 'regime' && (paneId === '4h' || paneId === '1h')) ||
+                      (settings.autoIndicatorsByRegime && (key === 'bollinger' || key === 'ichimoku'))
+                    }
+                    onCheckedChange={(checked) => onSettingsChange((current) => setPaneIndicator(current, paneId, key, checked === true))}
+                    aria-label={`${label} on ${paneId}`}
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
+</div>
+}
+
+export function AlertSettingsPanel({ alertConfig }: Pick<ChartOverlaySettingsMenuProps, 'alertConfig'>) {
+  return <div>        <div className="space-y-2 px-2 py-2 text-xs" onPointerDown={(event) => event.stopPropagation()}>
+          {([
+            ['forceCandle', 'Force candle'],
+            ['doublePattern', 'Double pattern'],
+            ['engulfing', 'Engulfing'],
+            ['doji', 'High-quality Doji'],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="flex items-center justify-between gap-4">
+              <span>{label}</span>
+              <Checkbox
+                checked={alertConfig.config[key]}
+                disabled={alertConfig.loading || alertConfig.saving || alertConfig.error === 'Sign in to edit alert config' || (alertConfig.error?.startsWith('Unable to load') ?? false)}
+                onCheckedChange={(checked) => alertConfig.setAlert(key, checked === true)}
+                aria-label={`${label} alert`}
+              />
+            </label>
+          ))}
+          {alertConfig.loading && <p className="text-muted-foreground">Loading alert config…</p>}
+          {alertConfig.saving && <p className="text-muted-foreground">Saving alert config…</p>}
+          {alertConfig.error && (
+            <div className="flex items-center gap-2 text-destructive" role="alert">
+              <span>{alertConfig.error}</span>
+              {alertConfig.error.startsWith('Unable to load') && (
+                <Button type="button" variant="ghost" size="xs" onClick={() => void alertConfig.reload()}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+</div>
+}
+
