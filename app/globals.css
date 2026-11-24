@@ -166,3 +166,6 @@
   .app-shell-header[data-workspace-route="true"] { display: none; }
   .workspace-app-menu { display: flex; }
 }
+
+/* Inset outline does not change the chart grid dimensions. */
+[data-active-chart="true"]::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--primary); pointer-events: none; z-index: 15; }

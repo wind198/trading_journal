@@ -20,11 +20,13 @@ import { Shrink } from 'lucide-react'
 import { SYMBOL, type PaneId, visibleWorkspacePanes, workspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
 import { WorkspaceToolbar } from './workspace-toolbar'
 import { WorkspaceLayout } from './workspace-layout'
+import { activatePane, resolveDrawingControl, toggleDrawingMode, cancelPaneMode, IDLE_MODE, type DrawingControl, type DrawingMode } from '../../_lib/workspace/drawing-control'
 import { ChartPane } from '../chart-pane/chart-pane'
 
 const SMALL_SCREEN_QUERY = '(min-width: 1600px)'
 
 export function TradingWorkspace() {
+  const [drawingControl, setDrawingControl] = useState<DrawingControl>({ paneId: '15m', mode: IDLE_MODE })
   const [expanded, setExpanded] = useState<PaneId | null>(null)
   const [fullScreen, setFullScreen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
@@ -61,6 +63,14 @@ export function TradingWorkspace() {
   const [globalChartType, setGlobalChartType] = useState<ChartType>('candlestick')
   const queryClient = useQueryClient()
   const visiblePanes = visibleWorkspacePanes(expanded, focusMode)
+  const control = resolveDrawingControl(drawingControl, visiblePanes.map(p => p.id))
+  const selectPane = (paneId: PaneId) => setDrawingControl(current => activatePane(current, paneId))
+  const chooseMode = (mode: DrawingMode) => setDrawingControl(current =>
+    toggleDrawingMode(resolveDrawingControl(current, visiblePanes.map(p => p.id)), mode))
+  const changeFocus = (focus: boolean) => {
+    setFocusMode(focus)
+    setDrawingControl(current => ({ ...resolveDrawingControl(current, visibleWorkspacePanes(null, focus).map(p => p.id)), mode: IDLE_MODE }))
+  }
   const sessionSlotEnabled = useSessionSlotsEnabled(overlaySettings.sessionSlots)
 
   const reloadMarketData = async () => {
@@ -82,7 +92,8 @@ export function TradingWorkspace() {
           expanded={expanded} focusMode={focusMode} marketReloading={marketReloading}
           globalChartType={globalChartType} overlaySettings={overlaySettings} alertConfig={alertConfig}
           autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings}
-          notesOpen={notesOpen} onFocusChange={setFocusMode}
+          notesOpen={notesOpen} onFocusChange={changeFocus}
+          drawingControl={control} onDrawingMode={chooseMode}
           onReloadMarketData={() => void reloadMarketData()}
           onResetLayout={() => setResetLayoutEpoch(current => current + 1)}
           onChartTypeChange={setGlobalChartType}
@@ -93,7 +104,7 @@ export function TradingWorkspace() {
               return next
             })
           }}
-          onFullscreen={() => setFullScreen(true)}
+          onFullscreen={() => { setDrawingControl(current => ({ ...current, mode: IDLE_MODE })); setFullScreen(true) }}
         />
       )}
       {!fullScreen && <NonTradeWarningBanner />}
@@ -115,6 +126,10 @@ export function TradingWorkspace() {
             <ChartPane
               key={pane.id}
               pane={pane}
+              active={control.paneId === pane.id}
+              drawingMode={control.paneId === pane.id ? control.mode : IDLE_MODE}
+              onActivate={() => selectPane(pane.id)}
+              onCancelMode={(kind) => setDrawingControl(current => cancelPaneMode(current, pane.id, kind))}
               isExpanded={isExpanded}
               compact={compact}
               chartType={chartType}
@@ -141,6 +156,7 @@ export function TradingWorkspace() {
                 setChartTypes((current) => ({ ...current, [pane.id]: type }))
               }
               onToggleExpand={() => {
+                setDrawingControl({ paneId: pane.id, mode: IDLE_MODE })
                 if (isExpanded) {
                   setExpanded(null)
                   return

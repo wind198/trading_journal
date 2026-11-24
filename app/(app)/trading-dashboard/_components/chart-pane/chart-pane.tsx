@@ -22,10 +22,12 @@ import { alignTimeBinsToCandleOpens, volumeProfileWindowFromCandles } from '@/li
 import { marketHistoryInfiniteOptions, marketRecentQueryOptions, volumeProfileQueryOptions } from '../../_lib/market-queries'
 import { buildVolumeProfile } from '../../_lib/chart/volume-profile'
 import { SYMBOL, type PaneDefinition, type PaneId } from '../../_lib/workspace/workspace-layout'
+import type { DrawingMode } from '../../_lib/workspace/drawing-control'
 import { ChartPaneHeader } from './chart-pane-header'
 
 export function ChartPane({
   pane,
+  active, drawingMode, onActivate, onCancelMode,
   isExpanded,
   compact,
   chartType,
@@ -48,6 +50,10 @@ export function ChartPane({
   onToggleExpand,
 }: {
   pane: PaneDefinition
+  active: boolean
+  drawingMode: DrawingMode
+  onActivate: () => void
+  onCancelMode: (kind: DrawingMode['kind']) => void
   isExpanded: boolean
   compact: boolean
   chartType: ChartType
@@ -191,8 +197,8 @@ export function ChartPane({
     })
   }, [showVolumeProfile, pane.id, volumeProfileQuery.data, volumeProfileWindow, vpIntervalSec])
 
-  const [drawTool, setDrawTool] = useState<DrawTool>(null)
-  const [measureActive, setMeasureActive] = useState(false)
+  const drawTool: DrawTool = drawingMode.kind === 'draw' ? drawingMode.tool : null
+  const measureActive = drawingMode.kind === 'measure'
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
   const labelSessionRef = useRef<DrawingLabelSession | null>(null)
@@ -211,12 +217,6 @@ export function ChartPane({
   const { queuePersist, commitPersist, queuePolylinePersist, commitPolylinePersist } =
     useDebouncedDrawingPersist(pane.id, setDrawings)
 
-  useEffect(() => {
-    if (isExpanded) return
-    setDrawTool(null)
-    setMeasureActive(false)
-    setSelectedDrawingId(null)
-  }, [isExpanded])
 
   useEffect(() => {
     let cancelled = false
@@ -303,34 +303,12 @@ export function ChartPane({
     [drawings],
   )
 
-  const iconToolActive = drawTool != null && isChartIconKind(drawTool)
   const labelEditDrawing = labelEditDrawingId
     ? drawings.find((d) => d.id === labelEditDrawingId)
     : null
   const labelEditIsText = labelEditDrawing != null && isTextAnchorKind(labelEditDrawing.kind)
   const labelEditIsCircle =
     labelEditDrawing != null && isWarningCircleKind(labelEditDrawing.kind)
-
-  const toggleTool = (tool: ChartDrawingKind) => {
-    setMeasureActive(false)
-    setDrawTool((current) => (current === tool ? null : tool))
-  }
-
-  const selectIconTool = (kind: ChartIconKind) => {
-    setMeasureActive(false)
-    setDrawTool((current) => (current === kind ? null : kind))
-  }
-
-  const toggleMeasure = () => {
-    setMeasureActive((current) => {
-      const next = !current
-      if (next) {
-        setDrawTool(null)
-        setSelectedDrawingId(null)
-      }
-      return next
-    })
-  }
 
   const onDrawingComplete = (input: {
     kind: ChartDrawingKind
@@ -343,7 +321,7 @@ export function ChartPane({
       !isPolylineArrowKind(input.kind) &&
       !isTextAnchorKind(input.kind)
     ) {
-      setDrawTool(null)
+      onCancelMode('draw')
     }
     const anchor = input.p1
     const tempId = `temp-${Date.now()}`
@@ -412,7 +390,7 @@ export function ChartPane({
 
   const onPolylineComplete = (input: { points: DrawingPoint[] }) => {
     if (input.points.length < 2) return
-    setDrawTool(null)
+    onCancelMode('draw')
     const first = input.points[0]
     const last = input.points[input.points.length - 1]
     const tempId = `temp-${Date.now()}`
@@ -488,6 +466,9 @@ export function ChartPane({
 
   return (
     <section
+      data-active-chart={active ? 'true' : undefined}
+      onPointerDownCapture={onActivate}
+      onFocusCapture={onActivate}
       className={
         isExpanded
           ? 'relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden border-0'
@@ -496,10 +477,9 @@ export function ChartPane({
     >
       <ChartPaneHeader
         pane={pane} compact={compact} isExpanded={isExpanded} chartType={chartType}
-        bias={bias} measureActive={measureActive} drawTool={drawTool} iconToolActive={iconToolActive}
-        selectedDrawingId={selectedDrawingId} onChartType={onChartType}
-        toggleMeasure={toggleMeasure} toggleTool={toggleTool} selectIconTool={selectIconTool}
-        onClearTool={() => setDrawTool(null)} deleteSelectedDrawing={deleteSelectedDrawing}
+        bias={bias} active={active} onActivate={onActivate}
+        selectedDrawingId={active ? selectedDrawingId : null} onChartType={onChartType}
+        deleteSelectedDrawing={deleteSelectedDrawing}
         onToggleExpand={onToggleExpand}
       />
       <div className={compact ? 'absolute inset-0' : 'min-h-0 flex-1'}>
@@ -543,6 +523,7 @@ export function ChartPane({
             sessionSlotEnabled={sessionSlotEnabled}
             showBollinger={indicatorVisibility.bollinger}
             showIchimoku={indicatorVisibility.ichimoku}
+            keyboardActive={active}
             drawTool={drawTool}
             measureActive={measureActive}
             onDrawingComplete={onDrawingComplete}
@@ -550,8 +531,8 @@ export function ChartPane({
             onDrawingChangeEnd={onDrawingChangeEnd}
             onDrawingDelete={onDrawingDelete}
             onSelectionChange={setSelectedDrawingId}
-            onDrawToolCancel={() => setDrawTool(null)}
-            onMeasureCancel={() => setMeasureActive(false)}
+            onDrawToolCancel={() => onCancelMode('draw')}
+            onMeasureCancel={() => onCancelMode('measure')}
             onPolylineComplete={onPolylineComplete}
             onPolylineChange={onPolylineChange}
             onPolylineChangeEnd={onPolylineChangeEnd}
