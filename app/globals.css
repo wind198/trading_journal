@@ -193,3 +193,8 @@
   .workspace-inspector { width: min(100%, 22rem); }
   .workspace-inspector-tabs [role="tab"] { min-height: 36px; }
 }
+
+/* Touch targets also apply to tablets wider than the compact viewport breakpoint. */
+@media (pointer: coarse) {
+  .workspace-pane-expand { width: 44px; height: 44px; }
+}

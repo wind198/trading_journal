@@ -180,12 +180,8 @@ export function TradingWorkspace() {
               }
               onToggleExpand={() => {
                 setDrawingControl({ paneId: pane.id, mode: IDLE_MODE })
-                if (isExpanded) {
-                  setExpanded(null)
-                  return
-                }
-                setExpanded(pane.id)
-                setChartTypes((current) => ({ ...current, [pane.id]: 'candlestick' }))
+                setExpanded(current => current === pane.id ? null : pane.id)
+                if (!isExpanded) setChartTypes(current => ({ ...current, [pane.id]: 'candlestick' }))
               }}
             />
           )
