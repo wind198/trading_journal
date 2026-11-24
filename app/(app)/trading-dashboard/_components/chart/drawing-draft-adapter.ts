@@ -5,6 +5,7 @@ import type { ChartHandle } from './price-chart-handle'
 type Draft = { p1: DrawingPoint; p2?: DrawingPoint; p3?: DrawingPoint }
 
 const SHAPE_DRAFT_SCOPES = new Set([
+  'parallel_channel',
   'trendline',
   'rectangle',
   'fibonacci_range',

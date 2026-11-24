@@ -14,6 +14,7 @@ import { WarningCircleEditBehavior } from '../../_components/objects/warning-cir
 import { IconEditBehavior } from '../../_components/objects/icon/icon-edit-behavior'
 import { TextAnchorEditBehavior } from '../../_components/objects/text/text-anchor-edit-behavior'
 import { FibonacciExtensionEditBehavior } from '../../_components/objects/fibonacci-extension/fibonacci-extension-edit-behavior'
+import { ParallelChannelEditBehavior } from '../../_components/objects/parallel-channel/parallel-channel-edit-behavior'
 import { PolylineEditBehavior } from '../../_components/objects/polyline/polyline-edit-behavior'
 
 export type EditToolSet = {
@@ -44,7 +45,7 @@ export function createToolEditBehaviors(handle: ChartHandle, drawings: () => Edi
   const polyline = new PolylineEditBehavior(handle.polylines)
   return {
     press: [icon, text],
-    primary: [extension, polyline],
+    primary: [...(handle.parallelChannels ? [new ParallelChannelEditBehavior(handle.parallelChannels)] : []), extension, polyline],
     anchors: legacyAnchors([trendline, rectangle, range, circle, icon, text]),
     body: [range],
   }
@@ -66,7 +67,7 @@ export function createLegacyEditPartsWithoutTwoPointStoreAnchors(
   const polyline = new PolylineEditBehavior(handle.polylines)
   return {
     press: [icon, text],
-    primary: [extension, polyline],
+    primary: [...(handle.parallelChannels ? [new ParallelChannelEditBehavior(handle.parallelChannels)] : []), extension, polyline],
     afterTwoPointStoreAnchors: [range, circle, icon, text],
     body: [range],
   }

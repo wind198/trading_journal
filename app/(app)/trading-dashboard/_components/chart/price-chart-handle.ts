@@ -26,11 +26,13 @@ import { TextAnchorPrimitive } from './_components/objects/text/text-anchor-prim
 import { TrendlinePrimitive } from './_components/objects/trendline/trendline-primitive'
 import { WarningCirclePrimitive } from './_components/objects/warning-circle/warning-circle-primitive'
 import { PriceMeasurementPrimitive } from './_components/objects/measure/price-measurement-primitive'
+import { ParallelChannelPrimitive } from './_components/objects/parallel-channel/parallel-channel-primitive'
 import { asPrimitiveLayer, ChartPrimitiveRegistry } from './chart-primitive-registry'
 
 type LwcModule = typeof import('lightweight-charts')
 
 type AnyPrimitive =
+  | ParallelChannelPrimitive
   | TrendlinePrimitive
   | RectanglePrimitive
   | FibonacciRangePrimitive
@@ -61,6 +63,7 @@ export type ChartHandle = {
   ichimokuConversion: LineSeries
   ichimokuBase: LineSeries
   ichimokuCloud: IchimokuCloudPrimitive
+  parallelChannels: ParallelChannelPrimitive
   trendlines: TrendlinePrimitive
   rectangles: RectanglePrimitive
   fibonacciExtensions: FibonacciRangeExtensionPrimitive
@@ -85,6 +88,7 @@ export function usesVolumeProfile(timeframe: string): boolean {
 }
 
 export function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
+  handle.parallelChannels.setBars(candles)
   handle.trendlines.setBars(candles)
   handle.rectangles.setBars(candles)
   handle.fibonacciRanges.setBars(candles)
@@ -216,6 +220,7 @@ export function initPriceChart(
       autoscaleInfoProvider: () => null,
     })
 
+  const parallelChannelPrimitive = new ParallelChannelPrimitive()
   const trendlinePrimitive = new TrendlinePrimitive([])
   const rectanglePrimitive = new RectanglePrimitive([])
   const fibonacciExtensionPrimitive = new FibonacciRangeExtensionPrimitive()
@@ -225,6 +230,7 @@ export function initPriceChart(
   const textAnchorPrimitive = new TextAnchorPrimitive([])
   const warningCirclePrimitive = new WarningCirclePrimitive([])
   const measurementPrimitive = new PriceMeasurementPrimitive()
+  price.attachPrimitive(parallelChannelPrimitive)
   price.attachPrimitive(trendlinePrimitive)
   price.attachPrimitive(rectanglePrimitive)
   price.attachPrimitive(fibonacciRangePrimitive)
@@ -261,6 +267,7 @@ export function initPriceChart(
   })
 
   const primitives = new ChartPrimitiveRegistry()
+  primitives.register('parallel_channel', asPrimitiveLayer(parallelChannelPrimitive))
   primitives.register('trendline', asPrimitiveLayer(trendlinePrimitive))
   primitives.register('rectangle', asPrimitiveLayer(rectanglePrimitive))
   primitives.register('fibonacci_range', asPrimitiveLayer(fibonacciRangePrimitive))
@@ -279,6 +286,7 @@ export function initPriceChart(
     ichimokuConversion: line(ICHIMOKU.conversion) as LineSeries,
     ichimokuBase: line(ICHIMOKU.base) as LineSeries,
     ichimokuCloud: ichimokuCloudPrimitive,
+    parallelChannels: parallelChannelPrimitive,
     trendlines: trendlinePrimitive,
     rectangles: rectanglePrimitive,
     fibonacciRanges: fibonacciRangePrimitive,

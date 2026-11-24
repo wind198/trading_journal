@@ -89,12 +89,13 @@ export class DrawingSelectionSession {
     const lineHit = handle.trendlines.hitTest(point.x, point.y)
     const rectHit = handle.rectangles.hitTest(point.x, point.y)
     const fibHit = handle.fibonacciRanges.hitTest(point.x, point.y)
+    const channelHit = handle.parallelChannels?.hitTest(point.x, point.y)
     const extensionHit = handle.fibonacciExtensions.hitTest(point.x, point.y)
     const circleHit = handle.warningCircles.hitTest(point.x, point.y)
     const iconHit = handle.icons.hitTest(point.x, point.y)
     const polyHit = handle.polylines.hitTest(point.x, point.y)
     const textHit = handle.textAnchors.hitTest(point.x, point.y)
-    const hit = [lineHit, fibHit, extensionHit, rectHit, circleHit, iconHit, polyHit, textHit]
+    const hit = [lineHit, fibHit, extensionHit, channelHit, rectHit, circleHit, iconHit, polyHit, textHit]
       .filter((item): item is NonNullable<typeof item> => item != null)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))[0]
     const hitId = hit?.externalId ?? null

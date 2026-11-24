@@ -9,7 +9,7 @@ import {
   isTwoPointCreateKind,
   type TwoPointToolKind,
 } from './_sessions/create/two-point-create-behavior'
-import { EXTENSION_SCOPE_ID } from './_sessions/create/three-point-create-behavior'
+import { isThreePointTool, type ThreePointToolKind } from './_sessions/create/three-point-create-behavior'
 import {
   barIntervalSec,
   chartXAtTime,
@@ -36,9 +36,11 @@ const TAP_MOVE_THRESHOLD_PX = 12
 const DOUBLE_TAP_MS = 350
 const DOUBLE_TAP_PX = 24
 
-type ShapeDrawTool = 'fibonacci_range_extension' | 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
+import type { ParallelChannelDrawing } from './_components/objects/parallel-channel/parallel-channel-primitive'
+
+type ShapeDrawTool = 'parallel_channel' | 'fibonacci_range_extension' | 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
 export function isShapeDrawTool(tool: ChartDrawingKind | null): tool is ShapeDrawTool {
-  return tool === 'fibonacci_range_extension' || tool === 'fibonacci_range' || tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
+  return tool === 'parallel_channel' || tool === 'fibonacci_range_extension' || tool === 'fibonacci_range' || tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
 }
 
 export function isTwoPointDrawTool(tool: ChartDrawingKind | null): tool is TwoPointToolKind {
@@ -64,7 +66,7 @@ export function defaultShapePreviewP2(
 export type PriceChartInteractionRefs = {
   drawToolRef: RefObject<ChartDrawingKind | null>
   seedCoarseTwoPointRef: RefObject<((tool: TwoPointToolKind) => boolean) | null>
-  seedCoarseThreePointRef: RefObject<(() => boolean) | null>
+  seedCoarseThreePointRef: RefObject<((tool: ThreePointToolKind) => boolean) | null>
   interactionCancelRef: RefObject<(() => void) | null>
   editSessionRef: RefObject<ChartEditRuntime | null>
   selectionSessionRef: RefObject<ChartSelectionRuntime | null>
@@ -76,6 +78,7 @@ export type PriceChartInteractionRefs = {
   trendlinesRef: RefObject<readonly TrendlineDrawing[]>
   rectanglesRef: RefObject<readonly RectangleDrawing[]>
   fibonacciRangesRef: RefObject<readonly FibonacciRangeDrawing[]>
+  parallelChannelsRef: RefObject<readonly ParallelChannelDrawing[]>
   fibonacciExtensionsRef: RefObject<readonly FibonacciRangeExtensionDrawing[]>
   iconsRef: RefObject<readonly IconMarkerDrawing[]>
   textAnchorsRef: RefObject<readonly TextAnchorDrawing[]>
@@ -147,14 +150,14 @@ export function createChartInteractionComposition(input: {
     defaultSecondPoint: (p1) => defaultShapePreviewP2(p1, refs.candlesRef.current),
     defaultThirdPoint: (p1, p2) => ({
       time: defaultShapePreviewP2(p2, refs.candlesRef.current).time,
-      price: (p1.price + p2.price) / 2,
+      price: refs.drawToolRef.current === 'parallel_channel' ? p2.price + (p2.price-p1.price) + Math.max(Math.abs(p2.price)*0.0005,0.0001) : (p1.price + p2.price) / 2,
     }),
     viewportCenter: () => viewportCenterPoint(handle, refs.candlesRef.current),
   }, { doubleTapMs: DOUBLE_TAP_MS, doubleTapPx: DOUBLE_TAP_PX })
 
   refs.interactionCancelRef.current = () => createRuntime.cancel('tool-change')
   refs.seedCoarseTwoPointRef.current = (tool) => createRuntime.seedCoarse(tool)
-  refs.seedCoarseThreePointRef.current = () => createRuntime.seedCoarse(EXTENSION_SCOPE_ID)
+  refs.seedCoarseThreePointRef.current = (tool) => createRuntime.seedCoarse(tool)
 
   const drawingPointToScreen = (point: DrawingPoint): { x: number; y: number } | null => {
     const x = chartXAtTime(handle.chart, point.time, refs.candlesRef.current)
@@ -167,6 +170,7 @@ export function createChartInteractionComposition(input: {
     handle.trendlines.updateAllViews()
     handle.rectangles.updateAllViews()
     handle.fibonacciRanges.updateAllViews()
+    handle.parallelChannels.updateAllViews()
     handle.fibonacciExtensions.updateAllViews()
     handle.icons.updateAllViews()
     handle.polylines.updateAllViews()
@@ -237,6 +241,7 @@ export function createChartInteractionComposition(input: {
     handle.trendlines.setLines(refs.trendlinesRef.current)
     handle.rectangles.setRects(refs.rectanglesRef.current)
     handle.fibonacciRanges.setRanges(refs.fibonacciRangesRef.current)
+    handle.parallelChannels.setChannels(refs.parallelChannelsRef.current)
     handle.fibonacciExtensions.setExtensions(refs.fibonacciExtensionsRef.current)
     handle.warningCircles.setCircles(refs.warningCirclesRef.current)
     handle.icons.setIcons(refs.iconsRef.current)
@@ -341,7 +346,7 @@ export function createChartInteractionComposition(input: {
     if (isCoarsePointer(event) && isTouchSeedShapeTool(tool)) {
       if (!createRuntime.isCoarsePlacing(tool)) {
         if (isTwoPointDrawTool(tool)) createRuntime.seedCoarse(tool)
-        else if (tool === EXTENSION_SCOPE_ID) createRuntime.seedCoarse(EXTENSION_SCOPE_ID)
+        else if (isThreePointTool(tool)) createRuntime.seedCoarse(tool)
       }
       const active = createRuntime.activeAnchor(tool)
       const screen = active ? drawingPointToScreen(active) : null
