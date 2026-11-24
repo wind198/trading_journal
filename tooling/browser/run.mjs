@@ -17,6 +17,12 @@ const env = {
   NEXT_PUBLIC_SUPABASE_URL: fakeSupabase,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'fixture-only-public-key',
 }
+try {
+  await fetch(origin + '/login', {signal: AbortSignal.timeout(1000)})
+  throw Error('Port 4317 is already serving HTTP; stop that server first')
+} catch (error) {
+  if (error.message.startsWith('Port 4317')) throw error
+}
 const server = spawn('pnpm', ['exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', '4317'], { cwd: root, env, stdio: 'inherit' })
 let browser
 const report = []
@@ -116,8 +122,8 @@ try {
       await page.getByRole('button',{name:'Drawing tools — 15M',exact:true}).waitFor()
       await click(page,'Open inspector')
       await page.getByRole('tab',{name:'Indicators'}).click()
-      await page.getByRole('checkbox',{name:'Force candles on 15m'}).waitFor()
-      await click(page,'Close inspector')
+      await page.getByRole('checkbox',{name:'Force candles on 15m'}).waitFor({state:'visible'})
+      await page.locator('#workspace-inspector').getByRole('button',{name:'Close inspector',exact:true}).click()
       await page.getByRole('button',{name:'Open inspector'}).waitFor()
       assert.deepEqual(errors,[])
       report.push({viewport:v.name,status:'passed',initial,fullscreen:full})
