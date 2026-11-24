@@ -33,6 +33,8 @@ import type { VolumeProfileFrame } from '../../_lib/chart/volume-profile'
 import type { ForceScorePoint, KeyLevelZone, RegimeSegment } from '../../_lib/overlays/baseline-indicators'
 import type { IconMarkerDrawing } from './_components/objects/icon/icon-marker-primitive'
 import type { RectangleDrawing } from './_components/objects/rect/rectangle-primitive'
+import type { ParallelChannelDrawing } from './_components/objects/parallel-channel/parallel-channel-primitive'
+import type { ThreePointToolKind } from './_sessions/create/three-point-create-behavior'
 import type { FibonacciRangeExtensionDrawing } from './_components/objects/fibonacci-extension/fibonacci-range-extension-primitive'
 import type { FibonacciRangeDrawing } from './_components/objects/fibonacci-range/fibonacci-range-primitive'
 import type { PolylineArrowDrawing } from './_components/objects/polyline/polyline-arrow-primitive'
@@ -165,6 +167,7 @@ export function PriceChart({
   trendlines = [],
   rectangles = [],
   fibonacciRanges = [],
+  parallelChannels = [],
   fibonacciExtensions = [],
   warningCircles = [],
   icons = [],
@@ -206,6 +209,7 @@ export function PriceChart({
   trendlines?: readonly TrendlineDrawing[]
   rectangles?: readonly RectangleDrawing[]
   fibonacciRanges?: readonly FibonacciRangeDrawing[]
+  parallelChannels?: readonly ParallelChannelDrawing[]
   fibonacciExtensions?: readonly FibonacciRangeExtensionDrawing[]
   warningCircles?: readonly WarningCircleDrawing[]
   icons?: readonly IconMarkerDrawing[]
@@ -262,7 +266,7 @@ export function PriceChart({
   const measurementStateRef = useRef<PriceMeasurementState>({ status: 'idle' })
   const cancelMeasurementRef = useRef<(() => void) | null>(null)
   const seedCoarseTwoPointRef = useRef<((tool: TwoPointToolKind) => boolean) | null>(null)
-  const seedCoarseThreePointRef = useRef<(() => boolean) | null>(null)
+  const seedCoarseThreePointRef = useRef<((tool: ThreePointToolKind) => boolean) | null>(null)
   const interactionCancelRef = useRef<(() => void) | null>(null)
   const editSessionRef = useRef<ChartEditRuntime | null>(null)
   const selectionSessionRef = useRef<ChartSelectionRuntime | null>(null)
@@ -272,6 +276,7 @@ export function PriceChart({
   const trendlinesRef = useRef(trendlines)
   const rectanglesRef = useRef(rectangles)
   const fibonacciRangesRef = useRef(fibonacciRanges)
+  const parallelChannelsRef = useRef(parallelChannels)
   const fibonacciExtensionsRef = useRef(fibonacciExtensions)
   const warningCirclesRef = useRef(warningCircles)
   const iconsRef = useRef(icons)
@@ -305,6 +310,7 @@ export function PriceChart({
   trendlinesRef.current = trendlines
   rectanglesRef.current = rectangles
   fibonacciRangesRef.current = fibonacciRanges
+  parallelChannelsRef.current = parallelChannels
   fibonacciExtensionsRef.current = fibonacciExtensions
   warningCirclesRef.current = warningCircles
   iconsRef.current = icons
@@ -379,6 +385,7 @@ export function PriceChart({
     handle?.trendlines.setSelectedId(id)
     handle?.rectangles.setSelectedId(id)
     handle?.fibonacciRanges.setSelectedId(id)
+    handle?.parallelChannels.setSelectedId(id)
     handle?.fibonacciExtensions.setSelectedId(id)
     handle?.warningCircles.setSelectedId(id)
     handle?.icons.setSelectedId(id)
@@ -467,6 +474,7 @@ export function PriceChart({
           trendlinesRef,
           rectanglesRef,
           fibonacciRangesRef,
+          parallelChannelsRef,
           fibonacciExtensionsRef,
           iconsRef,
           textAnchorsRef,
@@ -556,6 +564,7 @@ export function PriceChart({
     handle.rectangles.setRects(rectangles)
   }, [rectangles, epoch])
 
+  useEffect(() => { handleRef.current?.parallelChannels.setChannels(parallelChannels) }, [parallelChannels, epoch])
   useEffect(() => {
     handleRef.current?.fibonacciExtensions.setExtensions(fibonacciExtensions)
   }, [fibonacciExtensions, epoch])
@@ -821,8 +830,8 @@ export function PriceChart({
     ) {
       if (isTwoPointDrawTool(drawTool)) {
         seedCoarseTwoPointRef.current?.(drawTool)
-      } else if (drawTool === 'fibonacci_range_extension') {
-        seedCoarseThreePointRef.current?.()
+      } else if (drawTool === 'fibonacci_range_extension' || drawTool === 'parallel_channel') {
+        seedCoarseThreePointRef.current?.(drawTool)
       }
     }
   }, [drawTool, measureActive, epoch])
@@ -835,6 +844,7 @@ export function PriceChart({
     handle.trendlines.setSelectionEnabled(!drawing)
     handle.rectangles.setSelectionEnabled(!drawing)
     handle.fibonacciRanges.setSelectionEnabled(!drawing)
+    handle.parallelChannels.setSelectionEnabled(!drawing)
     handle.fibonacciExtensions.setSelectionEnabled(!drawing)
     handle.warningCircles.setSelectionEnabled(!drawing)
     handle.icons.setSelectionEnabled(!drawing)
@@ -852,13 +862,14 @@ export function PriceChart({
       trendlines.some((d) => d.id === selectedIdRef.current) ||
       rectangles.some((d) => d.id === selectedIdRef.current) ||
       fibonacciRanges.some((d) => d.id === selectedIdRef.current) ||
+      parallelChannels.some((d) => d.id === selectedIdRef.current) ||
       fibonacciExtensions.some((d) => d.id === selectedIdRef.current) ||
       warningCircles.some((d) => d.id === selectedIdRef.current) ||
       icons.some((d) => d.id === selectedIdRef.current) ||
       polylines.some((d) => d.id === selectedIdRef.current) ||
       textAnchors.some((d) => d.id === selectedIdRef.current)
     if (!exists) selectDrawing(null)
-  }, [trendlines, rectangles, fibonacciRanges, fibonacciExtensions, warningCircles, icons, polylines, textAnchors, epoch])
+  }, [trendlines, rectangles, fibonacciRanges, fibonacciExtensions, parallelChannels, warningCircles, icons, polylines, textAnchors, epoch])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

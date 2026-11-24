@@ -63,6 +63,10 @@ export function patchPolylineDrawing(
     )
     return true
   }
+  if (handle.parallelChannels?.getDrawing(id) && points.length === 3) {
+    handle.parallelChannels.setChannels(handle.parallelChannels.channels.map(d => d.id === id ? {id,points:[points[0]!,points[1]!,points[2]!]} : d))
+    return true
+  }
   if (handle.fibonacciExtensions.getDrawing(id) && points.length >= 3) {
     handle.fibonacciExtensions.setExtensions(
       handle.fibonacciExtensions.ranges.map((item) =>

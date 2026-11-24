@@ -23,7 +23,8 @@ import {
 } from './two-point-create-behavior'
 import {
   activeThreePointAnchor,
-  EXTENSION_SCOPE_ID,
+  isThreePointTool,
+  type ThreePointToolKind,
   ThreePointCreateBehavior,
   type ThreePointCreateState,
 } from './three-point-create-behavior'
@@ -77,9 +78,6 @@ function isOneShotKind(tool: ChartDrawingKind): boolean {
   return isChartIconKind(tool) || isTextAnchorKind(tool)
 }
 
-function isExtension(tool: ChartDrawingKind | null): tool is typeof EXTENSION_SCOPE_ID {
-  return tool === EXTENSION_SCOPE_ID
-}
 
 /** Shared InteractionStore create router for fine/coarse shapes, extension, polyline, one-shot. */
 export function createChartCreateRuntime(
@@ -95,6 +93,7 @@ export function createChartCreateRuntime(
     registry.registerCreation(new TwoPointCreateBehavior(kind, defaults))
   }
   registry.registerCreation(new ThreePointCreateBehavior(defaults))
+  registry.registerCreation(new ThreePointCreateBehavior(defaults, 'parallel_channel'))
   registry.registerCreation(new PolylineCreateBehavior(gesture))
 
   const effects = new InteractionEffectRunner((effect: InteractionEffect) => {
@@ -159,7 +158,7 @@ export function createChartCreateRuntime(
       if (!tool) return false
       return (
         isTwoPointCreateKind(tool) ||
-        isExtension(tool) ||
+        isThreePointTool(tool) ||
         isPolylineArrowKind(tool) ||
         isOneShotKind(tool)
       )
@@ -170,7 +169,7 @@ export function createChartCreateRuntime(
     placing(tool: ChartDrawingKind | null): boolean {
       if (!tool) return false
       if (isPolylineArrowKind(tool)) return isPlacing(POLYLINE_SCOPE_ID)
-      if (isExtension(tool)) return isPlacing(EXTENSION_SCOPE_ID)
+      if (isThreePointTool(tool)) return isPlacing(tool)
       return isTwoPointCreateKind(tool) && isPlacing(tool)
     },
     isCoarsePlacing(tool: ChartDrawingKind | null): boolean {
@@ -178,7 +177,7 @@ export function createChartCreateRuntime(
       const state = store.snapshot.state as { pointer?: string }
       if (state.pointer !== 'coarse') return false
       if (isTwoPointCreateKind(tool)) return isPlacing(tool)
-      if (isExtension(tool)) return isPlacing(EXTENSION_SCOPE_ID)
+      if (isThreePointTool(tool)) return isPlacing(tool)
       return false
     },
     activeAnchor(tool: ChartDrawingKind | null): DrawingPoint | null {
@@ -186,7 +185,7 @@ export function createChartCreateRuntime(
       if (isTwoPointCreateKind(tool) && isPlacing(tool)) {
         return activeTwoPointAnchor(store.snapshot.state as TwoPointCreateState)
       }
-      if (isExtension(tool) && isPlacing(EXTENSION_SCOPE_ID)) {
+      if (isThreePointTool(tool) && isPlacing(tool)) {
         return activeThreePointAnchor(store.snapshot.state as ThreePointCreateState)
       }
       return null
@@ -213,9 +212,9 @@ export function createChartCreateRuntime(
         store.dispatch({ type: 'confirm' })
         return true
       }
-      if (isExtension(tool)) {
-        if (!isPlacing(EXTENSION_SCOPE_ID)) {
-          beginOrReplace(EXTENSION_SCOPE_ID, { pointer: 'fine', p1: mapped })
+      if (isThreePointTool(tool)) {
+        if (!isPlacing(tool)) {
+          beginOrReplace(tool, { pointer: 'fine', p1: mapped })
           return true
         }
         store.dispatch({ type: 'pointer-move', pointer: pointerFor(mapped, screen) })
@@ -247,7 +246,7 @@ export function createChartCreateRuntime(
         })
         return true
       }
-      if (isExtension(tool)) {
+      if (isThreePointTool(tool)) {
         if (screen == null) return true
         store.dispatch({
           type: 'pointer-move',
@@ -266,11 +265,11 @@ export function createChartCreateRuntime(
       })
       return true
     },
-    seedCoarse(tool: TwoPointToolKind | typeof EXTENSION_SCOPE_ID): boolean {
+    seedCoarse(tool: TwoPointToolKind | ThreePointToolKind): boolean {
       const p1 = ports.viewportCenter()
       if (!p1) return false
-      if (tool === EXTENSION_SCOPE_ID) {
-        beginOrReplace(EXTENSION_SCOPE_ID, { pointer: 'coarse', p1 })
+      if (isThreePointTool(tool)) {
+        beginOrReplace(tool, { pointer: 'coarse', p1 })
         return true
       }
       beginOrReplace(tool, { pointer: 'coarse', p1 })
