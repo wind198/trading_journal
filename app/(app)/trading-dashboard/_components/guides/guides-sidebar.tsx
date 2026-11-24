@@ -104,7 +104,7 @@ function ArticleSection({ section }: { section: GuideSection }) {
   )
 }
 
-export function GuidesSidebar({ onClose }: { onClose: () => void }) {
+export function GuidesSidebar({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const biasHtf = usePaneBias('15m')
   const biasPrimary = usePaneBias('3m')
   const autoHtf = regimeFromBias(biasHtf)
@@ -118,15 +118,15 @@ export function GuidesSidebar({ onClose }: { onClose: () => void }) {
 
   return (
     <aside
-      className="absolute inset-y-0 right-0 z-30 flex w-80 max-w-[min(20rem,90vw)] flex-col border-l border-border bg-background/95 shadow-lg backdrop-blur-sm"
+      className={embedded ? "flex min-h-0 flex-1 flex-col" : "absolute inset-y-0 right-0 z-30 flex w-80 max-w-[min(20rem,90vw)] flex-col border-l border-border bg-background/95 shadow-lg backdrop-blur-sm"}
       aria-label="Trading guides"
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+      {!embedded && <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
         <h3 className="text-sm font-semibold">Guides</h3>
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Close guides" onClick={onClose}>
           <X />
         </Button>
-      </div>
+      </div>}
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
         <RegimeSelect

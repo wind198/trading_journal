@@ -4,9 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useMediaQuery } from 'usehooks-ts'
-import { DASHBOARD_NOTES_QUERY_KEY, NotesSidebar } from '../notes/notes-sidebar'
+import { DASHBOARD_NOTES_QUERY_KEY } from '../notes/notes-sidebar'
 import { loadDashboardNotes } from '../../_lib/notes/dashboard-notes'
-import { GuidesSidebar } from '../guides/guides-sidebar'
 import { NonTradeWarningBanner } from '../dashboard/non-trade-warning-banner'
 import { ExecutionOrderDrawer } from '../execution/execution-order-drawer'
 import { useChartOverlaySettings, useSessionSlotsEnabled } from '../dashboard/chart-overlay-settings-menu'
@@ -20,6 +19,8 @@ import { WorkspaceToolbar } from './workspace-toolbar'
 import { WorkspaceLayout } from './workspace-layout'
 import { activatePane, resolveDrawingControl, toggleDrawingMode, cancelPaneMode, IDLE_MODE, type DrawingControl, type DrawingMode } from '../../_lib/workspace/drawing-control'
 import { useWorkspaceLayoutPreferences } from '../../_hooks/useWorkspaceLayoutPreferences'
+import { WorkspaceInspector } from './workspace-inspector'
+import { DEFAULT_INSPECTOR, toggleInspector, showInspector } from '../../_lib/workspace/inspector-state'
 import { ChartPane } from '../chart-pane/chart-pane'
 
 const SMALL_SCREEN_QUERY = '(min-width: 1600px)'
@@ -39,7 +40,7 @@ export function TradingWorkspace() {
       current[paneId] === regime ? current : { ...current, [paneId]: regime },
     )
   }, [])
-  const [notesOpen, setNotesOpen] = useState(false)
+  const [inspector, setInspector] = useState(DEFAULT_INSPECTOR)
   const didAutoOpenNotesRef = useRef(false)
   const notesQuery = useQuery({
     queryKey: DASHBOARD_NOTES_QUERY_KEY,
@@ -50,9 +51,8 @@ export function TradingWorkspace() {
     if (!notesQuery.isSuccess) return
     if (!notesQuery.data.some((note) => note.pinned)) return
     didAutoOpenNotesRef.current = true
-    if (!window.matchMedia("(max-width: 767px), (max-height: 500px)").matches) setNotesOpen(true)
+    if (!window.matchMedia("(max-width: 767px), (max-height: 500px)").matches) setInspector(current => showInspector(current, 'notes'))
   }, [notesQuery.isSuccess, notesQuery.data])
-  const [guidesOpen, setGuidesOpen] = useState(false)
   const [executionOpen, setExecutionOpen] = useState(false)
   const [marketReloading, setMarketReloading] = useState(false)
   const [resetLayoutEpoch, setResetLayoutEpoch] = useState(0)
@@ -92,20 +92,13 @@ export function TradingWorkspace() {
           preferences={preferences} onPreferencesChange={setPreferences} wideLayout={wideLayout}
           fullScreen={fullScreen}
           expanded={expanded} focusMode={focusMode} marketReloading={marketReloading}
-          globalChartType={globalChartType} overlaySettings={overlaySettings} alertConfig={alertConfig}
-          autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings}
-          notesOpen={notesOpen} onFocusChange={changeFocus}
+          globalChartType={globalChartType}
+          inspectorOpen={inspector.open} onFocusChange={changeFocus}
           drawingControl={control} onDrawingMode={chooseMode}
           onReloadMarketData={() => void reloadMarketData()}
           onResetLayout={() => setResetLayoutEpoch(current => current + 1)}
           onChartTypeChange={setGlobalChartType}
-          onToggleNotes={() => {
-            setNotesOpen(open => {
-              const next = !open
-              if (next) setGuidesOpen(false)
-              return next
-            })
-          }}
+          onToggleInspector={() => setInspector(toggleInspector)}
           onFullscreen={() => setFullScreen(current => !current)}
         />
       {!fullScreen && <NonTradeWarningBanner />}
@@ -169,8 +162,9 @@ export function TradingWorkspace() {
           )
         })}
         </WorkspaceLayout>
-        {notesOpen && <NotesSidebar symbol={SYMBOL} onClose={() => setNotesOpen(false)} />}
-        {guidesOpen && <GuidesSidebar onClose={() => setGuidesOpen(false)} />}
+        <WorkspaceInspector open={inspector.open} tab={inspector.tab} activePane={control.paneId}
+          onTab={tab => setInspector(current => showInspector(current, tab))} onClose={() => setInspector(current => ({ ...current, open: false }))}
+          settings={overlaySettings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings} alertConfig={alertConfig} />
       </div>
       <ExecutionOrderDrawer
         open={executionOpen}

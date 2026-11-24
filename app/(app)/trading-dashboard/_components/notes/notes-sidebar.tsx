@@ -26,16 +26,19 @@ export const DASHBOARD_NOTES_QUERY_KEY = ['dashboard-notes'] as const
 type NotesSidebarProps = {
   symbol: string
   onClose: () => void
+  embedded?: boolean
 }
 
 function NoteBodyEditor({
   noteId,
   initialBody,
   onPersist,
+  onFlush,
 }: {
   noteId: string
   initialBody: string
   onPersist: (id: string, body: string) => void
+  onFlush: () => void
 }) {
   const [draftBody, setDraftBody] = useState(initialBody)
 
@@ -47,6 +50,7 @@ function NoteBodyEditor({
         setDraftBody(body)
         onPersist(noteId, body)
       }}
+      onBlur={onFlush}
       placeholder="Write your note…"
       className={cn(
         'h-full min-h-32 w-full min-w-0 flex-1 resize-none rounded-md border border-input bg-transparent px-2 py-1.5 text-sm',
@@ -191,7 +195,7 @@ function NoteTitleRow({
   )
 }
 
-export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
+export function NotesSidebar({ symbol, onClose, embedded = false }: NotesSidebarProps) {
   const queryClient = useQueryClient()
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -219,6 +223,8 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
       void queryClient.invalidateQueries({ queryKey: DASHBOARD_NOTES_QUERY_KEY })
     })
   }, NOTE_BODY_DEBOUNCE_MS)
+
+  useEffect(() => () => { persistBody.flush() }, [persistBody])
 
   const onCreateNote = () => {
     if (creating) return
@@ -263,6 +269,7 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
   }
 
   const onDeleteNote = (id: string) => {
+    persistBody.flush()
     let previous: DashboardNote[] = []
     setNotesCache((prev) => {
       previous = prev
@@ -276,13 +283,14 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
   }
 
   const toggleExpanded = (id: string) => {
+    persistBody.flush()
     setExpandedNoteId((current) => (current === id ? null : id))
   }
 
   return (
     <TooltipProvider>
       <aside
-        className="absolute inset-y-0 right-0 z-30 flex w-80 max-w-[min(20rem,90vw)] flex-col border-l border-border bg-background/95 shadow-lg backdrop-blur-sm"
+        className={embedded ? "flex min-h-0 flex-1 flex-col" : "absolute inset-y-0 right-0 z-30 flex w-80 max-w-[min(20rem,90vw)] flex-col border-l border-border bg-background/95 shadow-lg backdrop-blur-sm"}
         aria-label="Notes"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1.5">
@@ -298,9 +306,7 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
             >
               <Plus />
             </Button>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label="Close notes" onClick={onClose}>
-              <X />
-            </Button>
+            {!embedded && <Button type="button" variant="ghost" size="icon-sm" aria-label="Close notes" onClick={onClose}><X /></Button>}
           </div>
         </div>
 
@@ -340,6 +346,7 @@ export function NotesSidebar({ symbol, onClose }: NotesSidebarProps) {
                           noteId={note.id}
                           initialBody={note.body}
                           onPersist={persistBody}
+                          onFlush={() => persistBody.flush()}
                         />
                       </div>
                     )}

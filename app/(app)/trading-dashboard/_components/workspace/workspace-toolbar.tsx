@@ -3,20 +3,18 @@
 import { AppMenu } from '@/app/(app)/_components/app-shell/app-menu'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ChartOverlaySettingsMenu } from '../dashboard/chart-overlay-settings-menu'
 import { type ChartType } from '../chart/price-chart'
-import { ChartCandlestick, ChartNoAxesCombined, Expand, NotebookPen, RefreshCw, RotateCcw, Shrink } from 'lucide-react'
+import { ChartCandlestick, ChartNoAxesCombined, Expand, PanelRight, RefreshCw, RotateCcw, Shrink } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { LayoutSizeControls } from './layout-size-controls'
 import type { LayoutPreferences } from '../../_lib/workspace/layout-preferences'
 import { DrawingToolMenu } from './drawing-tool-menu'
 import type { DrawingControl, DrawingMode } from '../../_lib/workspace/drawing-control'
-import type { ComponentProps } from 'react'
 import { CHART_TYPES, SYMBOL, type PaneId } from '../../_lib/workspace/workspace-layout'
 
 export function WorkspaceToolbar({
-  preferences, onPreferencesChange, wideLayout, fullScreen, expanded, focusMode, marketReloading, globalChartType, overlaySettings, alertConfig, autoRegimesByPane, onSettingsChange,
-  drawingControl, onDrawingMode, notesOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleNotes, onFullscreen,
+  preferences, onPreferencesChange, wideLayout, fullScreen, expanded, focusMode, marketReloading, globalChartType,
+  drawingControl, onDrawingMode, inspectorOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleInspector, onFullscreen,
 }: {
   preferences: LayoutPreferences
   onPreferencesChange: (update: (current: LayoutPreferences) => LayoutPreferences) => void
@@ -26,18 +24,14 @@ export function WorkspaceToolbar({
   focusMode: boolean
   marketReloading: boolean
   globalChartType: ChartType
-  overlaySettings: ComponentProps<typeof ChartOverlaySettingsMenu>['settings']
-  alertConfig: ComponentProps<typeof ChartOverlaySettingsMenu>['alertConfig']
-  autoRegimesByPane: ComponentProps<typeof ChartOverlaySettingsMenu>['autoRegimesByPane']
-  onSettingsChange: ComponentProps<typeof ChartOverlaySettingsMenu>['onSettingsChange']
   drawingControl: DrawingControl
   onDrawingMode: (mode: DrawingMode) => void
-  notesOpen: boolean
+  inspectorOpen: boolean
   onFocusChange: (value: boolean) => void
   onReloadMarketData: () => void
   onResetLayout: () => void
   onChartTypeChange: (type: ChartType) => void
-  onToggleNotes: () => void
+  onToggleInspector: () => void
   onFullscreen: () => void
 }) {
   return (
@@ -83,21 +77,16 @@ export function WorkspaceToolbar({
             </DropdownMenu>
             
             <DrawingToolMenu paneId={drawingControl.paneId} mode={drawingControl.mode} onMode={onDrawingMode} />
-            <ChartOverlaySettingsMenu
-              settings={overlaySettings}
-              alertConfig={alertConfig}
-              autoRegimesByPane={autoRegimesByPane}
-              onSettingsChange={onSettingsChange}
-            />
             <Button
-              variant={notesOpen ? 'secondary' : 'ghost'}
+              variant={inspectorOpen ? 'secondary' : 'ghost'}
               size="icon-sm"
               className="size-9"
-              aria-label={notesOpen ? 'Close notes' : 'Open notes'}
-              aria-pressed={notesOpen}
-              onClick={onToggleNotes}
+              aria-label={inspectorOpen ? 'Close inspector' : 'Open inspector'}
+              aria-expanded={inspectorOpen}
+              aria-controls="workspace-inspector"
+              onClick={onToggleInspector}
             >
-              <NotebookPen />
+              <PanelRight />
             </Button>
             
             <Button
