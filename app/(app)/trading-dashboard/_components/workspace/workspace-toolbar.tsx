@@ -6,15 +6,21 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ChartOverlaySettingsMenu } from '../dashboard/chart-overlay-settings-menu'
 import { type ChartType } from '../chart/price-chart'
 import { ChartCandlestick, ChartNoAxesCombined, Expand, NotebookPen, RefreshCw, RotateCcw, Shrink } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { LayoutSizeControls } from './layout-size-controls'
+import type { LayoutPreferences } from '../../_lib/workspace/layout-preferences'
 import { DrawingToolMenu } from './drawing-tool-menu'
 import type { DrawingControl, DrawingMode } from '../../_lib/workspace/drawing-control'
 import type { ComponentProps } from 'react'
 import { CHART_TYPES, SYMBOL, type PaneId } from '../../_lib/workspace/workspace-layout'
 
 export function WorkspaceToolbar({
-  fullScreen, expanded, focusMode, marketReloading, globalChartType, overlaySettings, alertConfig, autoRegimesByPane, onSettingsChange,
+  preferences, onPreferencesChange, wideLayout, fullScreen, expanded, focusMode, marketReloading, globalChartType, overlaySettings, alertConfig, autoRegimesByPane, onSettingsChange,
   drawingControl, onDrawingMode, notesOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleNotes, onFullscreen,
 }: {
+  preferences: LayoutPreferences
+  onPreferencesChange: (update: (current: LayoutPreferences) => LayoutPreferences) => void
+  wideLayout: boolean
   fullScreen: boolean
   expanded: PaneId | null
   focusMode: boolean
@@ -43,9 +49,20 @@ export function WorkspaceToolbar({
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
             {expanded == null && (
-              <Button variant="outline" size="sm" className="h-9 min-w-9 px-2" aria-label={focusMode ? 'Show four charts' : 'Focus: show 15m and 3m charts'} onClick={() => onFocusChange(!focusMode)}>
-                {focusMode ? '2' : '4'}<span className="hidden lg:inline"> charts</span>
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 min-w-9 px-2" aria-label="Chart layout and pane sizes">
+                    {focusMode ? '2' : '4'}<span className="hidden lg:inline"> charts</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-auto max-h-[75dvh] overflow-y-auto p-2">
+                  <div className="flex gap-1 px-2 pb-1">
+                    <Button size="sm" variant={!focusMode ? 'default' : 'outline'} aria-pressed={!focusMode} onClick={() => onFocusChange(false)}>4 charts</Button>
+                    <Button size="sm" variant={focusMode ? 'default' : 'outline'} aria-pressed={focusMode} onClick={() => onFocusChange(true)}>2 charts</Button>
+                  </div>
+                  <LayoutSizeControls preferences={preferences} onChange={onPreferencesChange} wide={wideLayout} />
+                </PopoverContent>
+              </Popover>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
