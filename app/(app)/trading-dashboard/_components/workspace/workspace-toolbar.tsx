@@ -8,13 +8,14 @@ import { ChartCandlestick, ChartNoAxesCombined, Expand, PanelRight, RefreshCw, R
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { LayoutSizeControls } from './layout-size-controls'
 import type { LayoutPreferences } from '../../_lib/workspace/layout-preferences'
+import type { FavoriteTools } from '../../_lib/workspace/favorite-tools'
 import { DrawingToolMenu } from './drawing-tool-menu'
 import type { DrawingControl, DrawingMode } from '../../_lib/workspace/drawing-control'
 import { CHART_TYPES, SYMBOL, type PaneId } from '../../_lib/workspace/workspace-layout'
 
 export function WorkspaceToolbar({
   preferences, onPreferencesChange, wideLayout, fullScreen, expanded, focusMode, marketReloading, globalChartType,
-  drawingControl, onDrawingMode, inspectorOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleInspector, onFullscreen,
+  favorites, onToggleFavorites, onEditFavorites, drawingControl, onDrawingMode, inspectorOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleInspector, onFullscreen,
 }: {
   preferences: LayoutPreferences
   onPreferencesChange: (update: (current: LayoutPreferences) => LayoutPreferences) => void
@@ -24,6 +25,9 @@ export function WorkspaceToolbar({
   focusMode: boolean
   marketReloading: boolean
   globalChartType: ChartType
+  favorites: FavoriteTools
+  onToggleFavorites: () => void
+  onEditFavorites: () => void
   drawingControl: DrawingControl
   onDrawingMode: (mode: DrawingMode) => void
   inspectorOpen: boolean
@@ -78,7 +82,7 @@ export function WorkspaceToolbar({
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <DrawingToolMenu paneId={drawingControl.paneId} mode={drawingControl.mode} onMode={onDrawingMode} />
+            <DrawingToolMenu paneId={drawingControl.paneId} mode={drawingControl.mode} onMode={onDrawingMode} favorites={favorites} onToggleFavorites={onToggleFavorites} onEditFavorites={onEditFavorites} />
             <Button
               variant={inspectorOpen ? 'secondary' : 'ghost'}
               size="icon-sm"

@@ -21,11 +21,17 @@ import { activatePane, resolveDrawingControl, toggleDrawingMode, cancelPaneMode,
 import { useWorkspaceLayoutPreferences } from '../../_hooks/useWorkspaceLayoutPreferences'
 import { WorkspaceInspector } from './workspace-inspector'
 import { DEFAULT_INSPECTOR, toggleInspector, showInspector } from '../../_lib/workspace/inspector-state'
+import { useFavoriteTools } from '../../_hooks/useFavoriteTools'
+import { toggleFavorite } from '../../_lib/workspace/favorite-tools'
+import { FloatingFavoriteToolbar } from './floating-favorite-toolbar'
+import { FavoriteToolsDialog } from './favorite-tools-dialog'
 import { ChartPane } from '../chart-pane/chart-pane'
 
 const SMALL_SCREEN_QUERY = '(min-width: 1600px)'
 
 export function TradingWorkspace() {
+  const [favorites, setFavorites] = useFavoriteTools()
+  const [editFavorites, setEditFavorites] = useState(false)
   const [drawingControl, setDrawingControl] = useState<DrawingControl>({ paneId: '15m', mode: IDLE_MODE })
   const [expanded, setExpanded] = useState<PaneId | null>(null)
   const [fullScreen, setFullScreen] = useState(false)
@@ -94,6 +100,7 @@ export function TradingWorkspace() {
           expanded={expanded} focusMode={focusMode} marketReloading={marketReloading}
           globalChartType={globalChartType}
           inspectorOpen={inspector.open} onFocusChange={changeFocus}
+          favorites={favorites} onToggleFavorites={() => setFavorites(current => ({ ...current, visible: !current.visible }))} onEditFavorites={() => setEditFavorites(true)}
           drawingControl={control} onDrawingMode={chooseMode}
           onReloadMarketData={() => void reloadMarketData()}
           onResetLayout={() => setResetLayoutEpoch(current => current + 1)}
@@ -121,7 +128,7 @@ export function TradingWorkspace() {
               key={pane.id}
               pane={pane}
               active={control.paneId === pane.id}
-              keyboardEnabled={!inspector.open}
+              keyboardEnabled={!inspector.open && !editFavorites}
               drawingMode={control.paneId === pane.id ? control.mode : IDLE_MODE}
               onActivate={() => selectPane(pane.id)}
               onCancelMode={(kind) => setDrawingControl(current => cancelPaneMode(current, pane.id, kind))}
@@ -163,10 +170,12 @@ export function TradingWorkspace() {
           )
         })}
         </WorkspaceLayout>
+        {!inspector.open && <FloatingFavoriteToolbar favorites={favorites} control={control} onMode={chooseMode} onHide={() => setFavorites(current => ({ ...current, visible: false }))} onEdit={() => setEditFavorites(true)} />}
         <WorkspaceInspector open={inspector.open} tab={inspector.tab} activePane={control.paneId}
           onTab={tab => setInspector(current => showInspector(current, tab))} onClose={() => setInspector(current => ({ ...current, open: false }))}
           settings={overlaySettings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings} alertConfig={alertConfig} />
       </div>
+      <FavoriteToolsDialog open={editFavorites} onOpenChange={setEditFavorites} favorites={favorites} onToggle={id => setFavorites(current => toggleFavorite(current, id))} />
       <ExecutionOrderDrawer
         open={executionOpen}
         onOpenChange={setExecutionOpen}

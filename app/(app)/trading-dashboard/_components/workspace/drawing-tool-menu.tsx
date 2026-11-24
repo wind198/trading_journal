@@ -2,26 +2,20 @@
 
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Pencil, TrendingUp, Square, Circle, Spline, Type, Ruler, AlignLeft, Check, MousePointer2 } from 'lucide-react'
+import { Pencil, Ruler, Check, MousePointer2, Star } from 'lucide-react'
 import { CHART_ICON_DEFINITIONS } from '../../_lib/chart/chart-icons'
-import type { ChartDrawingKind } from '../../_lib/chart/chart-drawings'
+import { TOOLS } from './drawing-tool-catalog'
+import type { FavoriteTools } from '../../_lib/workspace/favorite-tools'
 import type { DrawingMode } from '../../_lib/workspace/drawing-control'
 import type { PaneId } from '../../_lib/workspace/workspace-layout'
 
-const TOOLS = [
-  { tool: 'trendline', label: 'Trend line', icon: TrendingUp },
-  { tool: 'rectangle', label: 'Rectangle', icon: Square },
-  { tool: 'fibonacci_range', label: 'Fibonacci range', icon: AlignLeft },
-  { tool: 'fibonacci_range_extension', label: 'Fibonacci extension', icon: AlignLeft },
-  { tool: 'warning_circle', label: 'Warning circle', icon: Circle },
-  { tool: 'polyline_arrow', label: 'Polyline arrow', icon: Spline },
-  { tool: 'text_anchor', label: 'Text anchor', icon: Type },
-] as const satisfies readonly { tool: ChartDrawingKind; label: string; icon: typeof Pencil }[]
-
-export function DrawingToolMenu({ paneId, mode, onMode, disabled }: {
+export function DrawingToolMenu({ paneId, mode, onMode, favorites, onToggleFavorites, onEditFavorites, disabled }: {
   paneId: PaneId
   mode: DrawingMode
   onMode: (mode: DrawingMode) => void
+  favorites: FavoriteTools
+  onToggleFavorites: () => void
+  onEditFavorites: () => void
   disabled?: boolean
 }) {
   const active = mode.kind !== 'idle'
@@ -37,6 +31,9 @@ export function DrawingToolMenu({ paneId, mode, onMode, disabled }: {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="workspace-drawing-menu max-h-[min(70dvh,28rem)] overflow-y-auto overscroll-contain">
+        <DropdownMenuItem onSelect={onToggleFavorites}><Star />{favorites.visible ? 'Hide favorites toolbar' : 'Show favorites toolbar'}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onEditFavorites}>Customize favorites…</DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>Draw on {paneId.toUpperCase()}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => onMode({ kind: 'idle' })}><MousePointer2 />Cursor / cancel</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onMode({ kind: 'measure' })}><Ruler />Measure{mode.kind === 'measure' && <Check className="ml-auto" />}</DropdownMenuItem>
