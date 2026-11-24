@@ -1,10 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Calculator } from 'lucide-react'
-import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -14,7 +11,6 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createClient } from '@/lib/supabase/client'
 import { calculateEurusdLotSize } from '../_lib/eurusd-lot-size'
 import {
   readEurusdCalculatorInputs,
@@ -28,7 +24,6 @@ function parsePositiveNumber(value: string): number {
 }
 
 export function LotSizeCalculatorPage() {
-  const router = useRouter()
   const [riskUsd, setRiskUsd] = useState('')
   const [stopLossPoints, setStopLossPoints] = useState('')
   const [storageReady, setStorageReady] = useState(false)
@@ -53,26 +48,11 @@ export function LotSizeCalculatorPage() {
     [riskUsd, stopLossPoints],
   )
 
-  async function handleSignOut() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
-
   return (
-    <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <AppNavLinks />
-          <h1 className="truncate text-sm font-semibold">Lot size calculator</h1>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={handleSignOut}>
-          Sign out
-        </Button>
-      </header>
+    <div className="flex min-h-full flex-col bg-background text-foreground">
+      <header className="border-b bg-card px-4 py-2"><h1 className="text-sm font-semibold">Lot size calculator</h1></header>
 
-      <main className={`flex flex-1 items-start justify-center px-4 py-8 sm:py-12 ${styles.main}`}>
+      <section className={`flex flex-1 items-start justify-center px-4 py-8 sm:py-12 ${styles.main}`}>
         <Card className={`w-full max-w-xl ${styles.card}`}>
           <CardHeader className="border-b">
             <div className="flex items-center gap-2">
@@ -160,7 +140,7 @@ export function LotSizeCalculatorPage() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </section>
     </div>
   )
 }

@@ -7,3 +7,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## UI/UX changes
+Read .agents/skills/ui-ux-orchestrator/SKILL.md and docs/ui-design-system.md before modifying presentation. Follow existing frontend architecture and library-first rules. Preserve trading behavior and chart runtime unless explicitly in scope.

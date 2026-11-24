@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
+import { useMediaQuery } from 'usehooks-ts'
+import { AppMenu } from '@/app/(app)/_components/app-shell/app-menu'
 import { Button } from '@/components/ui/button'
-import { Toggle } from '@/components/ui/toggle'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { AppNavLinks } from '@/app/(app)/_components/app-nav-links'
 import { DASHBOARD_NOTES_QUERY_KEY, NotesSidebar } from '../notes/notes-sidebar'
 import { loadDashboardNotes } from '../../_lib/notes/dashboard-notes'
 import { GuidesSidebar } from '../guides/guides-sidebar'
@@ -99,7 +97,6 @@ import {
   ChartCandlestick,
   ChartNoAxesCombined,
   Expand,
-  Focus,
   Maximize2,
   Minimize2,
   Minus,
@@ -120,18 +117,6 @@ import {
 
 const SYMBOL = 'EURUSD'
 const SMALL_SCREEN_QUERY = '(min-width: 1600px)'
-
-function useTabletUp() {
-  const [tablet, setTablet] = useState(false)
-  useEffect(() => {
-    const media = window.matchMedia(SMALL_SCREEN_QUERY)
-    const update = () => setTablet(media.matches)
-    update()
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
-  }, [])
-  return tablet
-}
 
 const CHART_TYPES: { id: ChartType; label: string }[] = [
   { id: 'line', label: 'Line' },
@@ -208,7 +193,7 @@ function Dashboard() {
     if (!notesQuery.isSuccess) return
     if (!notesQuery.data.some((note) => note.pinned)) return
     didAutoOpenNotesRef.current = true
-    setNotesOpen(true)
+    if (!window.matchMedia("(max-width: 767px), (max-height: 500px)").matches) setNotesOpen(true)
   }, [notesQuery.isSuccess, notesQuery.data])
   const [guidesOpen, setGuidesOpen] = useState(false)
   const [executionOpen, setExecutionOpen] = useState(false)
@@ -217,11 +202,10 @@ function Dashboard() {
   const [appliedResetLayoutEpochs, setAppliedResetLayoutEpochs] = useState<
     Partial<Record<PaneId, number>>
   >({})
-  const tablet = useTabletUp()
+  const tablet = useMediaQuery(SMALL_SCREEN_QUERY, { initializeWithValue: false })
   const [chartTypes, setChartTypes] = useState<Partial<Record<PaneId, ChartType>>>({})
   const [globalChartType, setGlobalChartType] = useState<ChartType>('candlestick')
   const queryClient = useQueryClient()
-  const router = useRouter()
   const visiblePanes =
     expanded == null && focusMode
       ? PANES.filter((pane) =>
@@ -229,11 +213,6 @@ function Dashboard() {
         )
       : PANES
   const sessionSlotEnabled = useSessionSlotsEnabled(overlaySettings.sessionSlots)
-
-  const signOut = async () => {
-    await createClient().auth.signOut()
-    router.push('/login')
-  }
 
   const reloadMarketData = async () => {
     if (marketReloading) return
@@ -248,58 +227,37 @@ function Dashboard() {
   }
 
   return (
-    <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-background">
+    <div data-workspace-fullscreen={fullScreen ? "true" : undefined} className="relative flex h-full min-h-0 flex-col overflow-hidden overscroll-none bg-background">
       {!fullScreen && (
-        <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-2 py-1.5 sm:gap-2 sm:px-3">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <AppNavLinks className="shrink-0" />
-            {/* <h1 className="min-w-0 truncate text-sm font-semibold">Trading dashboard</h1> */}
+        <header className="workspace-toolbar flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-1 sm:px-2">
+          <div className="workspace-app-menu hidden shrink-0"><AppMenu /></div>
+          <div className="flex shrink-0 items-center gap-1 text-xs font-medium">
+            <span>EURUSD</span>
+            
           </div>
-          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-            {/* <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-              Sign out
-            </Button> */}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Reload market data"
-              disabled={marketReloading}
-              onClick={() => void reloadMarketData()}
-            >
-              <RefreshCw className={marketReloading ? 'animate-spin' : undefined} />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setResetLayoutEpoch((current) => current + 1)}
-            >
-              <RotateCcw />
-              Reset layout
-            </Button>
-            {expanded == null &&
-              GLOBAL_CHART_TYPES.map((type) => (
-                <Button
-                  key={type.id}
-                  size="sm"
-                  variant={globalChartType === type.id ? 'default' : 'outline'}
-                  aria-pressed={globalChartType === type.id}
-                  onClick={() => setGlobalChartType(type.id)}
-                >
-                  {type.id === 'candlestick' ? <ChartCandlestick /> : <ChartNoAxesCombined />}
-                  {type.label}
-                </Button>
-              ))}
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
             {expanded == null && (
-              <Toggle
-                variant="outline"
-                size="sm"
-                pressed={focusMode}
-                aria-label={focusMode ? 'Exit focus mode' : 'Focus mode: 15m and 3m only'}
-                onPressedChange={setFocusMode}
-              >
-                <Focus />
-              </Toggle>
+              <Button variant="outline" size="sm" className="h-9 min-w-9 px-2" aria-label={focusMode ? 'Show four charts' : 'Focus: show 15m and 3m charts'} onClick={() => setFocusMode(!focusMode)}>
+                {focusMode ? '2' : '4'}<span className="hidden lg:inline"> charts</span>
+              </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" className="size-9" aria-label="Workspace actions">
+                  <RotateCcw aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={marketReloading} onSelect={() => void reloadMarketData()}><RefreshCw />Reload market data</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setResetLayoutEpoch((current) => current + 1)}><RotateCcw />Reset layout</DropdownMenuItem>
+                {expanded == null && GLOBAL_CHART_TYPES.map((type) => (
+                  <DropdownMenuItem key={type.id} onSelect={() => setGlobalChartType(type.id)}>
+                    {type.id === 'candlestick' ? <ChartCandlestick /> : <ChartNoAxesCombined />}
+                    {type.label}{globalChartType === type.id ? ' (active)' : ''}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             {/* <Button size="sm" variant="outline" onClick={() => setExecutionOpen(true)}>
               Execute
             </Button> */}
@@ -312,6 +270,7 @@ function Dashboard() {
             <Button
               variant={notesOpen ? 'secondary' : 'ghost'}
               size="icon-sm"
+              className="size-9"
               aria-label={notesOpen ? 'Close notes' : 'Open notes'}
               aria-pressed={notesOpen}
               onClick={() => {
@@ -342,6 +301,7 @@ function Dashboard() {
             <Button
               variant="ghost"
               size="icon-sm"
+              className="size-9"
               aria-label="Enter fullscreen"
               onClick={() => setFullScreen(true)}
             >
@@ -355,10 +315,10 @@ function Dashboard() {
         <div
           className={
             expanded
-              ? 'flex h-full min-h-0 overflow-hidden p-2'
+              ? 'flex h-full min-h-0 overflow-hidden'
               : focusMode
-                ? 'grid h-full min-h-0 grid-cols-1 grid-rows-2 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-1'
-                : 'grid h-full min-h-0 grid-cols-1 grid-rows-4 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2'
+                ? 'workspace-grid workspace-grid-two grid h-full min-h-0 min-w-0 overflow-hidden'
+                : 'workspace-grid workspace-grid-four grid h-full min-h-0 min-w-0 overflow-hidden'
           }
         >
         {visiblePanes.map((pane) => {
@@ -422,12 +382,12 @@ function Dashboard() {
         <Button
           variant="secondary"
           size="sm"
-          className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 bg-background/80 shadow-md backdrop-blur-sm"
+          className="absolute bottom-1 right-1 z-20 bg-background/90 shadow-sm"
           aria-label="Exit fullscreen"
           onClick={() => setFullScreen(false)}
         >
           <Shrink />
-          Exit
+          <span className="sr-only">Exit fullscreen</span>
         </Button>
       )}
       <ExecutionOrderDrawer
@@ -905,32 +865,32 @@ function DashboardPane({
     <section
       className={
         isExpanded
-          ? 'relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-border'
-          : 'relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-border'
+          ? 'relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden border-0'
+          : 'relative flex min-h-0 min-w-0 flex-col overflow-hidden border-0'
       }
     >
       <div
         className={
           compact
-            ? 'pointer-events-none absolute inset-x-1 top-1 z-10 flex items-center justify-between'
-            : 'flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2'
+            ? 'pointer-events-none absolute inset-x-0.5 top-0.5 z-10 flex items-start justify-between'
+            : 'flex min-w-0 shrink-0 items-center gap-1 border-b border-border px-1'
         }
       >
         <h2
           className={
             compact
-              ? 'pointer-events-auto flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-xs font-medium'
-              : 'flex items-center gap-1.5 text-sm font-medium'
+              ? 'pointer-events-none flex items-center gap-1 rounded bg-background/80 px-1 py-0.5 text-[11px] font-medium'
+              : 'flex shrink-0 items-center gap-1 text-xs font-medium'
           }
         >
-          EURUSD {pane.label}
+          {compact ? pane.label.toUpperCase() : `EURUSD ${pane.label}`}
           <BiasArrow value={bias} compact={compact} />
         </h2>
         <div
           className={
             compact
               ? 'pointer-events-auto flex items-center'
-              : 'flex flex-wrap items-center justify-end gap-1'
+              : 'flex min-w-0 flex-1 items-center justify-start gap-0.5 overflow-x-auto'
           }
         >
           {isExpanded &&
@@ -1076,8 +1036,8 @@ function DashboardPane({
           )}
           <Button
             variant="ghost"
-            size={compact ? 'icon-xs' : 'icon'}
-            className={compact ? 'bg-background/60' : undefined}
+            size={compact ? 'icon-sm' : 'icon'}
+            className={compact ? 'size-8 bg-background/80' : 'sticky right-0 ml-auto bg-background'}
             aria-label={isExpanded ? 'Collapse window' : 'Expand window'}
             onClick={onToggleExpand}
           >
