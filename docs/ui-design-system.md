@@ -12,7 +12,7 @@ AppShell supplies the viewport and scrollable route region. Workspace fills the 
 ## Regression checklist
 - Both routes reachable at 320, 390, 768, 1280 and 1440px.
 - Workspace controls occupy one 37px row on compact screens; application menu is included, no duplicate header. No viewport overflow.
-- Fullscreen hides app header and restores on exit.
+- Fullscreen hides app header and restores on exit; workspace toolbar and drawing tools remain accessible.
 - Calculator inputs and stored values unchanged; sign-out remains available.
 - Four panes, focus, expand, overlays, drawings, notes, polling and persistence unchanged.
 - Keyboard focus, reduced motion, accessible icon labels.
@@ -20,4 +20,4 @@ AppShell supplies the viewport and scrollable route region. Workspace fills the 
 - Dark mode activation, shared drawing toolbar, resizable panes, inspector and further mobile interaction refinements are later PRs.
 
 ## Mobile density contract
-Two and four simultaneously visible charts are core requirements, not optional desktop-only features. Portrait phones use 1×2 or 1×4; landscape and widths >=768px use 2×1 or 2×2. One-pixel dividers, zero outer grid padding, overlay timeframe/bias labels. Compact workspace uses one 37px toolbar; navigation and sign-out move into its application menu. Chart type, refresh and reset share an actions menu. Explicit fullscreen removes the remaining toolbar; exit stays accessible. Pinned notes do not automatically cover charts on compact screens. Keep existing axis visibility policy and drawing sessions. Test 320×568, 390×844, 844×390 and tablet layouts; verify all requested panes visible, controls reachable and no clipped chart canvas. Mobile expanded drawing controls scroll horizontally instead of wrapping. Touch controls target 36px on the workspace toolbar; pane expand uses 32px. Validate touch usability in browser before release.
+Two and four simultaneously visible charts are core requirements, not optional desktop-only features. Portrait phones use 1×2 or 1×4; landscape and widths >=768px use 2×1 or 2×2. One-pixel dividers, zero outer grid padding, overlay timeframe/bias labels. Compact workspace uses one 37px toolbar; navigation and sign-out move into its application menu. Chart type, refresh and reset share an actions menu. Explicit fullscreen retains the compact workspace toolbar and replaces the enter button with an exit button; global application chrome stays hidden. Pinned notes do not automatically cover charts on compact screens. Keep existing axis visibility policy and drawing sessions. Test 320×568, 390×844, 844×390 and tablet layouts; verify all requested panes visible, controls reachable and no clipped chart canvas. Mobile expanded drawing controls scroll horizontally instead of wrapping. Touch controls target 36px on the workspace toolbar; pane expand uses 32px. Validate touch usability in browser before release.

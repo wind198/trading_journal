@@ -5,14 +5,17 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ChartOverlaySettingsMenu } from '../dashboard/chart-overlay-settings-menu'
 import { type ChartType } from '../chart/price-chart'
-import { ChartCandlestick, ChartNoAxesCombined, Expand, NotebookPen, RefreshCw, RotateCcw } from 'lucide-react'
+import { ChartCandlestick, ChartNoAxesCombined, Expand, NotebookPen, RefreshCw, RotateCcw, Shrink } from 'lucide-react'
+import { DrawingToolMenu } from './drawing-tool-menu'
+import type { DrawingControl, DrawingMode } from '../../_lib/workspace/drawing-control'
 import type { ComponentProps } from 'react'
 import { CHART_TYPES, SYMBOL, type PaneId } from '../../_lib/workspace/workspace-layout'
 
 export function WorkspaceToolbar({
-  expanded, focusMode, marketReloading, globalChartType, overlaySettings, alertConfig, autoRegimesByPane, onSettingsChange,
-  notesOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleNotes, onFullscreen,
+  fullScreen, expanded, focusMode, marketReloading, globalChartType, overlaySettings, alertConfig, autoRegimesByPane, onSettingsChange,
+  drawingControl, onDrawingMode, notesOpen, onFocusChange, onReloadMarketData, onResetLayout, onChartTypeChange, onToggleNotes, onFullscreen,
 }: {
+  fullScreen: boolean
   expanded: PaneId | null
   focusMode: boolean
   marketReloading: boolean
@@ -21,6 +24,8 @@ export function WorkspaceToolbar({
   alertConfig: ComponentProps<typeof ChartOverlaySettingsMenu>['alertConfig']
   autoRegimesByPane: ComponentProps<typeof ChartOverlaySettingsMenu>['autoRegimesByPane']
   onSettingsChange: ComponentProps<typeof ChartOverlaySettingsMenu>['onSettingsChange']
+  drawingControl: DrawingControl
+  onDrawingMode: (mode: DrawingMode) => void
   notesOpen: boolean
   onFocusChange: (value: boolean) => void
   onReloadMarketData: () => void
@@ -31,7 +36,7 @@ export function WorkspaceToolbar({
 }) {
   return (
     <header className="workspace-toolbar flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-1 sm:px-2">
-          <div className="workspace-app-menu hidden shrink-0"><AppMenu /></div>
+          {!fullScreen && <div className="workspace-app-menu hidden shrink-0"><AppMenu /></div>}
           <div className="flex shrink-0 items-center gap-1 text-xs font-medium">
             <span>{SYMBOL}</span>
             
@@ -60,6 +65,7 @@ export function WorkspaceToolbar({
               </DropdownMenuContent>
             </DropdownMenu>
             
+            <DrawingToolMenu paneId={drawingControl.paneId} mode={drawingControl.mode} onMode={onDrawingMode} />
             <ChartOverlaySettingsMenu
               settings={overlaySettings}
               alertConfig={alertConfig}
@@ -81,10 +87,12 @@ export function WorkspaceToolbar({
               variant="ghost"
               size="icon-sm"
               className="size-9"
-              aria-label="Enter fullscreen"
+              aria-label={fullScreen ? "Exit fullscreen" : "Enter fullscreen"}
+              title={fullScreen ? "Exit fullscreen" : "Enter fullscreen"}
+              aria-pressed={fullScreen}
               onClick={() => onFullscreen()}
             >
-              <Expand />
+              {fullScreen ? <Shrink /> : <Expand />}
             </Button>
           </div>
         </header>

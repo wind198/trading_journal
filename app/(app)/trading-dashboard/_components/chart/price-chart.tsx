@@ -181,6 +181,7 @@ export function PriceChart({
   sessionSlotEnabled = null,
   showBollinger = true,
   showIchimoku = false,
+  keyboardActive = true,
   drawTool = null,
   measureActive = false,
   onDrawingComplete,
@@ -222,6 +223,7 @@ export function PriceChart({
   sessionSlotEnabled?: ReadonlySet<string> | null
   showBollinger?: boolean
   showIchimoku?: boolean
+  keyboardActive?: boolean
   drawTool?: DrawTool
   measureActive?: boolean
   onDrawingComplete?: (input: {
@@ -253,6 +255,8 @@ export function PriceChart({
   const appliedEpochRef = useRef(-1)
   const onLoadOlderRef = useRef(onLoadOlder)
   const axesVisibleRef = useRef(axesVisible)
+  const keyboardActiveRef = useRef(keyboardActive)
+  keyboardActiveRef.current = keyboardActive
   const drawToolRef = useRef(drawTool)
   const measureActiveRef = useRef(measureActive)
   const measurementStateRef = useRef<PriceMeasurementState>({ status: 'idle' })
@@ -858,6 +862,7 @@ export function PriceChart({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!keyboardActiveRef.current || event.defaultPrevented) return
       const target = event.target as HTMLElement | null
       if (
         target &&
