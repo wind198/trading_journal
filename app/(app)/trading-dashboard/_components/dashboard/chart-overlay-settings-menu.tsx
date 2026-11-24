@@ -129,7 +129,7 @@ export function ChartOverlaySettingsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Chart overlay settings">
+        <Button variant="ghost" size="icon-sm" className="size-9" aria-label="Chart overlay settings">
           <Settings2 />
         </Button>
       </DropdownMenuTrigger>

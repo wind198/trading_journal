@@ -10,6 +10,8 @@ const LINKS = [
   { href: '/calculator', label: 'Calculator', icon: Calculator },
 ] as const
 
+export const APP_LINKS = LINKS
+
 export function AppNavLinks({ className }: { className?: string }) {
   const pathname = usePathname()
   return (
