@@ -15,3 +15,6 @@ node_modules
 .DS_Store
 .env
 .vercel
+
+# Local synthetic browser regression output
+artifacts/browser/
