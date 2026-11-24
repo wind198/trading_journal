@@ -468,6 +468,7 @@ export function ChartPane({
   return (
     <section
       data-chart-pane={pane.id}
+      data-chart-bias={bias ?? undefined}
       data-active-chart={active ? 'true' : undefined}
       onPointerDownCapture={onActivate}
       onFocusCapture={onActivate}
@@ -484,7 +485,7 @@ export function ChartPane({
         deleteSelectedDrawing={deleteSelectedDrawing}
         onToggleExpand={onToggleExpand}
       />
-      <div className={compact ? 'absolute inset-0' : 'min-h-0 flex-1'}>
+      <div data-chart-content className={compact ? 'absolute inset-0' : 'min-h-0 flex-1'}>
         {history.isPending ? (
           <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Loading…
