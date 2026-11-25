@@ -873,6 +873,7 @@ export function PriceChart({
       fibonacciExtensions.some((d) => d.id === selectedIdRef.current) ||
       warningCircles.some((d) => d.id === selectedIdRef.current) ||
       icons.some((d) => d.id === selectedIdRef.current) ||
+      parallelChannels.some((d) => d.id === selectedIdRef.current) ||
       polylines.some((d) => d.id === selectedIdRef.current) ||
       textAnchors.some((d) => d.id === selectedIdRef.current)
     if (!exists) selectDrawing(null)
