@@ -4,6 +4,9 @@ import { onePointSession, type EditProbe, type ScreenPoint, type ToolEditBehavio
 
 export class TextAnchorEditBehavior implements ToolEditBehavior {
   constructor(private readonly primitive: ChartHandle['textAnchors'], private readonly drawings: () => readonly TextAnchorDrawing[]) {}
+  relativePressAnchor(id: string) {
+    return (this.drawings().find(item => item.id === id) ?? this.primitive.getDrawing(id))?.p1 ?? null
+  }
   pressHit(screen: ScreenPoint): string | null {
     return this.primitive.hitTest(screen.x, screen.y)?.externalId ?? null
   }

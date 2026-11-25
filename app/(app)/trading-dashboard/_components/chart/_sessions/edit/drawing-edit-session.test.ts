@@ -8,8 +8,8 @@ function harness(kind: 'circle' | 'polyline' | 'extension') {
   const empty = { hitTest: () => null, hitTestAnchor: () => null, getDrawing: () => null }
   const selectedId = kind
   const handle = {
-    chart: { timeScale: () => ({ coordinateToLogical: () => null, coordinateToTime: (x: number) => x }) },
-    price: { coordinateToPrice: (y: number) => y },
+    chart: { timeScale: () => ({ coordinateToLogical: () => null, coordinateToTime: (x: number) => x, timeToCoordinate: (x: number) => x }) },
+    price: { coordinateToPrice: (y: number) => y, priceToCoordinate: (y: number) => y },
     trendlines: empty, rectangles: empty, fibonacciRanges: empty, icons: empty, textAnchors: empty,
     warningCircles: kind === 'circle' ? {
       ...empty,
@@ -115,7 +115,7 @@ test('text press selects immediately but edits only after the movement threshold
   assert.deepEqual(selected, ['text'])
   assert.deepEqual(changed, [])
   behavior.pointerMove(event(19), { x: 19, y: 5 })
-  assert.deepEqual(changed, [{ id: 'text', p1: { time: 19, price: 5 }, p2: { time: 19, price: 5 } }])
+  assert.deepEqual(changed, [{ id: 'text', p1: { time: 24, price: 20 }, p2: { time: 24, price: 20 } }])
   behavior.cancelActive()
   behavior.pointerUp(event(19))
   assert.deepEqual(ended, ['text'])

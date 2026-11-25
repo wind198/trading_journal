@@ -262,7 +262,7 @@ export function PriceChart({
   const measureActiveRef = useRef(measureActive)
   const measurementStateRef = useRef<PriceMeasurementState>({ status: 'idle' })
   const cancelMeasurementRef = useRef<(() => void) | null>(null)
-  const seedCoarseTwoPointRef = useRef<((tool: TwoPointToolKind) => boolean) | null>(null)
+  const seedCoarseTwoPointRef = useRef<((tool: TwoPointToolKind | 'text_anchor') => boolean) | null>(null)
   const seedCoarseThreePointRef = useRef<(() => boolean) | null>(null)
   const interactionCancelRef = useRef<(() => void) | null>(null)
   const editSessionRef = useRef<ChartEditRuntime | null>(null)
@@ -823,7 +823,7 @@ export function PriceChart({
       pointerCoarseRef.current &&
       handleRef.current
     ) {
-      if (isTwoPointDrawTool(drawTool)) {
+      if (isTwoPointDrawTool(drawTool) || drawTool === 'text_anchor') {
         seedCoarseTwoPointRef.current?.(drawTool)
       } else if (drawTool === 'fibonacci_range_extension') {
         seedCoarseThreePointRef.current?.()

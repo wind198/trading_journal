@@ -15,6 +15,7 @@ export type EditProbe = ToolEditSession | 'blocked' | null
 
 /** Each tool owns its hit rules; the coordinator invokes phases in the existing priority order. */
 export interface ToolEditBehavior {
+  relativePressAnchor?(id: string): DrawingPoint | null
   pressHit?(screen: ScreenPoint): string | null
   beginPress?(id: string): ToolEditSession | null
   beginPrimary?(id: string, screen: ScreenPoint, chartPoint: DrawingPoint | null): ToolEditSession | null

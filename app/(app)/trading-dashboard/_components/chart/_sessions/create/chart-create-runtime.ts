@@ -27,6 +27,7 @@ import {
   ThreePointCreateBehavior,
   type ThreePointCreateState,
 } from './three-point-create-behavior'
+import { TextAnchorCreateBehavior, type TextCreateState } from './text-anchor-create-behavior'
 import { POLYLINE_SCOPE_ID, PolylineCreateBehavior } from './polyline-create-behavior'
 
 export type ChartCreateRuntimePorts = {
@@ -74,7 +75,7 @@ function pointerFor(
 }
 
 function isOneShotKind(tool: ChartDrawingKind): boolean {
-  return isChartIconKind(tool) || isTextAnchorKind(tool)
+  return isChartIconKind(tool)
 }
 
 function isExtension(tool: ChartDrawingKind | null): tool is typeof EXTENSION_SCOPE_ID {
@@ -95,6 +96,7 @@ export function createChartCreateRuntime(
     registry.registerCreation(new TwoPointCreateBehavior(kind, defaults))
   }
   registry.registerCreation(new ThreePointCreateBehavior(defaults))
+  registry.registerCreation(new TextAnchorCreateBehavior())
   registry.registerCreation(new PolylineCreateBehavior(gesture))
 
   const effects = new InteractionEffectRunner((effect: InteractionEffect) => {
@@ -161,7 +163,7 @@ export function createChartCreateRuntime(
         isTwoPointCreateKind(tool) ||
         isExtension(tool) ||
         isPolylineArrowKind(tool) ||
-        isOneShotKind(tool)
+        isTextAnchorKind(tool) || isOneShotKind(tool)
       )
     },
     handlesFine(tool: ChartDrawingKind | null): boolean {
@@ -169,6 +171,7 @@ export function createChartCreateRuntime(
     },
     placing(tool: ChartDrawingKind | null): boolean {
       if (!tool) return false
+      if (isTextAnchorKind(tool)) return isPlacing(tool)
       if (isPolylineArrowKind(tool)) return isPlacing(POLYLINE_SCOPE_ID)
       if (isExtension(tool)) return isPlacing(EXTENSION_SCOPE_ID)
       return isTwoPointCreateKind(tool) && isPlacing(tool)
@@ -177,12 +180,13 @@ export function createChartCreateRuntime(
       if (!tool || store.snapshot.status !== 'active') return false
       const state = store.snapshot.state as { pointer?: string }
       if (state.pointer !== 'coarse') return false
-      if (isTwoPointCreateKind(tool)) return isPlacing(tool)
+      if (isTextAnchorKind(tool) || isTwoPointCreateKind(tool)) return isPlacing(tool)
       if (isExtension(tool)) return isPlacing(EXTENSION_SCOPE_ID)
       return false
     },
     activeAnchor(tool: ChartDrawingKind | null): DrawingPoint | null {
       if (!tool || store.snapshot.status !== 'active') return null
+      if (isTextAnchorKind(tool) && isPlacing(tool)) return (store.snapshot.state as TextCreateState).p1
       if (isTwoPointCreateKind(tool) && isPlacing(tool)) {
         return activeTwoPointAnchor(store.snapshot.state as TwoPointCreateState)
       }
@@ -199,6 +203,12 @@ export function createChartCreateRuntime(
       const mapped = ports.mapPoint(screen)
       if (!mapped) return true
 
+      if (isTextAnchorKind(tool)) {
+        if (!isPlacing(tool)) beginOrReplace(tool, { pointer: 'fine', p1: mapped })
+        else store.dispatch({ type: 'pointer-move', pointer: pointerFor(mapped, screen) })
+        store.dispatch({ type: 'confirm' })
+        return true
+      }
       if (isOneShotKind(tool)) {
         ports.clearPreview()
         ports.complete({ kind: tool, p1: mapped, p2: mapped })
@@ -238,7 +248,16 @@ export function createChartCreateRuntime(
       return false
     },
     hover(tool: ChartDrawingKind | null, screen: { x: number; y: number } | null): boolean {
-      if (!tool || !this.placing(tool)) return false
+      if (!tool) return false
+      if (isTextAnchorKind(tool)) {
+        if (!screen) return true
+        const mapped = ports.mapPoint(screen)
+        if (!mapped) return true
+        if (!isPlacing(tool)) beginOrReplace(tool, { pointer: 'fine', p1: mapped })
+        else if (!this.isCoarsePlacing(tool)) store.dispatch({ type: 'pointer-move', pointer: pointerFor(mapped, screen) })
+        return true
+      }
+      if (!this.placing(tool)) return false
       if (isPolylineArrowKind(tool)) {
         if (screen == null) return true
         store.dispatch({
@@ -266,7 +285,7 @@ export function createChartCreateRuntime(
       })
       return true
     },
-    seedCoarse(tool: TwoPointToolKind | typeof EXTENSION_SCOPE_ID): boolean {
+    seedCoarse(tool: TwoPointToolKind | typeof EXTENSION_SCOPE_ID | 'text_anchor'): boolean {
       const p1 = ports.viewportCenter()
       if (!p1) return false
       if (tool === EXTENSION_SCOPE_ID) {

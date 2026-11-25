@@ -21,10 +21,10 @@ export type TextAnchorDrawing = {
 const TEXT_COLOR = CHART_THEME.text
 const SELECTED_COLOR = '#F0AD4E'
 const DRAFT_COLOR = 'rgba(0, 82, 255, 0.55)'
-const ANCHOR_RADIUS = 3
+const ANCHOR_RADIUS = 4
 const HIT_PADDING = 6
 const ANCHOR_HIT_RADIUS = 10
-const LABEL_FONT = '24px system-ui, sans-serif'
+const LABEL_FONT = '14px system-ui, sans-serif'
 const LABEL_OFFSET_X = 8
 const LABEL_OFFSET_Y = 4
 const PLACEHOLDER = 'Text'
@@ -44,8 +44,7 @@ function measureLabel(ctx: CanvasRenderingContext2D, text: string): { w: number;
   ctx.font = LABEL_FONT
   const metrics = ctx.measureText(text)
   const w = metrics.width
-  const h =
-    (metrics.actualBoundingBoxAscent ?? 9) + (metrics.actualBoundingBoxDescent ?? 3) || 12
+  const h = 18
   return { w, h }
 }
 
@@ -53,10 +52,10 @@ class TextAnchorRenderer {
   constructor(private items: readonly TextGeom[]) {}
 
   draw(target: CanvasRenderingTarget2D): void {
-    target.useBitmapCoordinateSpace((scope) => {
-      const context = scope.context
-      const hRatio = scope.horizontalPixelRatio
-      const vRatio = scope.verticalPixelRatio
+    target.useMediaCoordinateSpace(({ context }) => {
+      const hRatio = 1
+      const vRatio = 1
+      context.save()
       for (const item of this.items) {
         const x = item.x * hRatio
         const y = item.y * vRatio
@@ -84,6 +83,7 @@ class TextAnchorRenderer {
           )
         }
       }
+      context.restore()
     })
   }
 }
@@ -91,6 +91,7 @@ class TextAnchorRenderer {
 class TextAnchorPaneView {
   private rendererObj: TextAnchorRenderer | null = null
   private items: TextGeom[] = []
+  private measureCtx: CanvasRenderingContext2D | null = null
 
   constructor(private source: TextAnchorPrimitive) {}
 
@@ -128,7 +129,8 @@ class TextAnchorPaneView {
         y >= Math.min(item.y - pad, top) &&
         y <= Math.max(item.y + pad, bottom)
       if (!inside) continue
-      const distance = Math.hypot(x - item.x, y - item.y)
+      const labelDistance = Math.hypot(Math.max(left + pad - x, 0, x - (right - pad)), Math.max(top + pad - y, 0, y - (item.y - LABEL_OFFSET_Y)))
+      const distance = Math.min(labelDistance, Math.hypot(x - item.x, y - item.y))
       if (!best || distance < best.distance) best = { id: item.id, distance }
     }
     if (!best) return null
@@ -150,7 +152,7 @@ class TextAnchorPaneView {
       return
     }
 
-    const measureCtx = document.createElement('canvas').getContext('2d')
+    const measureCtx = this.measureCtx ??= document.createElement('canvas').getContext('2d')
     const items: TextGeom[] = []
     const push = (id: string, p1: DrawingPoint, label: string | undefined, draft: boolean, selected: boolean) => {
       const x = chartXAtTime(chart, p1.time, this.source.bars)
@@ -159,7 +161,7 @@ class TextAnchorPaneView {
       const text = label?.trim() ? label : PLACEHOLDER
       const size = measureCtx
         ? measureLabel(measureCtx, text)
-        : { w: text.length * 7, h: 12 }
+        : { w: text.length * 7, h: 18 }
       items.push({
         id,
         x: Number(x),

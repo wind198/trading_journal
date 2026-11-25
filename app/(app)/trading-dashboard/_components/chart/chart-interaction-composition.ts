@@ -36,9 +36,9 @@ const TAP_MOVE_THRESHOLD_PX = 12
 const DOUBLE_TAP_MS = 350
 const DOUBLE_TAP_PX = 24
 
-type ShapeDrawTool = 'fibonacci_range_extension' | 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
+type ShapeDrawTool = 'text_anchor' | 'fibonacci_range_extension' | 'trendline' | 'fibonacci_range' | 'rectangle' | 'warning_circle'
 export function isShapeDrawTool(tool: ChartDrawingKind | null): tool is ShapeDrawTool {
-  return tool === 'fibonacci_range_extension' || tool === 'fibonacci_range' || tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
+  return tool === 'text_anchor' || tool === 'fibonacci_range_extension' || tool === 'fibonacci_range' || tool === 'trendline' || tool === 'rectangle' || tool === 'warning_circle'
 }
 
 export function isTwoPointDrawTool(tool: ChartDrawingKind | null): tool is TwoPointToolKind {
@@ -63,7 +63,7 @@ export function defaultShapePreviewP2(
 
 export type PriceChartInteractionRefs = {
   drawToolRef: RefObject<ChartDrawingKind | null>
-  seedCoarseTwoPointRef: RefObject<((tool: TwoPointToolKind) => boolean) | null>
+  seedCoarseTwoPointRef: RefObject<((tool: TwoPointToolKind | 'text_anchor') => boolean) | null>
   seedCoarseThreePointRef: RefObject<(() => boolean) | null>
   interactionCancelRef: RefObject<(() => void) | null>
   editSessionRef: RefObject<ChartEditRuntime | null>
@@ -340,7 +340,7 @@ export function createChartInteractionComposition(input: {
 
     if (isCoarsePointer(event) && isTouchSeedShapeTool(tool)) {
       if (!createRuntime.isCoarsePlacing(tool)) {
-        if (isTwoPointDrawTool(tool)) createRuntime.seedCoarse(tool)
+        if (isTwoPointDrawTool(tool) || tool === 'text_anchor') createRuntime.seedCoarse(tool)
         else if (tool === EXTENSION_SCOPE_ID) createRuntime.seedCoarse(EXTENSION_SCOPE_ID)
       }
       const active = createRuntime.activeAnchor(tool)
@@ -368,7 +368,7 @@ export function createChartInteractionComposition(input: {
       return
     }
 
-    if (createRuntime.placing(tool) && shapePreviewFollowsPointer(event)) {
+    if ((createRuntime.placing(tool) || tool === 'text_anchor') && shapePreviewFollowsPointer(event)) {
       updateDraftPreview({ point })
     }
   }

@@ -202,6 +202,7 @@ export function ChartPane({
   const measureActive = drawingMode.kind === 'measure'
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
+  const pendingTextRef = useRef<{ id: string; point: DrawingPoint } | null>(null)
   const labelSessionRef = useRef<DrawingLabelSession | null>(null)
   if (!labelSessionRef.current) labelSessionRef.current = new DrawingLabelSession()
   const [labelState, setLabelState] = useState<DrawingLabelState>({ status: 'closed' })
@@ -212,6 +213,7 @@ export function ChartPane({
     setLabelState(labelSessionRef.current!.state)
   }
   const cancelLabelSession = () => {
+    pendingTextRef.current = null
     labelSessionRef.current!.cancel()
     setLabelState(labelSessionRef.current!.state)
   }
@@ -307,7 +309,7 @@ export function ChartPane({
   const labelEditDrawing = labelEditDrawingId
     ? drawings.find((d) => d.id === labelEditDrawingId)
     : null
-  const labelEditIsText = labelEditDrawing != null && isTextAnchorKind(labelEditDrawing.kind)
+  const labelEditIsText = labelState.status === 'editing' && labelState.kind === 'text_anchor'
   const labelEditIsCircle =
     labelEditDrawing != null && isWarningCircleKind(labelEditDrawing.kind)
 
@@ -317,17 +319,23 @@ export function ChartPane({
     p2: DrawingPoint
     points?: DrawingPoint[]
   }) => {
+    if (isTextAnchorKind(input.kind)) {
+      onCancelMode('draw')
+      const id = 'temp-' + crypto.randomUUID()
+      pendingTextRef.current = { id, point: input.p1 }
+      openLabelSession({ id, kind: 'text_anchor', label: '' })
+      return
+    }
     if (
       !isChartIconKind(input.kind) &&
-      !isPolylineArrowKind(input.kind) &&
-      !isTextAnchorKind(input.kind)
+      !isPolylineArrowKind(input.kind)
     ) {
       onCancelMode('draw')
     }
     const anchor = input.p1
     const tempId = `temp-${Date.now()}`
     const pointAnchor =
-      isChartIconKind(input.kind) || isTextAnchorKind(input.kind) ? anchor : input.p2
+      isChartIconKind(input.kind) ? anchor : input.p2
     const optimistic: ChartDrawing = {
       id: tempId,
       symbol: SYMBOL,
@@ -336,17 +344,9 @@ export function ChartPane({
       p1: anchor,
       p2: pointAnchor,
       ...(input.points ? { points: input.points } : {}),
-      ...(isTextAnchorKind(input.kind) ? { label: '' } : {}),
     }
     setDrawings((current) => [...current, optimistic])
-    const persist = isTextAnchorKind(input.kind)
-      ? insertTextAnchor({
-          symbol: SYMBOL,
-          timeframe: pane.id,
-          p1: anchor,
-          label: '',
-        })
-      : insertDrawing({
+    const persist = insertDrawing({
           symbol: SYMBOL,
           timeframe: pane.id,
           kind: input.kind,
@@ -357,9 +357,6 @@ export function ChartPane({
     void persist
       .then((saved) => {
         setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
-        if (isTextAnchorKind(input.kind)) {
-          openLabelSession({ id: saved.id, kind: saved.kind, label: saved.label ?? '' })
-        }
       })
       .catch(() => {
         setDrawings((current) => current.filter((d) => d.id !== tempId))
@@ -447,6 +444,18 @@ export function ChartPane({
     if (!result) return
     setLabelState(labelSessionRef.current!.state)
     const { id, label } = result
+    const pending = pendingTextRef.current
+    if (pending?.id === id) {
+      pendingTextRef.current = null
+      const text = label.trim()
+      if (!text) return
+      const optimistic: ChartDrawing = { id, symbol: SYMBOL, timeframe: pane.id, kind: 'text_anchor', p1: pending.point, p2: pending.point, label: text }
+      setDrawings(current => [...current, optimistic])
+      void insertTextAnchor({ symbol: SYMBOL, timeframe: pane.id, p1: pending.point, label: text }).then(saved => {
+        setDrawings(current => current.map(d => d.id === id ? saved : d))
+      }).catch(() => { setDrawings(current => current.filter(d => d.id !== id)); toast.error('Failed to save text anchor') })
+      return
+    }
     const drawing = drawings.find((d) => d.id === id)
     setDrawings((current) =>
       current.map((d) => (d.id === id ? { ...d, label } : d)),
@@ -564,6 +573,8 @@ export function ChartPane({
             </DialogTitle>
           </DialogHeader>
           <Input
+            autoFocus
+            className="text-base"
             value={labelDraft}
             onChange={(e) => {
               labelSessionRef.current!.changeDraft(e.target.value)
@@ -577,14 +588,14 @@ export function ChartPane({
                   : 'Label at arrow head'
             }
             onKeyDown={(e) => {
-              if (e.key === 'Enter') saveDrawingLabel()
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing && (!labelEditIsText || labelDraft.trim())) saveDrawingLabel()
             }}
           />
           <DialogFooter>
             <Button variant="outline" onClick={cancelLabelSession}>
               Cancel
             </Button>
-            <Button onClick={saveDrawingLabel}>Save</Button>
+            <Button disabled={labelEditIsText && !labelDraft.trim()} onClick={saveDrawingLabel}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
