@@ -11,7 +11,7 @@ export function screenshotFilename(symbol: string, paneCount: number, now = new 
 /** Compose official chart snapshots at their current DOM positions, not a reconstructed layout. */
 export function captureWorkspace(root: HTMLElement): HTMLCanvasElement {
   const bounds = root.getBoundingClientRect()
-  const panes = Array.from(root.querySelectorAll<HTMLElement>(':scope > [data-chart-pane]'))
+  const panes = Array.from(root.querySelectorAll<HTMLElement>(':scope > [data-chart-pane]:not([data-pane-obscured="true"])'))
   if (!bounds.width || !bounds.height || !panes.length) throw new Error('No visible chart workspace')
   const scale = Math.min(window.devicePixelRatio || 1, 2, 8192 / Math.max(bounds.width,bounds.height))
   const canvas = document.createElement('canvas')

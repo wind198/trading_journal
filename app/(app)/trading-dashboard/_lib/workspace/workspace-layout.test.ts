@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { visibleWorkspacePanes, workspaceLayoutMode } from './workspace-layout'
+import { visibleWorkspacePanes, mountedWorkspacePanes, workspaceLayoutMode } from './workspace-layout'
 
 test('four-chart mode preserves higher-to-lower timeframe order', () => {
   assert.deepEqual(visibleWorkspacePanes(null, false).map(p => p.id), ['4h', '1h', '15m', '3m'])
@@ -17,4 +17,10 @@ test('expanded pane takes precedence over focus mode', () => {
     assert.deepEqual(visibleWorkspacePanes('1h', focus).map(p => p.id), ['1h'])
     assert.equal(workspaceLayoutMode('1h', focus), 'expanded')
   }
+})
+
+test('mounted panes remain the original grid during expansion', () => {
+  assert.deepEqual(mountedWorkspacePanes(false).map(p=>p.id), ['4h','1h','15m','3m'])
+  assert.deepEqual(mountedWorkspacePanes(true).map(p=>p.id), ['15m','3m'])
+  assert.deepEqual(visibleWorkspacePanes('15m', false).map(p=>p.id), ['15m'])
 })

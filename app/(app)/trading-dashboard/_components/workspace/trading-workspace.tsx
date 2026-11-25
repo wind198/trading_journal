@@ -14,7 +14,7 @@ import { useAlertConfig } from '../../_hooks/useAlertConfig'
 import { type ChartType } from '../chart/price-chart'
 import type { Regime } from '../../_lib/overlays/baseline-indicators'
 import { hardReloadMarketQueries } from '../../_lib/market-queries'
-import { SYMBOL, type PaneId, visibleWorkspacePanes, workspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
+import { SYMBOL, type PaneId, visibleWorkspacePanes, mountedWorkspacePanes, workspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
 import { WorkspaceToolbar } from './workspace-toolbar'
 import { WorkspaceLayout } from './workspace-layout'
 import { activatePane, resolveDrawingControl, toggleDrawingMode, cancelPaneMode, IDLE_MODE, type DrawingControl, type DrawingMode } from '../../_lib/workspace/drawing-control'
@@ -125,18 +125,17 @@ export function TradingWorkspace() {
           drawingControl={control} onDrawingMode={chooseMode}
           onReloadMarketData={() => void reloadMarketData()}
           onResetLayout={() => setResetLayoutEpoch(current => current + 1)}
-          onChartTypeChange={setGlobalChartType}
+          onChartTypeChange={type => { setGlobalChartType(type); setChartTypes({}) }}
           onToggleInspector={() => { setDrawingControl(current => ({ ...current, mode: IDLE_MODE })); setInspector(toggleInspector) }}
           onFullscreen={() => setFullScreen(current => !current)}
         />
       {!fullScreen && <NonTradeWarningBanner />}
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <WorkspaceLayout captureRef={captureRef} mode={workspaceLayoutMode(expanded, focusMode)} preferences={preferences}>
-        {visiblePanes.map((pane) => {
+        <WorkspaceLayout captureRef={captureRef} mode={workspaceLayoutMode(null, focusMode)} expanded={expanded} preferences={preferences}>
+        {mountedWorkspacePanes(focusMode).map((pane) => {
           const isExpanded = expanded === pane.id
-          const chartType = isExpanded
-            ? (chartTypes[pane.id] ?? 'line')
-            : globalChartType
+          const obscured = expanded !== null && !isExpanded
+          const chartType = chartTypes[pane.id] ?? globalChartType
 
           const compact = !isExpanded && !tablet
           const paneToggles = paneIndicators(overlaySettings, pane.id)
@@ -147,9 +146,10 @@ export function TradingWorkspace() {
           return (
             <ChartPane
               key={pane.id}
+              obscured={obscured}
               pane={pane}
               active={control.paneId === pane.id}
-              keyboardEnabled={!inspector.open && !editFavorites}
+              keyboardEnabled={!obscured && !inspector.open && !editFavorites}
               drawingMode={control.paneId === pane.id ? control.mode : IDLE_MODE}
               onActivate={() => selectPane(pane.id)}
               onCancelMode={(kind) => setDrawingControl(current => cancelPaneMode(current, pane.id, kind))}
@@ -181,7 +181,7 @@ export function TradingWorkspace() {
               onToggleExpand={() => {
                 setDrawingControl({ paneId: pane.id, mode: IDLE_MODE })
                 setExpanded(current => current === pane.id ? null : pane.id)
-                if (!isExpanded) setChartTypes(current => ({ ...current, [pane.id]: 'candlestick' }))
+
               }}
             />
           )

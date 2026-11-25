@@ -27,3 +27,8 @@ export function visibleWorkspacePanes(expanded: PaneId | null, focusMode: boolea
   if (expanded) return PANES.filter(pane => pane.id === expanded)
   return focusMode ? PANES.filter(pane => (FOCUS_PANE_IDS as readonly PaneId[]).includes(pane.id)) : PANES
 }
+
+/** Expansion is a presentation state, not a change to the mounted chart set. */
+export function mountedWorkspacePanes(focusMode: boolean): readonly PaneDefinition[] {
+  return visibleWorkspacePanes(null, focusMode)
+}

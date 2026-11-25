@@ -1,0 +1,7 @@
+# Pane expansion lifecycle
+
+Source review confirmed: expanding filters out other panes, unmounting their chart instances, indicators and drawing loads; collapsing remounts them and recent/volume queries refetch on mount. Expansion also forced candlestick, and collapse could switch back to line, triggering chart teardown. These are concrete sources of avoidable work, not measured latency attribution.
+
+Keep the current 2/4 chart set mounted. Expansion overlays the target over the original grid, hides siblings with visibility:hidden + inert (not display:none), and preserves explicit grid tracks. No chart type change on expand/collapse; explicit per-pane chart type selection now remains until global type is changed. Existing autoSize resize observer handles target resize. Hidden siblings retain queries, drawings, viewport and canvas; memory/polling during expansion are intentionally retained as a responsiveness tradeoff. Screenshot filters obscured panes. Keyboard interaction remains limited to active visible chart. No new dependencies.
+
+Verification: browser regression checks visible count and chart canvas identity through expand/collapse; run production profiling on real tablet to confirm click-to-paint latency. Test two/four layouts, line/candle, repeated taps, fullscreen, capture and drawing edits. Build and browser execution not performed in this change environment.

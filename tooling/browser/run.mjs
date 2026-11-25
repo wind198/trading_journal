@@ -52,10 +52,10 @@ async function waitForServer() {
   throw Error('Fixture server did not become ready')
 }
 async function geometry(page, expected) {
-  const sections = page.locator('section[data-chart-pane]')
+  const sections = page.locator('section[data-chart-pane]:not([data-pane-obscured="true"])')
   await sections.first().waitFor({state:'visible'})
   assert.equal(await sections.count(), expected)
-  await page.waitForFunction(n => [...document.querySelectorAll('section[data-chart-pane]')].filter(el => el.querySelector('canvas')).length === n, expected)
+  await page.waitForFunction(n => [...document.querySelectorAll('section[data-chart-pane]:not([data-pane-obscured="true"])')].filter(el => el.querySelector('canvas')).length === n, expected)
   const bounds = await sections.evaluateAll(els => els.map(el => { const r=el.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom} }))
   const viewport = page.viewportSize()
   for (const r of bounds) {
@@ -100,13 +100,17 @@ try {
     try {
       await page.goto(origin+'/trading-dashboard')
       const initial=await geometry(page,4)
+      const canvasBefore = await page.locator('[data-chart-pane="4h"] canvas').first().elementHandle()
       const firstPane=page.locator('[data-chart-pane="4h"]')
       const expand=firstPane.getByRole('button',{name:'Expand window',exact:true})
       if(v.mobile) await expand.tap(); else await expand.click()
       await geometry(page,1)
+      assert.equal(await page.locator('section[data-chart-pane]').count(),4)
+      assert.ok(await canvasBefore.evaluate(el=>el.isConnected), 'Expand must retain existing chart canvas')
       const collapse=firstPane.getByRole('button',{name:'Collapse window',exact:true})
       if(v.mobile) await collapse.tap(); else await collapse.click()
       await geometry(page,4)
+      assert.ok(await canvasBefore.evaluate(el=>el.isConnected), 'Collapse must retain existing chart canvas')
       await click(page,'Chart layout and pane sizes')
       const layout=page.locator('[data-slot="popover-content"]')
       await layout.waitFor({state:'visible'})
