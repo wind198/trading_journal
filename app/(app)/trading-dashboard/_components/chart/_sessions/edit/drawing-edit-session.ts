@@ -39,7 +39,7 @@ export type StoreEditController = {
   cancel: () => void
 }
 
-type ActiveLegacy = { kind: 'legacy'; session: ToolEditSession; pointerId: number }
+type ActiveLegacy = { kind: 'legacy'; session: ToolEditSession; pointerId: number; relative?: boolean }
 type ActiveStore = { kind: 'store'; pointerId: number; relative: boolean }
 type ActiveEdit = ActiveLegacy | ActiveStore
 
@@ -60,7 +60,7 @@ function isTwoPointEditInput(input: unknown): input is TwoPointEditInput {
 /** Coordinates one active edit; geometry and hit rules live with the tool behaviors. */
 export class DrawingEditSession {
   private active: ActiveEdit | null = null
-  private press: { tool: ToolEditBehavior; id: string; x: number; y: number; pointerId: number } | null = null
+  private press: { tool: ToolEditBehavior; id: string; x: number; y: number; pointerId: number; relative?: boolean } | null = null
   private readonly relativeDrag: CreationPointerSession
 
   constructor(
@@ -76,7 +76,7 @@ export class DrawingEditSession {
   }
 
   get isDragging(): boolean {
-    return this.active !== null || Boolean(this.storeEdit?.isActive())
+    return this.active !== null || Boolean(this.press?.relative) || Boolean(this.storeEdit?.isActive())
   }
 
   private endpointScreen(input: unknown): ScreenPoint | null {
@@ -145,7 +145,17 @@ export class DrawingEditSession {
       const id = tool.pressHit?.(point)
       if (!id || id.startsWith('temp-')) continue
       this.ports.select(id)
-      this.press = { tool, id, x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+      const anchor = tool.relativePressAnchor?.(id)
+      const x = anchor ? chartXAtTime(this.ports.handle.chart, anchor.time, this.ports.candles()) : null
+      const y = anchor ? this.ports.handle.price.priceToCoordinate(anchor.price) : null
+      const relative = x != null && y != null
+      this.press = { tool, id, x: event.clientX, y: event.clientY, pointerId: event.pointerId, relative }
+      if (relative) {
+        event.preventDefault()
+        this.relativeDrag.begin(event.pointerId, event.clientX, event.clientY, { x: Number(x), y: Number(y) })
+        this.ports.capture(event)
+        this.ports.syncLock()
+      }
       return
     }
 
@@ -173,13 +183,14 @@ export class DrawingEditSession {
       if (session) {
         this.ports.markDrag()
         this.press = null
-        this.beginLegacy(session, event)
+        if (press.relative) this.active = { kind: 'legacy', session, pointerId: event.pointerId, relative: true }
+        else this.beginLegacy(session, event)
       }
     }
     if (this.active?.pointerId !== event.pointerId) return
 
     let mapped: DrawingPoint | null
-    if (this.active.kind === 'store' && this.active.relative) {
+    if (this.active.relative) {
       mapped = this.relativeDrag.move(event.pointerId, event.clientX, event.clientY)
       if (!mapped) return
     } else {
@@ -234,7 +245,11 @@ export class DrawingEditSession {
 
   /** Returns true when an active edit consumed the pointer release. */
   pointerUp(event: PointerEvent): boolean {
-    if (this.press?.pointerId === event.pointerId) this.press = null
+    if (this.press?.pointerId === event.pointerId) {
+      const relative = this.press.relative
+      this.press = null
+      if (relative) { this.relativeDrag.cancel(); this.ports.release(event); this.ports.syncLock() }
+    }
     if (this.active?.pointerId !== event.pointerId) return false
     this.ports.release(event)
     if (this.active.kind === 'store') {
@@ -263,7 +278,9 @@ export class DrawingEditSession {
 
   /** Used when the active tool changes and React releases pointer capture. */
   cancelActive(): void {
+    const press = this.press
     this.press = null
+    if (press?.relative) { this.relativeDrag.cancel(); this.ports.releaseById(press.pointerId); this.ports.syncLock() }
     if (this.active) {
       this.ports.releaseById(this.active.pointerId)
       if (this.active.kind === 'store') {
