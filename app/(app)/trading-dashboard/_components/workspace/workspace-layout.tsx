@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode, Ref } from 'react'
-import type { WorkspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
+import type { PaneId, WorkspaceLayoutMode } from '../../_lib/workspace/workspace-layout'
 import { portraitTracks, splitTracks, type LayoutPreferences } from '../../_lib/workspace/layout-preferences'
 
 const layoutClasses: Record<WorkspaceLayoutMode, string> = {
@@ -8,7 +8,7 @@ const layoutClasses: Record<WorkspaceLayoutMode, string> = {
   four: 'workspace-grid workspace-grid-four grid h-full min-h-0 min-w-0 overflow-hidden',
 }
 
-export function WorkspaceLayout({ mode, preferences, children, captureRef }: { mode: WorkspaceLayoutMode; preferences: LayoutPreferences; children: ReactNode; captureRef?: Ref<HTMLDivElement> }) {
+export function WorkspaceLayout({ mode, preferences, children, captureRef, expanded }: { mode: WorkspaceLayoutMode; preferences: LayoutPreferences; children: ReactNode; captureRef?: Ref<HTMLDivElement>; expanded?: PaneId | null }) {
   const style = {
     '--workspace-portrait-four': portraitTracks(preferences.fourPortrait),
     '--workspace-portrait-two': splitTracks(preferences.focusPortrait),
@@ -16,5 +16,5 @@ export function WorkspaceLayout({ mode, preferences, children, captureRef }: { m
     '--workspace-wide-columns': splitTracks(preferences.fourWide.column),
     '--workspace-wide-focus': splitTracks(preferences.focusWide),
   } as CSSProperties
-  return <div ref={captureRef} className={layoutClasses[mode]} style={style}>{children}</div>
+  return <div ref={captureRef} data-workspace-expanded={expanded ?? undefined} className={'relative ' + layoutClasses[mode]} style={style}>{children}</div>
 }

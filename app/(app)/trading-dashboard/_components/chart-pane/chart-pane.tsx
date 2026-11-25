@@ -27,6 +27,7 @@ import { ChartPaneHeader } from './chart-pane-header'
 
 export function ChartPane({
   pane,
+  obscured = false,
   active, keyboardEnabled, drawingMode, onActivate, onCancelMode,
   isExpanded,
   compact,
@@ -50,6 +51,7 @@ export function ChartPane({
   onToggleExpand,
 }: {
   pane: PaneDefinition
+  obscured?: boolean
   active: boolean
   keyboardEnabled: boolean
   drawingMode: DrawingMode
@@ -477,6 +479,10 @@ export function ChartPane({
   return (
     <section
       data-chart-pane={pane.id}
+      data-pane-obscured={obscured ? 'true' : undefined}
+      data-pane-expanded={isExpanded ? 'true' : undefined}
+      inert={obscured}
+      aria-hidden={obscured || undefined}
       data-chart-bias={bias ?? undefined}
       data-active-chart={active ? 'true' : undefined}
       onPointerDownCapture={(event) => {
@@ -487,7 +493,7 @@ export function ChartPane({
       }}
       className={
         isExpanded
-          ? 'relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden border-0'
+          ? 'absolute inset-0 z-30 flex h-full min-h-0 w-full flex-col overflow-hidden border-0 bg-background'
           : 'relative flex min-h-0 min-w-0 flex-col overflow-hidden border-0'
       }
     >
