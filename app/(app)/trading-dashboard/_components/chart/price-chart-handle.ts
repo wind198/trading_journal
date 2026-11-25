@@ -21,6 +21,7 @@ import { IconMarkerPrimitive } from './_components/objects/icon/icon-marker-prim
 import { RectanglePrimitive } from './_components/objects/rect/rectangle-primitive'
 import { FibonacciRangeExtensionPrimitive } from './_components/objects/fibonacci-extension/fibonacci-range-extension-primitive'
 import { FibonacciRangePrimitive } from './_components/objects/fibonacci-range/fibonacci-range-primitive'
+import { ParallelChannelPrimitive } from './_components/objects/parallel-channel/parallel-channel-primitive'
 import { PolylineArrowPrimitive } from './_components/objects/polyline/polyline-arrow-primitive'
 import { TextAnchorPrimitive } from './_components/objects/text/text-anchor-primitive'
 import { TrendlinePrimitive } from './_components/objects/trendline/trendline-primitive'
@@ -35,6 +36,7 @@ type AnyPrimitive =
   | RectanglePrimitive
   | FibonacciRangePrimitive
   | IconMarkerPrimitive
+  | ParallelChannelPrimitive
   | PolylineArrowPrimitive
   | TextAnchorPrimitive
   | WarningCirclePrimitive
@@ -66,6 +68,7 @@ export type ChartHandle = {
   fibonacciExtensions: FibonacciRangeExtensionPrimitive
   fibonacciRanges: FibonacciRangePrimitive
   icons: IconMarkerPrimitive
+  parallelChannels?: ParallelChannelPrimitive
   polylines: PolylineArrowPrimitive
   textAnchors: TextAnchorPrimitive
   warningCircles: WarningCirclePrimitive
@@ -91,6 +94,7 @@ export function syncDrawingBars(handle: ChartHandle, candles: BarTimeSeries) {
   handle.fibonacciExtensions.setBars(candles)
   handle.icons.setBars(candles)
   handle.polylines.setBars(candles)
+  handle.parallelChannels?.setBars(candles)
   handle.textAnchors.setBars(candles)
   handle.warningCircles.setBars(candles)
   handle.indicators.setBars(candles)
@@ -221,6 +225,7 @@ export function initPriceChart(
   const fibonacciExtensionPrimitive = new FibonacciRangeExtensionPrimitive()
   const fibonacciRangePrimitive = new FibonacciRangePrimitive([])
   const iconMarkerPrimitive = new IconMarkerPrimitive([])
+  const parallelChannelPrimitive = new ParallelChannelPrimitive()
   const polylineArrowPrimitive = new PolylineArrowPrimitive([])
   const textAnchorPrimitive = new TextAnchorPrimitive([])
   const warningCirclePrimitive = new WarningCirclePrimitive([])
@@ -232,6 +237,7 @@ export function initPriceChart(
   price.attachPrimitive(warningCirclePrimitive)
   price.attachPrimitive(iconMarkerPrimitive)
   price.attachPrimitive(polylineArrowPrimitive)
+  price.attachPrimitive(parallelChannelPrimitive)
   price.attachPrimitive(textAnchorPrimitive)
   price.attachPrimitive(measurementPrimitive)
   const ichimokuCloudPrimitive = new IchimokuCloudPrimitive()
@@ -267,6 +273,7 @@ export function initPriceChart(
   primitives.register('fibonacci_range_extension', asPrimitiveLayer(fibonacciExtensionPrimitive))
   primitives.register('warning_circle', asPrimitiveLayer(warningCirclePrimitive))
   primitives.register('icon', asPrimitiveLayer(iconMarkerPrimitive))
+  primitives.register('parallel_channel',asPrimitiveLayer(parallelChannelPrimitive))
   primitives.register('polyline', asPrimitiveLayer(polylineArrowPrimitive))
   primitives.register('text_anchor', asPrimitiveLayer(textAnchorPrimitive))
 
@@ -285,6 +292,7 @@ export function initPriceChart(
     fibonacciExtensions: fibonacciExtensionPrimitive,
     icons: iconMarkerPrimitive,
     polylines: polylineArrowPrimitive,
+    parallelChannels:parallelChannelPrimitive,
     textAnchors: textAnchorPrimitive,
     warningCircles: warningCirclePrimitive,
     measurement: measurementPrimitive,

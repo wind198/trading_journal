@@ -6,6 +6,7 @@ export type ShapeDrawingKind = 'trendline' | 'fibonacci_range' | 'rectangle' | '
 export type PolylineArrowKind = 'polyline_arrow'
 export type TextAnchorKind = 'text_anchor'
 export type ChartDrawingKind =
+  | 'parallel_channel'
   | 'fibonacci_range_extension'
   | ShapeDrawingKind
   | ChartIconKind
@@ -17,6 +18,7 @@ const LOADABLE_KINDS = [
   'rectangle',
   'fibonacci_range',
   'fibonacci_range_extension',
+  'parallel_channel',
   'warning_circle',
   'polyline_arrow',
   'text_anchor',

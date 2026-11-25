@@ -57,6 +57,10 @@ export function patchPolylineDrawing(
   id: string,
   points: DrawingPoint[],
 ): boolean {
+  if(handle.parallelChannels?.getDrawing(id)&&points.length===3){
+    handle.parallelChannels.setChannels(handle.parallelChannels.channels.map(item=>item.id===id?{id,points:[points[0]!,points[1]!,points[2]!]}:item))
+    return true
+  }
   if (handle.polylines.getDrawing(id)) {
     handle.polylines.setPolylines(
       handle.polylines.polylines.map((item) => (item.id === id ? { ...item, points } : item)),

@@ -8,6 +8,7 @@ export type EditChange =
 export type ToolEditSession = {
   id: string
   changeKind: EditChange['kind']
+  relativeAnchor?: DrawingPoint
   move: (point: DrawingPoint) => EditChange
 }
 

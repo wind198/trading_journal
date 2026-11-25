@@ -2,7 +2,7 @@ import type { ChartDrawingKind } from '../chart/chart-drawings'
 import type { DrawingMode } from './drawing-control'
 
 export const FAVORITE_TOOL_IDS = [
-  'measure', 'trendline', 'rectangle', 'fibonacci_range', 'fibonacci_range_extension',
+  'measure', 'parallel_channel', 'trendline', 'rectangle', 'fibonacci_range', 'fibonacci_range_extension',
   'warning_circle', 'polyline_arrow', 'text_anchor',
   'icon_strong_push_up', 'icon_strong_push_down', 'icon_weakening_trend_up', 'icon_weakening_trend_down',
   'icon_weak_reaction_up', 'icon_weak_reaction_down', 'icon_resistance_test_up', 'icon_resistance_test_down',

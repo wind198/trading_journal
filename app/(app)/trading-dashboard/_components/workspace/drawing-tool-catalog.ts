@@ -1,7 +1,8 @@
-import { Pencil, TrendingUp, Square, Circle, Spline, Type, Ruler, AlignLeft, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, ChevronUp, ChevronDown, TrendingDown } from 'lucide-react'
+import { Pencil, Grip, TrendingUp, Square, Circle, Spline, Type, Ruler, AlignLeft, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, ChevronUp, ChevronDown, TrendingDown } from 'lucide-react'
 import { CHART_ICON_DEFINITIONS } from '../../_lib/chart/chart-icons'
 import type { FavoriteToolId } from '../../_lib/workspace/favorite-tools'
 export const TOOLS = [
+  { tool: 'parallel_channel', label: 'Parallel price channel', icon: Grip },
   { tool: 'trendline', label: 'Trend line', icon: TrendingUp },
   { tool: 'rectangle', label: 'Rectangle', icon: Square },
   { tool: 'fibonacci_range', label: 'Fibonacci range', icon: AlignLeft },

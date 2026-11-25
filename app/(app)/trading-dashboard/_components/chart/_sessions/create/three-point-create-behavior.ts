@@ -7,6 +7,9 @@ import type {
 import { decideCoarseThreePointConfirm } from './coarse-three-point-confirm'
 
 export const EXTENSION_SCOPE_ID = 'fibonacci_range_extension' as const
+export type ThreePointToolKind = typeof EXTENSION_SCOPE_ID | 'parallel_channel'
+export function isThreePointTool(tool:unknown):tool is ThreePointToolKind {return tool===EXTENSION_SCOPE_ID||tool==='parallel_channel'}
+import { validChannelBaseline } from '../../_components/objects/parallel-channel/parallel-channel-geometry'
 
 export type ThreePointCreateState =
   | { pointer: 'fine'; status: 'first'; p1: DrawingPoint; hover?: DrawingPoint | null }
@@ -38,9 +41,7 @@ function previewPayload(state: ThreePointCreateState) {
 
 /** Fine and coarse Fibonacci extension create policy. */
 export class ThreePointCreateBehavior implements Creatable<ThreePointCreateState, ThreePointCreateInput> {
-  readonly id = EXTENSION_SCOPE_ID
-
-  constructor(private readonly defaults?: ThreePointCreateDefaults) {}
+  constructor(private readonly defaults?: ThreePointCreateDefaults, readonly id:ThreePointToolKind=EXTENSION_SCOPE_ID) {}
 
   beginCreation(input: ThreePointCreateInput): InteractionResult<ThreePointCreateState> {
     if (input.pointer === 'coarse') {
@@ -83,6 +84,7 @@ export class ThreePointCreateBehavior implements Creatable<ThreePointCreateState
         const point = state.hover
         if (!point) return { state, status: 'active' }
         if (state.status === 'first') {
+          if(this.id==='parallel_channel'&&!validChannelBaseline(state.p1,point))return {state,status:'active'}
           const next: ThreePointCreateState = {
             pointer: 'fine', status: 'second', p1: state.p1, p2: point, hover: null,
           }
@@ -93,7 +95,7 @@ export class ThreePointCreateBehavior implements Creatable<ThreePointCreateState
           status: 'committed',
           effects: [
             this.effect('complete', {
-              kind: EXTENSION_SCOPE_ID,
+              kind: this.id,
               p1: state.p1,
               p2: point,
               points: [state.p1, state.p2, point],
@@ -102,6 +104,7 @@ export class ThreePointCreateBehavior implements Creatable<ThreePointCreateState
           ],
         }
       }
+      if(this.id==='parallel_channel'&&state.phase==='placing_p2'&&!validChannelBaseline(state.p1,state.p2))return {state,status:'active'}
       const defaultPoint = !this.defaults
         ? null
         : state.phase === 'placing_p1'
@@ -139,7 +142,7 @@ export class ThreePointCreateBehavior implements Creatable<ThreePointCreateState
           status: 'committed',
           effects: [
             this.effect('complete', {
-              kind: EXTENSION_SCOPE_ID,
+              kind: this.id,
               p1: decision.p1,
               p2: decision.p3,
               points: [decision.p1, decision.p2, decision.p3],

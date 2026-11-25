@@ -94,7 +94,8 @@ export class DrawingSelectionSession {
     const iconHit = handle.icons.hitTest(point.x, point.y)
     const polyHit = handle.polylines.hitTest(point.x, point.y)
     const textHit = handle.textAnchors.hitTest(point.x, point.y)
-    const hit = [lineHit, fibHit, extensionHit, rectHit, circleHit, iconHit, polyHit, textHit]
+    const channelHit=handle.parallelChannels?.hitTest(point.x,point.y)
+    const hit = [channelHit,lineHit, fibHit, extensionHit, rectHit, circleHit, iconHit, polyHit, textHit]
       .filter((item): item is NonNullable<typeof item> => item != null)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))[0]
     const hitId = hit?.externalId ?? null
