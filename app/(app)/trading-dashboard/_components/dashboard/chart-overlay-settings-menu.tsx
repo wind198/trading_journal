@@ -1,6 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Input } from '@/components/ui/input'
+import { isValidAlertInterval, MIN_ALERT_INTERVAL, MAX_ALERT_INTERVAL } from '../../_lib/alerts/alert-config'
 import { useLocalStorage } from 'usehooks-ts'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -241,6 +243,7 @@ export function ChartOverlaySettingsMenu({
               />
             </label>
           ))}
+          <AlertIntervalField alertConfig={alertConfig} />
           {alertConfig.loading && <p className="text-muted-foreground">Loading alert config…</p>}
           {alertConfig.saving && <p className="text-muted-foreground">Saving alert config…</p>}
           {alertConfig.error && (
@@ -323,6 +326,29 @@ export function IndicatorSettingsPanel({ settings, marketOpenConfig, autoRegimes
 </div>
 }
 
+function AlertIntervalField({ alertConfig }: Pick<ChartOverlaySettingsMenuProps, 'alertConfig'>) {
+  const [draft, setDraft] = useState(String(alertConfig.config.interval))
+  useEffect(() => { setDraft(String(alertConfig.config.interval)) }, [alertConfig.config.interval, alertConfig.error])
+  const parsed = draft.trim() === '' ? NaN : Number(draft)
+  const valid = isValidAlertInterval(parsed)
+  const disabled = alertConfig.loading || alertConfig.saving || alertConfig.error === 'Sign in to edit alert config' || (alertConfig.error?.startsWith('Unable to load') ?? false)
+  return <div className="space-y-1.5 border-t border-border pt-2">
+    <label className="flex items-center justify-between gap-2">
+      <span>Interval (minutes)</span>
+      <Input type="number" inputMode="numeric" min={MIN_ALERT_INTERVAL} max={MAX_ALERT_INTERVAL} step={1}
+        className="h-10 w-24 text-base" aria-label="Alert interval in minutes" aria-invalid={!valid}
+        disabled={disabled} value={draft} onChange={event => setDraft(event.target.value)}
+        onKeyDown={event => { if(event.key==='Enter' && valid && !disabled) { event.preventDefault(); alertConfig.setIntervalMinutes(parsed) } }}
+      />
+    </label>
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-muted-foreground">Every {alertConfig.config.interval} min</span>
+      <Button type="button" size="sm" variant="outline" disabled={disabled || !valid || parsed===alertConfig.config.interval} onClick={()=>alertConfig.setIntervalMinutes(parsed)}>Apply</Button>
+    </div>
+    {!valid && <p role="alert" className="text-destructive">Enter a whole number from 1 to 1440.</p>}
+  </div>
+}
+
 export function AlertSettingsPanel({ alertConfig }: Pick<ChartOverlaySettingsMenuProps, 'alertConfig'>) {
   return <div>        <div className="space-y-2 px-2 py-2 text-xs" onPointerDown={(event) => event.stopPropagation()}>
           {([
@@ -341,6 +367,7 @@ export function AlertSettingsPanel({ alertConfig }: Pick<ChartOverlaySettingsMen
               />
             </label>
           ))}
+          <AlertIntervalField alertConfig={alertConfig} />
           {alertConfig.loading && <p className="text-muted-foreground">Loading alert config…</p>}
           {alertConfig.saving && <p className="text-muted-foreground">Saving alert config…</p>}
           {alertConfig.error && (

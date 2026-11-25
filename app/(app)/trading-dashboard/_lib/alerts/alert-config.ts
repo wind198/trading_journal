@@ -5,6 +5,7 @@ export type AlertConfig = {
   doublePattern: boolean
   engulfing: boolean
   doji: boolean
+  interval: number
 }
 
 export const DEFAULT_ALERT_CONFIG: AlertConfig = {
@@ -12,6 +13,14 @@ export const DEFAULT_ALERT_CONFIG: AlertConfig = {
   doublePattern: false,
   engulfing: false,
   doji: false,
+  interval: 15,
+}
+
+export const MIN_ALERT_INTERVAL = 1
+export const MAX_ALERT_INTERVAL = 1440
+export type AlertToggleKey = Exclude<keyof AlertConfig, 'interval'>
+export function isValidAlertInterval(value: number): boolean {
+  return Number.isInteger(value) && value >= MIN_ALERT_INTERVAL && value <= MAX_ALERT_INTERVAL
 }
 
 type AlertConfigRow = {
@@ -19,6 +28,7 @@ type AlertConfigRow = {
   double_pattern: boolean
   engulfing: boolean
   doji: boolean
+  interval: number
 }
 
 function fromRow(row: AlertConfigRow): AlertConfig {
@@ -27,6 +37,7 @@ function fromRow(row: AlertConfigRow): AlertConfig {
     doublePattern: row.double_pattern,
     engulfing: row.engulfing,
     doji: row.doji,
+    interval: isValidAlertInterval(row.interval) ? row.interval : DEFAULT_ALERT_CONFIG.interval,
   }
 }
 
@@ -42,7 +53,7 @@ export async function loadAlertConfigWithClient(
   const userId = await requireAuthenticated(supabase)
   const { data, error } = await supabase
     .from('alert_config')
-    .select('force_candle, double_pattern, engulfing, doji')
+    .select('force_candle, double_pattern, engulfing, doji, interval')
     .eq('user_id', userId)
     .maybeSingle()
   if (error) throw error
@@ -61,6 +72,7 @@ export async function saveAlertConfigWithClient(
   supabase: ReturnType<typeof createClient>,
   config: AlertConfig,
 ): Promise<void> {
+  if (!isValidAlertInterval(config.interval)) throw new Error('Invalid alert interval')
   const userId = await requireAuthenticated(supabase)
 
   const values = {
@@ -69,6 +81,7 @@ export async function saveAlertConfigWithClient(
     double_pattern: config.doublePattern,
     engulfing: config.engulfing,
     doji: config.doji,
+    interval: config.interval,
     updated_at: new Date().toISOString(),
   }
 
