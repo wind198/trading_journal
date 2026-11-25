@@ -259,7 +259,11 @@ export class DrawingEditSession {
   }
 
   pointerCancel(event: PointerEvent): void {
-    if (this.press?.pointerId === event.pointerId) this.press = null
+    if (this.press?.pointerId === event.pointerId) {
+      const relative = this.press.relative
+      this.press = null
+      if (relative) { this.relativeDrag.cancel(); this.ports.release(event); this.ports.syncLock() }
+    }
     if (this.active?.pointerId !== event.pointerId) return
     this.ports.release(event)
     if (this.active.kind === 'store') {

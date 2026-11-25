@@ -335,7 +335,7 @@ export function ChartPane({
     const anchor = input.p1
     const tempId = `temp-${Date.now()}`
     const pointAnchor =
-      isChartIconKind(input.kind) || isTextAnchorKind(input.kind) ? anchor : input.p2
+      isChartIconKind(input.kind) ? anchor : input.p2
     const optimistic: ChartDrawing = {
       id: tempId,
       symbol: SYMBOL,
@@ -344,7 +344,6 @@ export function ChartPane({
       p1: anchor,
       p2: pointAnchor,
       ...(input.points ? { points: input.points } : {}),
-
     }
     setDrawings((current) => [...current, optimistic])
     const persist = insertDrawing({
@@ -358,7 +357,6 @@ export function ChartPane({
     void persist
       .then((saved) => {
         setDrawings((current) => current.map((d) => (d.id === tempId ? saved : d)))
-
       })
       .catch(() => {
         setDrawings((current) => current.filter((d) => d.id !== tempId))
@@ -590,7 +588,7 @@ export function ChartPane({
                   : 'Label at arrow head'
             }
             onKeyDown={(e) => {
-              if (e.key === 'Enter') saveDrawingLabel()
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing && (!labelEditIsText || labelDraft.trim())) saveDrawingLabel()
             }}
           />
           <DialogFooter>
