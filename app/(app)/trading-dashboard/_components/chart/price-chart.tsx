@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import type { SessionOpenTimes } from '../../_lib/chart/chart-timezone'
 import { registerChartScreenshot } from '../../_lib/workspace/chart-screenshot-source'
 import type { IChartApi, ITimeScaleApi, LogicalRange, Time } from 'lightweight-charts'
 import { useDebounceCallback } from 'usehooks-ts'
@@ -180,6 +181,7 @@ export function PriceChart({
   forceScores = [],
   volumeProfile = null,
   sessionSlotEnabled = null,
+  sessionOpenTimes,
   showBollinger = true,
   showIchimoku = false,
   keyboardActive = true,
@@ -222,6 +224,7 @@ export function PriceChart({
   volumeProfile?: VolumeProfileFrame | null
   /** null = all session slots; otherwise only these slot ids are drawn. */
   sessionSlotEnabled?: ReadonlySet<string> | null
+  sessionOpenTimes?: SessionOpenTimes
   showBollinger?: boolean
   showIchimoku?: boolean
   keyboardActive?: boolean
@@ -646,7 +649,8 @@ export function PriceChart({
     const handle = handleRef.current
     if (!handle) return
     handle.indicators.setSessionSlots(sessionSlotEnabled)
-  }, [sessionSlotEnabled, epoch])
+    if (sessionOpenTimes) handle.indicators.setSessionOpenTimes(sessionOpenTimes)
+  }, [sessionSlotEnabled, sessionOpenTimes, epoch])
 
   useEffect(() => {
     const handle = handleRef.current

@@ -1,5 +1,8 @@
 import {
   defaultSessionSlotEnabled,
+  defaultSessionOpenTimes,
+  normalizeSessionOpenTimes,
+  type SessionOpenTimes,
   type SessionSlotId,
 } from './chart-timezone'
 import type { Regime } from '../overlays/baseline-indicators'
@@ -22,6 +25,7 @@ export type ChartOverlaySettings = {
   volumeProfile: boolean
   autoIndicatorsByRegime: boolean
   sessionSlots: Record<SessionSlotId, boolean>
+  sessionOpenTimes: SessionOpenTimes
   indicatorsByPane: Record<DashboardPaneId, PaneIndicatorToggles>
 }
 
@@ -56,6 +60,7 @@ export const DEFAULT_OVERLAY_SETTINGS: ChartOverlaySettings = {
   volumeProfile: true,
   autoIndicatorsByRegime: false,
   sessionSlots: defaultSessionSlotEnabled(),
+  sessionOpenTimes: defaultSessionOpenTimes(),
   indicatorsByPane: defaultIndicatorsByPane(),
 }
 
@@ -112,7 +117,9 @@ export function parseChartOverlaySettings(raw: string): ChartOverlaySettings {
     const sessionSlots = parsed.sessionSlots
     if (sessionSlots && typeof sessionSlots === 'object') {
       for (const id of Object.keys(defaults) as SessionSlotId[]) {
-        const value = (sessionSlots as Record<string, unknown>)[id]
+        const legacy: Partial<Record<SessionSlotId, string>> = { tokyo: '07:00', london: '14:00', newyork: '19:30' }
+        const old = sessionSlots as Record<string, unknown>
+        const value = old[id] ?? (legacy[id] ? old[legacy[id]!] : undefined)
         if (typeof value === 'boolean') slots[id] = value
       }
     }
@@ -123,6 +130,7 @@ export function parseChartOverlaySettings(raw: string): ChartOverlaySettings {
           : DEFAULT_OVERLAY_SETTINGS.volumeProfile,
       autoIndicatorsByRegime: parsed.autoIndicatorsByRegime === true,
       sessionSlots: slots,
+      sessionOpenTimes: normalizeSessionOpenTimes(parsed.sessionOpenTimes),
       indicatorsByPane: parseIndicatorsByPane(parsed),
     }
   } catch {

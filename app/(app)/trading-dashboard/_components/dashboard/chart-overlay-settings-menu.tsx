@@ -12,11 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { MarketSessionSettingsDialog } from './market-session-settings-dialog'
 import { Settings2 } from 'lucide-react'
 import {
   SESSION_LINE_SLOTS,
   sessionSlotId,
   sessionSlotLabel,
+  formatSessionOpenTime,
 } from '../../_lib/chart/chart-timezone'
 import {
   DASHBOARD_PANE_IDS,
@@ -148,7 +150,7 @@ export function ChartOverlaySettingsMenu({
           Volume profile
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Session lines</DropdownMenuLabel>
+        <DropdownMenuLabel>Market openings</DropdownMenuLabel>
         {SESSION_LINE_SLOTS.map((slot) => {
           const id = sessionSlotId(slot)
           return (
@@ -166,7 +168,7 @@ export function ChartOverlaySettingsMenu({
               }
               onSelect={(event) => event.preventDefault()}
             >
-              {sessionSlotLabel(slot)}
+              {sessionSlotLabel(slot)} · {formatSessionOpenTime(settings.sessionOpenTimes[id])}
             </DropdownMenuCheckboxItem>
           )
         })}
@@ -274,7 +276,7 @@ export function IndicatorSettingsPanel({ settings, autoRegimesByPane, onSettings
       <Checkbox checked={settings.volumeProfile} onCheckedChange={checked => onSettingsChange(current => ({ ...current, volumeProfile: checked === true }))} />
     </label>
     <hr className="border-border" />
-    <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Session lines</h3>
+    <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1"><h3 className="text-xs font-semibold text-muted-foreground">Market openings</h3><MarketSessionSettingsDialog times={settings.sessionOpenTimes} onSave={times => onSettingsChange(current => ({...current,sessionOpenTimes:times}))} /></div>
     {SESSION_LINE_SLOTS.map(slot => {
       const id = sessionSlotId(slot)
       return <label key={id} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">

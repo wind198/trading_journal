@@ -166,6 +166,7 @@ export function TradingWorkspace() {
               }}
               showVolumeProfile={overlaySettings.volumeProfile}
               sessionSlotEnabled={sessionSlotEnabled}
+              sessionOpenTimes={overlaySettings.sessionOpenTimes}
               showBollinger={paneToggles.bollinger}
               showIchimoku={paneToggles.ichimoku}
               autoIndicatorsByRegime={overlaySettings.autoIndicatorsByRegime}

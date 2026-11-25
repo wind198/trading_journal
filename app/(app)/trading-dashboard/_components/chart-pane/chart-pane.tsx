@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { SessionOpenTimes } from '../../_lib/chart/chart-timezone'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ export function ChartPane({
   onResetLayoutApplied,
   showVolumeProfile,
   sessionSlotEnabled,
+  sessionOpenTimes,
   showBollinger,
   showIchimoku,
   autoIndicatorsByRegime,
@@ -65,6 +67,7 @@ export function ChartPane({
   onResetLayoutApplied: (epoch: number) => void
   showVolumeProfile: boolean
   sessionSlotEnabled: ReadonlySet<string>
+  sessionOpenTimes: SessionOpenTimes
   showBollinger: boolean
   showIchimoku: boolean
   autoIndicatorsByRegime: boolean
@@ -543,6 +546,7 @@ export function ChartPane({
             keyLevels={keyLevels}
             volumeProfile={volumeProfile}
             sessionSlotEnabled={sessionSlotEnabled}
+            sessionOpenTimes={sessionOpenTimes}
             showBollinger={indicatorVisibility.bollinger}
             showIchimoku={indicatorVisibility.ichimoku}
             keyboardActive={active && keyboardEnabled}
