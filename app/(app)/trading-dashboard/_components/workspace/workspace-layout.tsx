@@ -16,5 +16,5 @@ export function WorkspaceLayout({ mode, preferences, children, captureRef, expan
     '--workspace-wide-columns': splitTracks(preferences.fourWide.column),
     '--workspace-wide-focus': splitTracks(preferences.focusWide),
   } as CSSProperties
-  return <div ref={captureRef} data-workspace-expanded={expanded ?? undefined} className={'relative ' + layoutClasses[mode]} style={style}>{children}</div>
+  return <div ref={captureRef} data-workspace-expanded={expanded ?? undefined} className={'relative isolate z-0 ' + layoutClasses[mode]} style={style}>{children}</div>
 }
