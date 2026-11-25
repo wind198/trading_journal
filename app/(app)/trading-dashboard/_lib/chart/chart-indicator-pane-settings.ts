@@ -1,10 +1,3 @@
-import {
-  defaultSessionSlotEnabled,
-  defaultSessionOpenTimes,
-  normalizeSessionOpenTimes,
-  type SessionOpenTimes,
-  type SessionSlotId,
-} from './chart-timezone'
 import type { Regime } from '../overlays/baseline-indicators'
 
 export const DASHBOARD_PANE_IDS = ['4h', '1h', '15m', '3m'] as const
@@ -24,8 +17,6 @@ export type PaneIndicatorToggles = {
 export type ChartOverlaySettings = {
   volumeProfile: boolean
   autoIndicatorsByRegime: boolean
-  sessionSlots: Record<SessionSlotId, boolean>
-  sessionOpenTimes: SessionOpenTimes
   indicatorsByPane: Record<DashboardPaneId, PaneIndicatorToggles>
 }
 
@@ -59,8 +50,6 @@ export function defaultIndicatorsByPane(): Record<DashboardPaneId, PaneIndicator
 export const DEFAULT_OVERLAY_SETTINGS: ChartOverlaySettings = {
   volumeProfile: true,
   autoIndicatorsByRegime: false,
-  sessionSlots: defaultSessionSlotEnabled(),
-  sessionOpenTimes: defaultSessionOpenTimes(),
   indicatorsByPane: defaultIndicatorsByPane(),
 }
 
@@ -112,25 +101,12 @@ function parseIndicatorsByPane(
 export function parseChartOverlaySettings(raw: string): ChartOverlaySettings {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
-    const defaults = defaultSessionSlotEnabled()
-    const slots = { ...defaults }
-    const sessionSlots = parsed.sessionSlots
-    if (sessionSlots && typeof sessionSlots === 'object') {
-      for (const id of Object.keys(defaults) as SessionSlotId[]) {
-        const legacy: Partial<Record<SessionSlotId, string>> = { tokyo: '07:00', london: '14:00', newyork: '19:30' }
-        const old = sessionSlots as Record<string, unknown>
-        const value = old[id] ?? (legacy[id] ? old[legacy[id]!] : undefined)
-        if (typeof value === 'boolean') slots[id] = value
-      }
-    }
     return {
       volumeProfile:
         typeof parsed.volumeProfile === 'boolean'
           ? parsed.volumeProfile
           : DEFAULT_OVERLAY_SETTINGS.volumeProfile,
       autoIndicatorsByRegime: parsed.autoIndicatorsByRegime === true,
-      sessionSlots: slots,
-      sessionOpenTimes: normalizeSessionOpenTimes(parsed.sessionOpenTimes),
       indicatorsByPane: parseIndicatorsByPane(parsed),
     }
   } catch {

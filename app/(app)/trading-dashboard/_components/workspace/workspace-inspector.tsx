@@ -17,7 +17,7 @@ const tabs = [
   { id: 'guides', label: 'Guides', icon: BookOpen },
 ] as const
 
-export function WorkspaceInspector({ open, tab, onTab, onClose, activePane, settings, autoRegimesByPane, onSettingsChange, alertConfig }: ChartOverlaySettingsMenuProps & {
+export function WorkspaceInspector({ open, tab, onTab, onClose, activePane, settings, marketOpenConfig, autoRegimesByPane, onSettingsChange, alertConfig }: ChartOverlaySettingsMenuProps & {
   open: boolean; tab: InspectorTab; onTab: (tab: InspectorTab) => void; onClose: () => void; activePane: PaneId
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -57,7 +57,7 @@ export function WorkspaceInspector({ open, tab, onTab, onClose, activePane, sett
           <NotesSidebar symbol={SYMBOL} embedded onClose={onClose} />
         </Tabs.Content>
         <Tabs.Content value="indicators" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <IndicatorSettingsPanel settings={settings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={onSettingsChange} />
+          <IndicatorSettingsPanel marketOpenConfig={marketOpenConfig} settings={settings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={onSettingsChange} />
         </Tabs.Content>
         <Tabs.Content value="alerts" className="min-h-0 flex-1 overflow-y-auto overscroll-contain"><AlertSettingsPanel alertConfig={alertConfig} /></Tabs.Content>
         <Tabs.Content value="guides" className="min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden"><GuidesSidebar embedded onClose={onClose} /></Tabs.Content>

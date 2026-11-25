@@ -12,6 +12,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import type { useMarketOpenConfig } from '../../_hooks/useMarketOpenConfig'
+import type { MarketOpenConfig } from '../../_lib/chart/market-open-time'
 import { MarketSessionSettingsDialog } from './market-session-settings-dialog'
 import { Settings2 } from 'lucide-react'
 import {
@@ -45,7 +47,7 @@ export function useChartOverlaySettings() {
 }
 
 export function sessionSlotsEnabledSet(
-  sessionSlots: ChartOverlaySettings['sessionSlots'],
+  sessionSlots: MarketOpenConfig['enabled'],
 ): ReadonlySet<string> {
   const enabled = new Set<string>()
   for (const [id, on] of Object.entries(sessionSlots)) {
@@ -56,6 +58,7 @@ export function sessionSlotsEnabledSet(
 
 export type ChartOverlaySettingsMenuProps = {
   settings: ChartOverlaySettings
+  marketOpenConfig: ReturnType<typeof useMarketOpenConfig>
   alertConfig: ReturnType<typeof useAlertConfig>
   autoRegimesByPane: Partial<Record<DashboardPaneId, Regime | null>>
   onSettingsChange: (
@@ -124,6 +127,7 @@ const INDICATORS = [
 
 export function ChartOverlaySettingsMenu({
   settings,
+  marketOpenConfig,
   alertConfig,
   autoRegimesByPane,
   onSettingsChange,
@@ -156,19 +160,12 @@ export function ChartOverlaySettingsMenu({
           return (
             <DropdownMenuCheckboxItem
               key={id}
-              checked={settings.sessionSlots[id] ?? true}
-              onCheckedChange={(checked) =>
-                onSettingsChange((current) => ({
-                  ...current,
-                  sessionSlots: {
-                    ...current.sessionSlots,
-                    [id]: checked === true,
-                  },
-                }))
-              }
+              checked={marketOpenConfig.config.enabled[id]}
+              disabled={!marketOpenConfig.loaded || marketOpenConfig.saving}
+              onCheckedChange={checked => void marketOpenConfig.save(current => ({...current,enabled:{...current.enabled,[id]:checked === true}}))}
               onSelect={(event) => event.preventDefault()}
             >
-              {sessionSlotLabel(slot)} · {formatSessionOpenTime(settings.sessionOpenTimes[id])}
+              {sessionSlotLabel(slot)} · {formatSessionOpenTime(marketOpenConfig.config.times[id])}
             </DropdownMenuCheckboxItem>
           )
         })}
@@ -263,12 +260,12 @@ export function ChartOverlaySettingsMenu({
 }
 
 export function useSessionSlotsEnabled(
-  sessionSlots: ChartOverlaySettings['sessionSlots'],
+  sessionSlots: MarketOpenConfig['enabled'],
 ): ReadonlySet<string> {
   return useMemo(() => sessionSlotsEnabledSet(sessionSlots), [sessionSlots])
 }
 
-export function IndicatorSettingsPanel({ settings, autoRegimesByPane, onSettingsChange }: Omit<ChartOverlaySettingsMenuProps, 'alertConfig'>) {
+export function IndicatorSettingsPanel({ settings, marketOpenConfig, autoRegimesByPane, onSettingsChange }: Omit<ChartOverlaySettingsMenuProps, 'alertConfig'>) {
   return <div className="space-y-1">
     <h3 className="px-2 py-1 text-xs font-semibold text-muted-foreground">Overlays</h3>
     <label className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
@@ -276,12 +273,14 @@ export function IndicatorSettingsPanel({ settings, autoRegimesByPane, onSettings
       <Checkbox checked={settings.volumeProfile} onCheckedChange={checked => onSettingsChange(current => ({ ...current, volumeProfile: checked === true }))} />
     </label>
     <hr className="border-border" />
-    <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1"><h3 className="text-xs font-semibold text-muted-foreground">Market openings</h3><MarketSessionSettingsDialog times={settings.sessionOpenTimes} onSave={times => onSettingsChange(current => ({...current,sessionOpenTimes:times}))} /></div>
+    <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1"><h3 className="text-xs font-semibold text-muted-foreground">Market openings</h3><MarketSessionSettingsDialog times={marketOpenConfig.config.times} disabled={!marketOpenConfig.loaded || marketOpenConfig.saving} saving={marketOpenConfig.saving} error={marketOpenConfig.error} onSave={times => marketOpenConfig.save(current => ({...current,times}))} /></div>
+    {marketOpenConfig.loading && <p className="px-2 text-xs text-muted-foreground">Loading market openings…</p>}
+    {marketOpenConfig.error && <div role="alert" className="px-2 text-xs text-destructive">{marketOpenConfig.error} <Button size="xs" variant="ghost" disabled={marketOpenConfig.saving} onClick={()=>void marketOpenConfig.reload()}>Retry load</Button></div>}
     {SESSION_LINE_SLOTS.map(slot => {
       const id = sessionSlotId(slot)
       return <label key={id} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
-        <span>{sessionSlotLabel(slot)}</span>
-        <Checkbox checked={settings.sessionSlots[id] ?? true} onCheckedChange={checked => onSettingsChange(current => ({ ...current, sessionSlots: { ...current.sessionSlots, [id]: checked === true } }))} />
+        <span>{sessionSlotLabel(slot)} · {formatSessionOpenTime(marketOpenConfig.config.times[id])}</span>
+        <Checkbox checked={marketOpenConfig.config.enabled[id]} disabled={!marketOpenConfig.loaded || marketOpenConfig.saving} onCheckedChange={checked => void marketOpenConfig.save(current => ({...current,enabled:{...current.enabled,[id]:checked === true}}))} />
       </label>
     })}
     <hr className="border-border" />
