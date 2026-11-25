@@ -1,0 +1,4 @@
+BEGIN;
+ALTER TABLE public.alert_config ADD COLUMN interval INTEGER NOT NULL DEFAULT 15
+  CHECK (interval BETWEEN 1 AND 1440);
+COMMIT;

@@ -7,13 +7,16 @@ import {
   loadAlertConfig,
   saveAlertConfig,
   type AlertConfig,
+  type AlertToggleKey,
+  isValidAlertInterval,
 } from '../_lib/alerts/alert-config'
 
 function sameConfig(a: AlertConfig, b: AlertConfig): boolean {
   return a.forceCandle === b.forceCandle &&
     a.doublePattern === b.doublePattern &&
     a.engulfing === b.engulfing &&
-    a.doji === b.doji
+    a.doji === b.doji &&
+    a.interval === b.interval
 }
 
 export function useAlertConfig() {
@@ -61,10 +64,16 @@ export function useAlertConfig() {
     return () => debouncedPersist.cancel()
   }, [config, loading, saving, error, debouncedPersist])
 
-  const setAlert = useCallback((key: keyof AlertConfig, enabled: boolean) => {
+  const setAlert = useCallback((key: AlertToggleKey, enabled: boolean) => {
     setError(null)
     setConfig((current) => ({ ...current, [key]: enabled }))
   }, [])
 
-  return { config, loading, saving, error, setAlert, reload }
+  const setIntervalMinutes = useCallback((interval: number) => {
+    if (!isValidAlertInterval(interval)) return
+    setError(null)
+    setConfig(current => ({ ...current, interval }))
+  }, [])
+
+  return { config, loading, saving, error, setAlert, setIntervalMinutes, reload }
 }
