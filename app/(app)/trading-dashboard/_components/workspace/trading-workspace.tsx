@@ -19,6 +19,7 @@ import { WorkspaceToolbar } from './workspace-toolbar'
 import { WorkspaceLayout } from './workspace-layout'
 import { activatePane, resolveDrawingControl, toggleDrawingMode, cancelPaneMode, IDLE_MODE, type DrawingControl, type DrawingMode } from '../../_lib/workspace/drawing-control'
 import { useWorkspaceLayoutPreferences } from '../../_hooks/useWorkspaceLayoutPreferences'
+import { useMarketOpenConfig } from '../../_hooks/useMarketOpenConfig'
 import { WorkspaceInspector } from './workspace-inspector'
 import { DEFAULT_INSPECTOR, toggleInspector, showInspector } from '../../_lib/workspace/inspector-state'
 import { useFavoriteTools } from '../../_hooks/useFavoriteTools'
@@ -43,6 +44,7 @@ export function TradingWorkspace() {
   const focusMode = preferences.focusMode
   const wideLayout = useMediaQuery('(min-width: 768px), (orientation: landscape)', { initializeWithValue: false })
   const [overlaySettings, setOverlaySettings] = useChartOverlaySettings()
+  const marketOpenConfig = useMarketOpenConfig()
   const alertConfig = useAlertConfig()
   const [autoRegimesByPane, setAutoRegimesByPane] = useState<Partial<Record<PaneId, Regime | null>>>({})
   const onPaneRegimeChange = useCallback((paneId: PaneId, regime: Regime | null) => {
@@ -83,7 +85,7 @@ export function TradingWorkspace() {
     setPreferences(current => ({ ...current, focusMode: focus }))
     setDrawingControl(current => ({ ...resolveDrawingControl(current, visibleWorkspacePanes(null, focus).map(p => p.id)), mode: IDLE_MODE }))
   }
-  const sessionSlotEnabled = useSessionSlotsEnabled(overlaySettings.sessionSlots)
+  const sessionSlotEnabled = useSessionSlotsEnabled(marketOpenConfig.config.enabled)
 
   const captureScreenshot = async () => {
     if (capturingRef.current || !captureRef.current) return
@@ -166,7 +168,7 @@ export function TradingWorkspace() {
               }}
               showVolumeProfile={overlaySettings.volumeProfile}
               sessionSlotEnabled={sessionSlotEnabled}
-              sessionOpenTimes={overlaySettings.sessionOpenTimes}
+              sessionOpenTimes={marketOpenConfig.config.times}
               showBollinger={paneToggles.bollinger}
               showIchimoku={paneToggles.ichimoku}
               autoIndicatorsByRegime={overlaySettings.autoIndicatorsByRegime}
@@ -192,7 +194,7 @@ export function TradingWorkspace() {
         {!inspector.open && <FloatingFavoriteToolbar favorites={favorites} control={control} onMode={chooseMode} onHide={() => setFavorites(current => ({ ...current, visible: false }))} onEdit={() => setEditFavorites(true)} />}
         <WorkspaceInspector open={inspector.open} tab={inspector.tab} activePane={control.paneId}
           onTab={tab => setInspector(current => showInspector(current, tab))} onClose={closeInspector}
-          settings={overlaySettings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings} alertConfig={alertConfig} />
+          marketOpenConfig={marketOpenConfig} settings={overlaySettings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings} alertConfig={alertConfig} />
       </div>
       <FavoriteToolsDialog open={editFavorites} onOpenChange={setEditFavorites} favorites={favorites} onToggle={id => setFavorites(current => toggleFavorite(current, id))} />
       <ExecutionOrderDrawer
