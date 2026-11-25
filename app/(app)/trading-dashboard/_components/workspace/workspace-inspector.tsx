@@ -22,7 +22,6 @@ export function WorkspaceInspector({ open, tab, onTab, onClose, activePane, sett
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
-  const inspectorRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!open) return
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -30,14 +29,14 @@ export function WorkspaceInspector({ open, tab, onTab, onClose, activePane, sett
     return () => { previousFocus.current?.focus({ preventScroll: true }) }
   }, [open])
   return (
-    <aside ref={inspectorRef} hidden={!open} aria-label="Workspace inspector" id="workspace-inspector"
-      className={open ? "workspace-inspector absolute inset-y-0 right-0 z-30 flex w-80 max-w-full flex-col border-l bg-background shadow-lg" : "hidden"}
+    <aside hidden={!open} inert={!open} aria-label="Workspace inspector" id="workspace-inspector"
+      className={open ? "workspace-inspector absolute inset-y-0 right-0 z-40 isolate flex w-80 max-w-full flex-col border-l bg-background shadow-lg" : "hidden"}
       onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); onClose() } }}>
-      <div className="workspace-inspector-header flex h-9 shrink-0 items-center justify-between border-b px-2">
+      <div className="workspace-inspector-header relative z-10 flex h-9 shrink-0 items-center justify-between border-b bg-background px-2">
         <span className="text-xs font-semibold">Inspector · {activePane.toUpperCase()}</span>
-        <Button ref={closeRef} variant="ghost" size="icon-sm" aria-label="Close inspector" onClick={onClose}><X /></Button>
+        <Button ref={closeRef} type="button" variant="ghost" size="icon-sm" className="workspace-inspector-close size-9 shrink-0 touch-manipulation" aria-label="Close inspector" title="Close inspector" onClick={event => { event.stopPropagation(); onClose() }}><X aria-hidden /></Button>
       </div>
-      <Tabs.Root value={tab} onValueChange={value => onTab(value as InspectorTab)} className="flex min-h-0 flex-1 flex-col">
+      <Tabs.Root value={tab} onValueChange={value => onTab(value as InspectorTab)} className="relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">
         <Tabs.List className="workspace-inspector-tabs grid shrink-0 grid-cols-5 border-b" aria-label="Inspector sections">
           {tabs.map(({id, label, icon: Icon}) => <Tabs.Trigger key={id} value={id} title={label} aria-label={label}
             className="flex h-10 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-primary">
@@ -57,11 +56,11 @@ export function WorkspaceInspector({ open, tab, onTab, onClose, activePane, sett
         <Tabs.Content value="notes" forceMount className="min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
           <NotesSidebar symbol={SYMBOL} embedded onClose={onClose} />
         </Tabs.Content>
-        <Tabs.Content value="indicators" className="min-h-0 flex-1 overflow-y-auto">
+        <Tabs.Content value="indicators" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <IndicatorSettingsPanel settings={settings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={onSettingsChange} />
         </Tabs.Content>
-        <Tabs.Content value="alerts" className="min-h-0 flex-1 overflow-y-auto"><AlertSettingsPanel alertConfig={alertConfig} /></Tabs.Content>
-        <Tabs.Content value="guides" className="min-h-0 flex-1 flex flex-col"><GuidesSidebar embedded onClose={onClose} /></Tabs.Content>
+        <Tabs.Content value="alerts" className="min-h-0 flex-1 overflow-y-auto overscroll-contain"><AlertSettingsPanel alertConfig={alertConfig} /></Tabs.Content>
+        <Tabs.Content value="guides" className="min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden"><GuidesSidebar embedded onClose={onClose} /></Tabs.Content>
       </Tabs.Root>
     </aside>
   )

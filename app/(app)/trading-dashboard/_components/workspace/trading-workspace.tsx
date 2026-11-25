@@ -51,6 +51,7 @@ export function TradingWorkspace() {
     )
   }, [])
   const [inspector, setInspector] = useState(DEFAULT_INSPECTOR)
+  const closeInspector = useCallback(() => setInspector(current => current.open ? { ...current, open: false } : current), [])
   const didAutoOpenNotesRef = useRef(false)
   const notesQuery = useQuery({
     queryKey: DASHBOARD_NOTES_QUERY_KEY,
@@ -130,7 +131,7 @@ export function TradingWorkspace() {
           onFullscreen={() => setFullScreen(current => !current)}
         />
       {!fullScreen && <NonTradeWarningBanner />}
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="relative isolate min-h-0 flex-1 overflow-hidden">
         <WorkspaceLayout captureRef={captureRef} mode={workspaceLayoutMode(null, focusMode)} expanded={expanded} preferences={preferences}>
         {mountedWorkspacePanes(focusMode).map((pane) => {
           const isExpanded = expanded === pane.id
@@ -189,7 +190,7 @@ export function TradingWorkspace() {
         </WorkspaceLayout>
         {!inspector.open && <FloatingFavoriteToolbar favorites={favorites} control={control} onMode={chooseMode} onHide={() => setFavorites(current => ({ ...current, visible: false }))} onEdit={() => setEditFavorites(true)} />}
         <WorkspaceInspector open={inspector.open} tab={inspector.tab} activePane={control.paneId}
-          onTab={tab => setInspector(current => showInspector(current, tab))} onClose={() => setInspector(current => ({ ...current, open: false }))}
+          onTab={tab => setInspector(current => showInspector(current, tab))} onClose={closeInspector}
           settings={overlaySettings} autoRegimesByPane={autoRegimesByPane} onSettingsChange={setOverlaySettings} alertConfig={alertConfig} />
       </div>
       <FavoriteToolsDialog open={editFavorites} onOpenChange={setEditFavorites} favorites={favorites} onToggle={id => setFavorites(current => toggleFavorite(current, id))} />

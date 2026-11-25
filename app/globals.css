@@ -211,3 +211,10 @@
   .workspace-grid-four > section:not([data-pane-expanded="true"]):nth-child(3) { grid-row: 2; grid-column: 1; }
   .workspace-grid-four > section:not([data-pane-expanded="true"]):nth-child(4) { grid-row: 2; grid-column: 2; }
 }
+
+/* Inspector controls must remain above chart and tab content on touch devices. */
+@media (pointer: coarse) {
+  .workspace-inspector-header { height: 48px; min-height: 48px; }
+  .workspace-inspector-close { width: 44px; height: 44px; }
+  .workspace-inspector textarea, .workspace-inspector input { font-size: 16px; }
+}

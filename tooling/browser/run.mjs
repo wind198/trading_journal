@@ -68,6 +68,25 @@ async function click(page, name) {
   const target=page.getByRole('button',{name,exact:true})
   await target.click()
 }
+async function verifyInspectorClose(page, mobile) {
+  const inspector=page.locator('#workspace-inspector')
+  const opener=page.getByRole('button',{name:'Open inspector',exact:true})
+  if(mobile) await opener.tap(); else await opener.click()
+  await inspector.waitFor({state:'visible'})
+  const close=inspector.getByRole('button',{name:'Close inspector',exact:true})
+  const hit=await close.evaluate(el=>{
+    const r=el.getBoundingClientRect()
+    const target=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)
+    return {reachable:!!target&&el.contains(target),width:r.width,height:r.height}
+  })
+  assert.ok(hit.reachable,'Inspector close must win hit testing')
+  if(mobile) {
+    assert.ok(hit.width>=44&&hit.height>=44,'Touch close target must be at least 44px')
+    await close.tap()
+  } else await close.click()
+  await inspector.waitFor({state:'hidden'})
+  await opener.waitFor({state:'visible'})
+}
 async function setup(page) {
   await page.route('**/*', async route => {
     const url=new URL(route.request().url())
@@ -105,6 +124,7 @@ try {
       const expand=firstPane.getByRole('button',{name:'Expand window',exact:true})
       if(v.mobile) await expand.tap(); else await expand.click()
       await geometry(page,1)
+      await verifyInspectorClose(page,v.mobile)
       assert.equal(await page.locator('section[data-chart-pane]').count(),4)
       assert.ok(await canvasBefore.evaluate(el=>el.isConnected), 'Expand must retain existing chart canvas')
       const collapse=firstPane.getByRole('button',{name:'Collapse window',exact:true})
@@ -120,6 +140,7 @@ try {
       await page.screenshot({path:path.join(output,v.name+'-four.png')})
       await click(page,'Enter fullscreen')
       const full=await geometry(page,4)
+      await verifyInspectorClose(page,v.mobile)
       const exit=page.getByRole('button',{name:'Exit fullscreen',exact:true})
       const rect=await exit.boundingBox()
       assert.ok(rect && rect.x>=0 && rect.x+rect.width<=v.width+1)
@@ -140,7 +161,9 @@ try {
       await click(page,'Open inspector')
       await page.getByRole('tab',{name:'Indicators'}).click()
       await page.getByRole('checkbox',{name:'Force candles on 15m'}).waitFor({state:'visible'})
-      await page.locator('#workspace-inspector').getByRole('button',{name:'Close inspector',exact:true}).click()
+      const closeInspector=page.locator('#workspace-inspector').getByRole('button',{name:'Close inspector',exact:true})
+      if(v.mobile) await closeInspector.tap(); else await closeInspector.click()
+      await page.locator('#workspace-inspector').waitFor({state:'hidden'})
       await page.getByRole('button',{name:'Open inspector'}).waitFor()
       assert.deepEqual(errors,[])
       report.push({viewport:v.name,status:'passed',initial,fullscreen:full})
