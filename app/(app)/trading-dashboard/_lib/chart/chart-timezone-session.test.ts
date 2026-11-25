@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   SESSION_LINE_SLOTS,
+  sessionVerticalLines, defaultSessionOpenTimes, normalizeSessionOpenTimes, parseSessionOpenTime, unixAtChartZone,
   sessionSlotId,
   sessionVerticalLineTimes,
 } from './chart-timezone'
@@ -29,4 +30,20 @@ test('sessionVerticalLineTimes filters to enabled slot ids only', () => {
 
 test('sessionVerticalLineTimes with empty enabled set yields no lines', () => {
   assert.deepEqual(sessionVerticalLineTimes(new Set()), [])
+})
+
+test('named session identity survives editable clock times and overlaps', () => {
+  const times = defaultSessionOpenTimes()
+  times.sydney = {hour:19,minute:30}
+  const lines = sessionVerticalLines(null,times,new Date('2026-11-25T12:00:00Z'))
+  assert.equal(lines.length,16)
+  const sameTime = lines.filter(l=>l.time===unixAtChartZone(2026,11,25,19,30))
+  assert.deepEqual(sameTime.map(l=>l.id),['sydney','newyork'])
+  assert.notEqual(sameTime[0]!.color,sameTime[1]!.color)
+})
+test('clock validation rejects malformed or out of range values', () => {
+  assert.equal(parseSessionOpenTime('24:00'),null)
+  assert.equal(parseSessionOpenTime('07:60'),null)
+  assert.deepEqual(parseSessionOpenTime('19:30'),{hour:19,minute:30})
+  assert.deepEqual(normalizeSessionOpenTimes({london:{hour:25,minute:0}}).london,defaultSessionOpenTimes().london)
 })

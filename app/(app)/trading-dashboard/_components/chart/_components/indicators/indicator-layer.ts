@@ -5,6 +5,7 @@ import type { EngulfingOverlayEvent } from './engulfing/engulfing-overlay-primit
 import { EngulfingIndicator } from './engulfing/engulfing-indicator'
 import type { ForceOverlayEvent } from './force/force-overlay-primitive'
 import { ForceIndicator } from './force/force-indicator'
+import type { SessionOpenTimes } from '../../../../_lib/chart/chart-timezone'
 import { SessionGridIndicator } from './session-grid/session-grid-indicator'
 import { VolumeProfileIndicator } from './volume-profile/volume-profile-indicator'
 import { MarketContextPrimitive } from './market-context/market-context-primitive'
@@ -98,6 +99,8 @@ export class IndicatorLayer {
   setVolumeProfile(profile: VolumeProfileFrame | null): void {
     this.volumeProfile?.setProfile(profile)
   }
+
+  setSessionOpenTimes(times: SessionOpenTimes): void { this.sessionGrid?.setOpenTimes(times) }
 
   setSessionSlots(enabled: ReadonlySet<string> | null): void {
     this.sessionGrid?.setEnabledSlots(enabled)

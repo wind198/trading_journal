@@ -102,3 +102,17 @@ test('auto regime visibility overrides but preserves saved manual choices', () =
   assert.deepEqual(regimeIndicatorVisibility(true, null, manual), { bollinger: false, ichimoku: false })
   assert.deepEqual(manual, { bollinger: false, ichimoku: true })
 })
+
+test('market times and visibility persist by stable session identity', () => {
+ const parsed=parseChartOverlaySettings(JSON.stringify({sessionSlots:{london:false},sessionOpenTimes:{london:{hour:15,minute:0}}}))
+ assert.equal(parsed.sessionSlots.london,false)
+ assert.deepEqual(parsed.sessionOpenTimes.london,{hour:15,minute:0})
+ assert.equal(parsed.sessionSlots.tokyo,true)
+})
+test('legacy named-hour toggles migrate where meaningful', () => {
+ const parsed=parseChartOverlaySettings(JSON.stringify({sessionSlots:{'07:00':false,'14:00':false,'19:30':false}}))
+ assert.equal(parsed.sessionSlots.tokyo,false)
+ assert.equal(parsed.sessionSlots.london,false)
+ assert.equal(parsed.sessionSlots.newyork,false)
+ assert.equal(parsed.sessionSlots.sydney,true)
+})

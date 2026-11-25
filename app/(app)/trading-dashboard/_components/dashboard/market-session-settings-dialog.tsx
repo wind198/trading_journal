@@ -1,0 +1,36 @@
+'use client'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { CHART_TIME_ZONE, SESSION_LINE_SLOTS, defaultSessionOpenTimes, formatSessionOpenTime, parseSessionOpenTime, type SessionOpenTimes, type SessionSlotId } from '../../_lib/chart/chart-timezone'
+
+function toDraft(times: SessionOpenTimes): Record<SessionSlotId,string> {
+  return Object.fromEntries(SESSION_LINE_SLOTS.map(s => [s.id, formatSessionOpenTime(times[s.id])])) as Record<SessionSlotId,string>
+}
+export function MarketSessionSettingsDialog({ times, onSave }: { times: SessionOpenTimes; onSave: (times: SessionOpenTimes) => void }) {
+  const [open,setOpen] = useState(false)
+  const [draft,setDraft] = useState(() => toDraft(times))
+  const valid = SESSION_LINE_SLOTS.every(slot => parseSessionOpenTime(draft[slot.id]) !== null)
+  const changeOpen = (value: boolean) => { if(value) setDraft(toDraft(times)); setOpen(value) }
+  const save = () => {
+    if (!valid) return
+    onSave(Object.fromEntries(SESSION_LINE_SLOTS.map(slot => [slot.id, parseSessionOpenTime(draft[slot.id])!])) as SessionOpenTimes)
+    setOpen(false)
+  }
+  return <Dialog open={open} onOpenChange={changeOpen}>
+    <DialogTrigger asChild><Button type="button" variant="outline" size="sm" className="h-9">Edit opening times</Button></DialogTrigger>
+    <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
+      <DialogHeader><DialogTitle>Market opening times</DialogTitle>
+        <DialogDescription>Times are in {CHART_TIME_ZONE} (24-hour clock). Adjust them when daylight saving or your trading schedule changes.</DialogDescription>
+      </DialogHeader>
+      <form onSubmit={event => { event.preventDefault(); save() }} className="space-y-3">
+        {SESSION_LINE_SLOTS.map(slot => <label key={slot.id} className="flex items-center justify-between gap-3 text-sm">
+          <span className="flex items-center gap-2"><span className="size-3 rounded-full" style={{backgroundColor:slot.color}} />{slot.label}</span>
+          <Input type="time" required step={60} className="h-11 w-36 text-base" aria-label={slot.label+' opening time'} value={draft[slot.id]} onChange={event => setDraft(current => ({...current,[slot.id]:event.target.value}))}/>
+        </label>)}
+        <DialogFooter className="gap-2"><Button type="button" variant="ghost" onClick={()=>setDraft(toDraft(defaultSessionOpenTimes()))}>Reset defaults</Button><Button type="button" variant="outline" onClick={()=>setOpen(false)}>Cancel</Button><Button type="submit" disabled={!valid}>Save</Button></DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>
+}

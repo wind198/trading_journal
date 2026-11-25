@@ -137,45 +137,50 @@ export function unixAtChartZone(
 }
 
 export const SESSION_LINE_SLOTS = [
-  { hour: 6, minute: 0 },
-  { hour: 7, minute: 0 },
-  { hour: 9, minute: 0 },
-  { hour: 11, minute: 0 },
-  { hour: 14, minute: 0 },
-  { hour: 17, minute: 30 },
-  { hour: 19, minute: 30 },
-  { hour: 23, minute: 0 },
+  { id: 'sydney', label: 'Sydney', hour: 4, minute: 0, color: '#7C3AED' },
+  { id: 'tokyo', label: 'Tokyo', hour: 7, minute: 0, color: '#DC2626' },
+  { id: 'london', label: 'London', hour: 14, minute: 0, color: '#2563EB' },
+  { id: 'newyork', label: 'New York', hour: 19, minute: 30, color: '#059669' },
 ] as const
-
 export type SessionLineSlot = (typeof SESSION_LINE_SLOTS)[number]
-export type SessionSlotId = `${string}:${string}`
-
-export function sessionSlotId(slot: { hour: number; minute: number }): SessionSlotId {
-  return `${String(slot.hour).padStart(2, '0')}:${String(slot.minute).padStart(2, '0')}`
+export type SessionSlotId = SessionLineSlot['id']
+export type SessionOpenTime = { hour: number; minute: number }
+export type SessionOpenTimes = Record<SessionSlotId, SessionOpenTime>
+export function sessionSlotId(slot: SessionLineSlot): SessionSlotId { return slot.id }
+export function formatSessionOpenTime(time: SessionOpenTime): string {
+  return `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`
 }
-
-export function sessionSlotLabel(slot: { hour: number; minute: number }): string {
-  return sessionSlotId(slot)
+export function sessionSlotLabel(slot: SessionLineSlot): string { return slot.label }
+export function defaultSessionOpenTimes(): SessionOpenTimes {
+  return Object.fromEntries(SESSION_LINE_SLOTS.map(slot => [slot.id, { hour: slot.hour, minute: slot.minute }])) as SessionOpenTimes
 }
-
-export function defaultSessionSlotEnabled(): Record<SessionSlotId, boolean> {
-  const enabled = {} as Record<SessionSlotId, boolean>
-  for (const slot of SESSION_LINE_SLOTS) {
-    enabled[sessionSlotId(slot)] = true
+export function normalizeSessionOpenTimes(raw: unknown): SessionOpenTimes {
+  const result = defaultSessionOpenTimes()
+  if (!raw || typeof raw !== 'object') return result
+  for (const { id } of SESSION_LINE_SLOTS) {
+    const time = (raw as Record<string, unknown>)[id] as Partial<SessionOpenTime> | undefined
+    if (time && Number.isInteger(time.hour) && Number.isInteger(time.minute) &&
+        time.hour! >= 0 && time.hour! <= 23 && time.minute! >= 0 && time.minute! <= 59) {
+      result[id] = { hour: time.hour!, minute: time.minute! }
+    }
   }
-  return enabled
+  return result
+}
+export function parseSessionOpenTime(value: string): SessionOpenTime | null {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null
+  const [hour, minute] = value.split(':').map(Number)
+  return { hour: hour!, minute: minute! }
+}
+export function defaultSessionSlotEnabled(): Record<SessionSlotId, boolean> {
+  return { sydney: true, tokyo: true, london: true, newyork: true }
 }
 
 const SESSION_DAY_OFFSETS = [-2, -1, 0, 1] as const
 
-function chartZoneYmdFromDate(date: Date): { year: number; month: number; day: number } {
+export function chartZoneYmdFromDate(date: Date): { year: number; month: number; day: number } {
   const nowSec = Math.floor(date.getTime() / 1000)
   const p = partMap(nowSec, { year: 'numeric', month: '2-digit', day: '2-digit' })
   return { year: Number(p.year), month: Number(p.month), day: Number(p.day) }
-}
-
-function chartZoneTodayYmd(): { year: number; month: number; day: number } {
-  return chartZoneYmdFromDate(new Date())
 }
 
 /** Start of next calendar day in CHART_TIME_ZONE (exclusive end of “today”). */
@@ -194,17 +199,24 @@ function addCalendarDays(year: number, month: number, day: number, deltaDays: nu
  * Session verticals for today−2 … today+1 in chart zone.
  * `enabled` null/undefined keeps every slot; otherwise only ids present in the set.
  */
-export function sessionVerticalLineTimes(
+export type SessionVerticalLine = { time: number; id: SessionSlotId; label: string; color: string }
+export function sessionVerticalLines(
   enabled?: ReadonlySet<string> | null,
-): number[] {
-  const today = chartZoneTodayYmd()
-  const times: number[] = []
+  openTimes: SessionOpenTimes = defaultSessionOpenTimes(),
+  fromDate: Date = new Date(),
+): SessionVerticalLine[] {
+  const today = chartZoneYmdFromDate(fromDate)
+  const lines: SessionVerticalLine[] = []
   for (const offset of SESSION_DAY_OFFSETS) {
     const { year, month, day } = addCalendarDays(today.year, today.month, today.day, offset)
     for (const slot of SESSION_LINE_SLOTS) {
-      if (enabled && !enabled.has(sessionSlotId(slot))) continue
-      times.push(unixAtChartZone(year, month, day, slot.hour, slot.minute))
+      if (enabled && !enabled.has(slot.id)) continue
+      const { hour, minute } = openTimes[slot.id]
+      lines.push({ time: unixAtChartZone(year, month, day, hour, minute), id: slot.id, label: slot.label, color: slot.color })
     }
   }
-  return times
+  return lines.sort((a,b) => a.time-b.time)
+}
+export function sessionVerticalLineTimes(enabled?: ReadonlySet<string> | null, openTimes?: SessionOpenTimes): number[] {
+  return sessionVerticalLines(enabled, openTimes).map(line => line.time)
 }
