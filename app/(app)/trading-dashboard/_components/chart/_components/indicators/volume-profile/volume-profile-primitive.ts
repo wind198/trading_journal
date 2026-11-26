@@ -8,7 +8,6 @@ import type {
   Time,
 } from 'lightweight-charts'
 import {
-  VOLUME_PROFILE_BIN_SIZE,
   type VolumeProfileFrame,
 } from '../../../../../_lib/chart/volume-profile'
 import { VOLUME_PROFILE } from '../../../../../_lib/chart/price-chart-style'
@@ -92,7 +91,7 @@ class VolumeProfilePaneView {
     }
 
     const maxBarW = paneWidth * VOLUME_PROFILE.maxWidthRatio
-    const half = VOLUME_PROFILE_BIN_SIZE / 2
+    const half = frame.binSize / 2
     const priceBars: PriceBar[] = []
 
     for (const bin of frame.bins) {

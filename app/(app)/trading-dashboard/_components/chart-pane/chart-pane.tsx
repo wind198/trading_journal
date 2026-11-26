@@ -21,6 +21,7 @@ import { mergeCandles } from '@/lib/ticks/merge'
 import { CANDLE_TIMEFRAMES, type CandleTimeframe, type LightweightCandle } from '@/lib/ticks/candles'
 import { alignTimeBinsToCandleOpens, volumeProfileWindowFromCandles } from '@/lib/ticks/volume-profile'
 import { marketHistoryInfiniteOptions, marketRecentQueryOptions, volumeProfileQueryOptions } from '../../_lib/market-queries'
+import { DEFAULT_VP_SETTINGS, volumeProfilePriceGrid, type VolumeProfileSettings } from '../../_lib/chart/volume-profile-settings'
 import { buildVolumeProfile } from '../../_lib/chart/volume-profile'
 import { SYMBOL, type PaneDefinition, type PaneId } from '../../_lib/workspace/workspace-layout'
 import type { DrawingMode } from '../../_lib/workspace/drawing-control'
@@ -37,6 +38,7 @@ export function ChartPane({
   resetLayoutEpoch,
   onResetLayoutApplied,
   showVolumeProfile,
+  volumeProfileSettings = DEFAULT_VP_SETTINGS,
   sessionSlotEnabled,
   sessionOpenTimes,
   showBollinger,
@@ -66,6 +68,7 @@ export function ChartPane({
   resetLayoutEpoch: number
   onResetLayoutApplied: (epoch: number) => void
   showVolumeProfile: boolean
+  volumeProfileSettings?:VolumeProfileSettings
   sessionSlotEnabled: ReadonlySet<string>
   sessionOpenTimes: SessionOpenTimes
   showBollinger: boolean
@@ -117,8 +120,9 @@ export function ChartPane({
   )
   const volumeProfileWindow = useMemo(() => {
     if (pane.id !== '15m' && pane.id !== '3m') return null
-    return volumeProfileWindowFromCandles(candles, pane.id as CandleTimeframe)
-  }, [candles, pane.id])
+    return volumeProfileWindowFromCandles(candles, pane.id as CandleTimeframe,volumeProfileSettings.lookback)
+  }, [candles, pane.id,volumeProfileSettings.lookback])
+  const vpGrid=useMemo(()=>volumeProfilePriceGrid(candles,volumeProfileSettings),[candles,volumeProfileSettings])
   const vpIntervalSec =
     volumeProfileWindow?.intervalSec ??
     (pane.id === '15m' || pane.id === '3m' ? CANDLE_TIMEFRAMES[pane.id] : 900)
@@ -129,9 +133,10 @@ export function ChartPane({
           volumeProfileWindow.toMsc,
           vpIntervalSec,
           pane.id,
+          vpGrid??undefined,
         )
       : volumeProfileQueryOptions(0, 1, vpIntervalSec, pane.id)),
-    enabled: volumeProfileWindow != null && showVolumeProfile,
+    enabled: volumeProfileWindow != null && vpGrid != null && showVolumeProfile,
   })
   const keyLevelBarCount = keyLevelVolumeBarCount(pane.id)
   const keyLevelCandles = useMemo(
@@ -188,6 +193,7 @@ export function ChartPane({
 
   const volumeProfile = useMemo(() => {
     if (!showVolumeProfile || (pane.id !== '15m' && pane.id !== '3m')) return null
+    if (!vpGrid || volumeProfileQuery.isPlaceholderData) return null
     const payload = volumeProfileQuery.data
     const window = volumeProfileWindow
     const timeBins = window
@@ -200,8 +206,9 @@ export function ChartPane({
     return buildVolumeProfile(payload?.price ?? [], {
       timeBins,
       intervalSec: vpIntervalSec,
+      binSize:vpGrid.binSize,
     })
-  }, [showVolumeProfile, pane.id, volumeProfileQuery.data, volumeProfileWindow, vpIntervalSec])
+  }, [showVolumeProfile, pane.id, volumeProfileQuery.data, volumeProfileWindow, vpIntervalSec,vpGrid,volumeProfileQuery.isPlaceholderData])
 
   const drawTool: DrawTool = drawingMode.kind === 'draw' ? drawingMode.tool : null
   const measureActive = drawingMode.kind === 'measure'

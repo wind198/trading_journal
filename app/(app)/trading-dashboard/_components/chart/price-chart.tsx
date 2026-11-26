@@ -691,7 +691,9 @@ export function PriceChart({
     const pointAt = (x: number, y: number): PriceMeasurementPoint | null => {
       const price = handle.price.coordinateToPrice(y)
       if (price == null || !Number.isFinite(Number(price))) return null
-      return { x, price: Number(price) }
+      const logical=handle.chart.timeScale().coordinateToLogical(x)
+      if(logical==null||!Number.isFinite(logical))return null
+      return { x, price: Number(price),logical:Number(logical) }
     }
     const bounds = rect()
     const center = pointAt(bounds.width / 2, bounds.height / 2)
@@ -787,7 +789,8 @@ export function PriceChart({
           const startY = handle.price.priceToCoordinate(state.start.price)
           if (startY == null) return
           const candidateY = Number(startY) > 56 ? Number(startY) - 48 : Number(startY) + 48
-          const defaultEnd = pointAt(state.start.x, candidateY)
+          const candidateX=state.start.x+48<rect().width?state.start.x+48:state.start.x-48
+          const defaultEnd = pointAt(candidateX, candidateY)
           if (defaultEnd) dispatch({ type: 'confirm', point: defaultEnd })
           return
         }

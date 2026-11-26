@@ -167,6 +167,7 @@ export function TradingWorkspace() {
                 )
               }}
               showVolumeProfile={overlaySettings.volumeProfile}
+              volumeProfileSettings={pane.id==='3m'||pane.id==='15m'?overlaySettings.volumeProfileByPane[pane.id]:undefined}
               sessionSlotEnabled={sessionSlotEnabled}
               sessionOpenTimes={marketOpenConfig.config.times}
               showBollinger={paneToggles.bollinger}

@@ -1,6 +1,7 @@
 export type PriceMeasurementPoint = {
   x: number
   price: number
+  logical?:number
 }
 
 export type PriceMeasurementState =
@@ -82,4 +83,11 @@ export function reducePriceMeasurement(
     }
   }
   return { status: 'complete', start: state.start, end: state.end }
+}
+
+/** Distance in chart bar slots, not elapsed wall-clock minutes. */
+export function formatBarMeasurement(start:PriceMeasurementPoint,end:PriceMeasurementPoint):string|null{
+ if(start.logical==null||end.logical==null||!Number.isFinite(start.logical)||!Number.isFinite(end.logical))return null
+ const n=Math.abs(Math.round(end.logical)-Math.round(start.logical))
+ return n+' '+(n===1?'bar':'bars')
 }

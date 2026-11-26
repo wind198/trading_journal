@@ -76,8 +76,9 @@ export function marketRecentQueryOptions(timeframe: string) {
   })
 }
 
-export function volumeProfileKey(fromMsc: number, toMsc: number, intervalSec: number) {
-  return ['market', 'volume-profile', MARKET_SYMBOL, fromMsc, toMsc, intervalSec] as const
+type ProfileGrid={low:number;high:number;binSize:number;bins:number}
+export function volumeProfileKey(fromMsc: number, toMsc: number, intervalSec: number,grid?:ProfileGrid) {
+  return ['market', 'volume-profile', MARKET_SYMBOL, fromMsc, toMsc, intervalSec,grid??null] as const
 }
 
 export function volumeProfileQueryOptions(
@@ -85,9 +86,10 @@ export function volumeProfileQueryOptions(
   toMsc: number,
   intervalSec: number,
   timeframe: string,
+  grid?:ProfileGrid,
 ) {
   return queryOptions({
-    queryKey: volumeProfileKey(fromMsc, toMsc, intervalSec),
+    queryKey: volumeProfileKey(fromMsc, toMsc, intervalSec,grid),
     queryFn: async ({ signal }): Promise<VolumeProfilePayload> => {
       const params = new URLSearchParams({
         symbol: MARKET_SYMBOL,
@@ -96,6 +98,7 @@ export function volumeProfileQueryOptions(
         timeframe,
         interval_sec: String(intervalSec),
       })
+      if(grid){params.set('price_low',String(grid.low));params.set('price_high',String(grid.high));params.set('bins',String(grid.bins))}
       const response = await fetch(`/api/volume-profile?${params}`, { signal })
       if (!response.ok) throw new Error('volume-profile')
       const body = (await response.json()) as { data?: VolumeProfilePayload }
