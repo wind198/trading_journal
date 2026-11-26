@@ -927,8 +927,10 @@ export function PriceChart({
     const previousFuture = appliedFutureTimesRef.current
     const futureChanged = previousFuture.length !== futureTimes.length || previousFuture.some((time,index)=>time!==futureTimes[index])
     const coordBars = chartCoordinateBars(candles, tf, futureTimes)
-    candlesRef.current = coordBars
-    syncDrawingBars(handle, coordBars)
+    const publishCoordinateBars = () => {
+      candlesRef.current = coordBars
+      syncDrawingBars(handle, coordBars)
+    }
 
     applyIndicatorVisibility(handle, showBollinger, showIchimoku)
     const prevToggles = indicatorToggleRef.current
@@ -952,10 +954,11 @@ export function PriceChart({
       scale.applyOptions(timeOpts)
       if (logical) scale.setVisibleLogicalRange(logical)
       indicatorToggleRef.current = { showBollinger, showIchimoku }
+      publishCoordinateBars()
       return
     }
 
-    if (diff.kind === 'unchanged' && !futureChanged) return
+    if (diff.kind === 'unchanged' && !futureChanged) { publishCoordinateBars(); return }
 
     if (indicatorsChanged) {
       indicatorToggleRef.current = { showBollinger, showIchimoku }
@@ -983,6 +986,7 @@ export function PriceChart({
         handle.lower.update({ time, value: level.lower }, true)
       }
       appliedCandlesRef.current = candles
+      publishCoordinateBars()
       handle.firstTime = coordBars[0]?.time ?? null
       return
     }
@@ -1006,6 +1010,7 @@ export function PriceChart({
     syncBollingerBandData(handle, candles, showBollinger)
     syncIchimokuSeries(handle, candles, tf, showIchimoku)
     appliedCandlesRef.current = candles
+    publishCoordinateBars()
     handle.firstTime = coordBars[0].time
 
     const snapshot = viewportSnapshotRef.current

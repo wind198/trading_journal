@@ -1,4 +1,4 @@
-import type { IChartApi, Logical, Time } from 'lightweight-charts'
+import type { IChartApi, Time } from 'lightweight-charts'
 
 export type BarTimeSeries = readonly { time: number }[]
 
@@ -10,7 +10,7 @@ export function barIntervalSec(bars: BarTimeSeries): number | null {
 
 /** Float bar index for a unix time (extrapolates beyond loaded bars). */
 export function logicalIndexAtTime(timeSec: number, bars: BarTimeSeries): number | null {
-  if (bars.length === 0) return null
+  if (!Number.isFinite(timeSec) || timeSec <= 0 || bars.length === 0) return null
   if (bars.length === 1) return timeSec <= bars[0].time ? 0 : 1
 
   const first = bars[0].time
@@ -50,7 +50,7 @@ export function timeAtLogicalIndex(logical: number, bars: BarTimeSeries): number
   const t1 = bars[Math.max(0, Math.min(bars.length - 1, i0 + 1))]?.time
   if (t0 == null || t1 == null) return null
 
-  if (i0 < 0) return t0 + logical * (t1 - t0)
+  if (i0 < 0) return bars[0]!.time + logical * (bars[1]!.time - bars[0]!.time)
   if (i0 >= bars.length - 1) {
     const last = bars.length - 1
     const prev = bars[last - 1].time
@@ -64,27 +64,61 @@ function asUnixSeconds(time: unknown): number | null {
   return typeof time === 'number' && Number.isFinite(time) ? time : null
 }
 
-/** Time at pixel x (no bar-center snap; extrapolates in future whitespace). */
-export function timeAtChartX(chart: IChartApi, x: number, bars: BarTimeSeries): number | null {
-  const logical = chart.timeScale().coordinateToLogical(x)
-  if (logical != null && Number.isFinite(logical)) {
-    const t = timeAtLogicalIndex(logical, bars)
-    if (t != null) return t
-  }
-  return asUnixSeconds(chart.timeScale().coordinateToTime(x))
+/** Actual pixel coordinate of a timestamp already present on the chart. */
+function coordinateAt(chart: IChartApi, time: number): number | null {
+  const value = chart.timeScale().timeToCoordinate(time as Time)
+  return value != null && Number.isFinite(value) ? Number(value) : null
 }
 
-/** Pixel x for a unix time (extrapolates when LWC timeToCoordinate returns null). */
+/** Locate adjacent rendered timestamps by pixel coordinate (including offscreen extrapolation). */
+function pixelBracket(chart: IChartApi, x: number, bars: BarTimeSeries): number | null {
+  if (bars.length < 2) return null
+  let lo = 0, hi = bars.length - 1
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2)
+    const px = coordinateAt(chart, bars[mid]!.time)
+    if (px == null) return null
+    if (px <= x) lo = mid
+    else hi = mid
+  }
+  return lo
+}
+
+/** Time at pixel x, using actual rendered slots rather than rounded logical indices. */
+export function timeAtChartX(chart: IChartApi, x: number, bars: BarTimeSeries): number | null {
+  if (!Number.isFinite(x)) return null
+  const scale = chart.timeScale()
+  // Some lightweight test adapters expose only logical coordinates.
+  if (typeof scale.timeToCoordinate === 'function' && bars.length >= 2) {
+    const i = pixelBracket(chart, x, bars)
+    if (i == null) return null
+    const t0 = bars[i]!.time, t1 = bars[i+1]!.time
+    const a = coordinateAt(chart,t0), b = coordinateAt(chart,t1)
+    if (a == null || b == null || b <= a || t1 <= t0) return null
+    const time = t0 + (x-a)/(b-a)*(t1-t0)
+    return Number.isFinite(time) && time > 0 ? time : null
+  }
+  const logical = scale.coordinateToLogical(x)
+  if (logical != null && Number.isFinite(logical)) {
+    const t = timeAtLogicalIndex(logical, bars)
+    if (t != null && Number.isFinite(t) && t > 0) return t
+  }
+  const time = asUnixSeconds(scale.coordinateToTime(x))
+  return time != null && time > 0 ? time : null
+}
+
+/** Pixel x for Unix time. Never substitute logical index zero for an unavailable timestamp. */
 export function chartXAtTime(chart: IChartApi, timeSec: number, bars: BarTimeSeries): number | null {
-  const direct = chart.timeScale().timeToCoordinate(timeSec as Time)
+  if (!Number.isFinite(timeSec) || timeSec <= 0) return null
+  const direct = coordinateAt(chart,timeSec)
   if (direct != null) return direct
   if (bars.length < 2) return null
-  const logical = logicalIndexAtTime(timeSec, bars)
+  const logical = logicalIndexAtTime(timeSec,bars)
   if (logical == null || !Number.isFinite(logical)) return null
-  const scale = chart.timeScale()
-  const lower = Math.max(0, Math.min(bars.length-2, Math.floor(logical)))
-  const a = scale.timeToCoordinate(bars[lower]!.time as Time)
-  const b = scale.timeToCoordinate(bars[lower+1]!.time as Time)
-  if (a != null && b != null && b > a) return a + (logical-lower)*(b-a)
-  return scale.logicalToCoordinate(logical as Logical)
+  const lower = Math.max(0,Math.min(bars.length-2,Math.floor(logical)))
+  const a = coordinateAt(chart,bars[lower]!.time)
+  const b = coordinateAt(chart,bars[lower+1]!.time)
+  if (a == null || b == null || b <= a) return null
+  const x = a + (logical-lower)*(b-a)
+  return Number.isFinite(x) ? x : null
 }
