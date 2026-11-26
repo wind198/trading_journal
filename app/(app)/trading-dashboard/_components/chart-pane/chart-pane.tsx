@@ -272,6 +272,7 @@ export function ChartPane({
         .map((d) => ({ id: d.id, p1: d.p1, p2: d.p2 })),
     [drawings],
   )
+  const parallelChannelDrawings=useMemo(()=>drawings.filter(d=>d.kind==='parallel_channel'&&d.points?.length===3).map(d=>({id:d.id,points:d.points as [DrawingPoint,DrawingPoint,DrawingPoint]})),[drawings])
   const fibonacciExtensionDrawings = useMemo(
     () => drawings
       .filter((d) => d.kind === 'fibonacci_range_extension' && d.points?.length === 3)
@@ -533,6 +534,7 @@ export function ChartPane({
             rectangles={rectangleDrawings}
             fibonacciRanges={fibonacciRangeDrawings}
             fibonacciExtensions={fibonacciExtensionDrawings}
+            parallelChannels={parallelChannelDrawings}
             warningCircles={warningCircleDrawings}
             icons={iconDrawings}
             polylines={polylineDrawings}

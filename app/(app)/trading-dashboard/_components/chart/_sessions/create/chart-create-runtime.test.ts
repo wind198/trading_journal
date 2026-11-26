@@ -115,3 +115,6 @@ test('cancelled text draft does not persist', () => {
   assert.equal(p.completed.length,0)
   runtime.dispose()
 })
+
+test('parallel channel uses three fine anchors and persists one object',()=>{const p=ports();const runtime=createChartCreateRuntime(p.api);runtime.tap('parallel_channel',{x:10,y:0});runtime.tap('parallel_channel',{x:20,y:0});runtime.tap('parallel_channel',{x:30,y:0});assert.deepEqual(p.completed,[{kind:'parallel_channel',p1,p2:p3,points:[p1,p2,p3]}]);runtime.dispose()})
+test('parallel channel uses coarse seed and three confirmations',()=>{const p=ports();const runtime=createChartCreateRuntime(p.api);assert.equal(runtime.seedCoarse('parallel_channel'),true);runtime.confirmCoarse('parallel_channel');runtime.confirmCoarse('parallel_channel');runtime.confirmCoarse('parallel_channel');assert.equal(p.completed.length,1);runtime.dispose()})

@@ -7,6 +7,7 @@ type Draft = { p1: DrawingPoint; p2?: DrawingPoint; p3?: DrawingPoint }
 const SHAPE_DRAFT_SCOPES = new Set([
   'text_anchor',
   'trendline',
+  'parallel_channel',
   'rectangle',
   'fibonacci_range',
   'fibonacci_range_extension',

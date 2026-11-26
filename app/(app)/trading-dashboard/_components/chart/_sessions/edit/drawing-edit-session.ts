@@ -91,7 +91,12 @@ export class DrawingEditSession {
   private beginLegacy(session: ToolEditSession, event: PointerEvent): void {
     event.preventDefault()
     this.relativeDrag.cancel()
-    this.active = { kind: 'legacy', session, pointerId: event.pointerId }
+    const anchor=session.relativeAnchor
+    const x=anchor?chartXAtTime(this.ports.handle.chart,anchor.time,this.ports.candles()):null
+    const y=anchor?this.ports.handle.price.priceToCoordinate(anchor.price):null
+    const relative=x!=null&&y!=null
+    if(relative)this.relativeDrag.begin(event.pointerId,event.clientX,event.clientY,{x:Number(x),y:Number(y)})
+    this.active = { kind: 'legacy', session, pointerId: event.pointerId,relative }
     this.ports.capture(event)
     this.ports.syncLock()
   }
