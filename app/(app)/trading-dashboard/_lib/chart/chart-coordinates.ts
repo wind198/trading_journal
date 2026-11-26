@@ -81,5 +81,10 @@ export function chartXAtTime(chart: IChartApi, timeSec: number, bars: BarTimeSer
   if (bars.length < 2) return null
   const logical = logicalIndexAtTime(timeSec, bars)
   if (logical == null || !Number.isFinite(logical)) return null
-  return chart.timeScale().logicalToCoordinate(logical as Logical)
+  const scale = chart.timeScale()
+  const lower = Math.max(0, Math.min(bars.length-2, Math.floor(logical)))
+  const a = scale.timeToCoordinate(bars[lower]!.time as Time)
+  const b = scale.timeToCoordinate(bars[lower+1]!.time as Time)
+  if (a != null && b != null && b > a) return a + (logical-lower)*(b-a)
+  return scale.logicalToCoordinate(logical as Logical)
 }
