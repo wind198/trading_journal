@@ -41,6 +41,10 @@ export async function GET(request: NextRequest) {
       ? Math.floor(intervalFromQuery)
       : CANDLE_TIMEFRAMES[tfRaw as CandleTimeframe]
 
+  const lowRaw=request.nextUrl.searchParams.get('price_low'),highRaw=request.nextUrl.searchParams.get('price_high'),binsRaw=request.nextUrl.searchParams.get('bins')
+  const custom=lowRaw!==null||highRaw!==null||binsRaw!==null
+  const low=Number(lowRaw),high=Number(highRaw),bins=Number(binsRaw)
+  if(custom&&(lowRaw===null||highRaw===null||binsRaw===null||!Number.isFinite(low)||!Number.isFinite(high)||low<=0||high<low||![20,30,40].includes(bins)))return NextResponse.json({error:'Bad price grid'},{status:400})
   try {
     const options = {
       symbol,
@@ -48,6 +52,7 @@ export async function GET(request: NextRequest) {
       toMsc,
       intervalSec,
       binSize: VOLUME_PROFILE_BIN_SIZE,
+      grid:custom?{low,high,bins}:undefined,
     }
     const data = request.nextUrl.searchParams.get('time_only') === '1'
       ? { price: [], time: await fetchVolumeProfileTimeTickCounts(options) }

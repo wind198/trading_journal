@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { VolumeProfileSettingsPanel } from './volume-profile-settings-panel'
 import { Input } from '@/components/ui/input'
 import { isValidAlertInterval, MIN_ALERT_INTERVAL, MAX_ALERT_INTERVAL } from '../../_lib/alerts/alert-config'
 import { useLocalStorage } from 'usehooks-ts'
@@ -275,6 +276,7 @@ export function IndicatorSettingsPanel({ settings, marketOpenConfig, autoRegimes
       <span>Volume profile</span>
       <Checkbox checked={settings.volumeProfile} onCheckedChange={checked => onSettingsChange(current => ({ ...current, volumeProfile: checked === true }))} />
     </label>
+    {(['15m','3m'] as const).map(pane=><VolumeProfileSettingsPanel key={pane} pane={pane} value={settings.volumeProfileByPane[pane]} onChange={value=>onSettingsChange(current=>({...current,volumeProfileByPane:{...current.volumeProfileByPane,[pane]:value}}))}/>)}
     <hr className="border-border" />
     <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1"><h3 className="text-xs font-semibold text-muted-foreground">Market openings</h3><MarketSessionSettingsDialog times={marketOpenConfig.config.times} disabled={!marketOpenConfig.loaded || marketOpenConfig.saving} saving={marketOpenConfig.saving} error={marketOpenConfig.error} onSave={times => marketOpenConfig.save(current => ({...current,times}))} /></div>
     {marketOpenConfig.loading && <p className="px-2 text-xs text-muted-foreground">Loading market openings…</p>}

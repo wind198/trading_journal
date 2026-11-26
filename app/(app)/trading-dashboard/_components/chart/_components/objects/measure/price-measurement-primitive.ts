@@ -7,9 +7,9 @@ import type {
   SeriesType,
   Time,
 } from 'lightweight-charts'
-import { CHART_THEME } from '../../../../../_lib/chart/price-chart-style'
 import {
   formatPriceMeasurement,
+  formatBarMeasurement,
   type PriceMeasurementState,
 } from './price-measurement'
 
@@ -22,6 +22,8 @@ const LABEL_BACKGROUND = 'rgba(17, 24, 39, 0.88)'
 
 export type PriceMeasurementGeometry = {
   x: number
+  endX:number
+  barLabel:string|null
   startY: number
   endY: number
   top: number
@@ -46,6 +48,8 @@ export function buildPriceMeasurementGeometry(
   const bottom = Math.max(startY, endY)
   return {
     x,
+    endX:Math.min(Math.max(state.end.x,EDGE_MARGIN),Math.max(EDGE_MARGIN,width-EDGE_MARGIN)),
+    barLabel:formatBarMeasurement(state.start,state.end),
     startY,
     endY,
     top,
@@ -81,6 +85,10 @@ class PriceMeasurementRenderer {
       context.lineTo(g.x + TICK_HALF_WIDTH, g.startY)
       context.moveTo(g.x - TICK_HALF_WIDTH, g.endY)
       context.lineTo(g.x + TICK_HALF_WIDTH, g.endY)
+      context.moveTo(g.x,g.endY)
+      context.lineTo(g.endX,g.endY)
+      context.moveTo(g.endX,g.endY-TICK_HALF_WIDTH)
+      context.lineTo(g.endX,g.endY+TICK_HALF_WIDTH)
       context.stroke()
 
       context.setLineDash([])
@@ -96,9 +104,16 @@ class PriceMeasurementRenderer {
       const boxY = g.labelY - LABEL_HEIGHT / 2
       context.fillStyle = LABEL_BACKGROUND
       context.fillRect(boxX, boxY, boxWidth, LABEL_HEIGHT)
-      context.fillStyle = CHART_THEME.text
+      context.fillStyle = '#fff'
       context.textAlign = 'left'
       context.fillText(g.label, boxX + LABEL_PADDING_X, g.labelY)
+      if(g.barLabel){
+        const bw=context.measureText(g.barLabel).width+12
+        const bx=Math.max(2,Math.min((g.x+g.endX-bw)/2,mediaSize.width-bw-2))
+        const by=Math.max(2,Math.min(g.endY+10,mediaSize.height-LABEL_HEIGHT-2))
+        context.fillStyle=LABEL_BACKGROUND;context.fillRect(bx,by,bw,LABEL_HEIGHT)
+        context.fillStyle='#fff';context.fillText(g.barLabel,bx+6,by+LABEL_HEIGHT/2)
+      }
       context.restore()
     })
   }

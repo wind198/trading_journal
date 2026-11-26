@@ -174,10 +174,17 @@ export async function fetchVolumeProfilePayload(options: {
   toMsc: number
   intervalSec: number
   binSize?: number
+  grid?:{low:number;high:number;bins:number}
 }): Promise<VolumeProfilePayload> {
   const [price, time] = await Promise.all([
-    fetchVolumeProfileTickCounts(options),
+    options.grid?fetchGridTickCounts(options,options.grid):fetchVolumeProfileTickCounts(options),
     fetchVolumeProfileTimeTickCounts(options),
   ])
   return { price, time }
+}
+
+async function fetchGridTickCounts(options:{symbol:string;fromMsc:number;toMsc:number},grid:{low:number;high:number;bins:number}):Promise<VolumeProfileTickBin[]>{
+ const {data,error}=await createServiceClient().rpc('volume_profile_range_tick_counts',{p_symbol:options.symbol,p_from_msc:options.fromMsc,p_to_msc:options.toMsc,p_low:grid.low,p_high:grid.high,p_bins:grid.bins})
+ if(error)throw new Error(error.message)
+ return (data??[]).map((row:{price:number|string;tick_count:number|string})=>({price:Number(row.price),tickCount:Number(row.tick_count)}))
 }

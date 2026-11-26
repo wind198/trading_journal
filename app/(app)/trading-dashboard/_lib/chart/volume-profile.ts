@@ -19,6 +19,7 @@ export type VolumeProfileFrame = {
   /** Bottom histogram: ticks per candle bucket. */
   timeBins: VolumeProfileTimeBin[]
   intervalSec: number
+  binSize:number
 }
 
 /** POC = max tick-count bin (lowest price on ties). VAH/VAL = 70% value-area edges. */
@@ -83,5 +84,6 @@ export function buildVolumeProfile(
     val: sorted[lo].price - half,
     timeBins,
     intervalSec: options?.intervalSec ?? 0,
+    binSize,
   }
 }

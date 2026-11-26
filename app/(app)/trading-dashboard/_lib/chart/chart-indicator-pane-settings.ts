@@ -1,3 +1,4 @@
+import { DEFAULT_VP_SETTINGS, normalizeVolumeProfileSettings, type VolumeProfileSettings } from './volume-profile-settings'
 import type { Regime } from '../overlays/baseline-indicators'
 
 export const DASHBOARD_PANE_IDS = ['4h', '1h', '15m', '3m'] as const
@@ -16,6 +17,7 @@ export type PaneIndicatorToggles = {
 
 export type ChartOverlaySettings = {
   volumeProfile: boolean
+  volumeProfileByPane: Record<'3m'|'15m',VolumeProfileSettings>
   autoIndicatorsByRegime: boolean
   indicatorsByPane: Record<DashboardPaneId, PaneIndicatorToggles>
 }
@@ -49,6 +51,7 @@ export function defaultIndicatorsByPane(): Record<DashboardPaneId, PaneIndicator
 
 export const DEFAULT_OVERLAY_SETTINGS: ChartOverlaySettings = {
   volumeProfile: true,
+  volumeProfileByPane: {'3m':{...DEFAULT_VP_SETTINGS},'15m':{...DEFAULT_VP_SETTINGS}},
   autoIndicatorsByRegime: false,
   indicatorsByPane: defaultIndicatorsByPane(),
 }
@@ -106,6 +109,7 @@ export function parseChartOverlaySettings(raw: string): ChartOverlaySettings {
         typeof parsed.volumeProfile === 'boolean'
           ? parsed.volumeProfile
           : DEFAULT_OVERLAY_SETTINGS.volumeProfile,
+      volumeProfileByPane: {'3m':normalizeVolumeProfileSettings((parsed.volumeProfileByPane as Record<string,unknown>|undefined)?.['3m']),'15m':normalizeVolumeProfileSettings((parsed.volumeProfileByPane as Record<string,unknown>|undefined)?.['15m'])},
       autoIndicatorsByRegime: parsed.autoIndicatorsByRegime === true,
       indicatorsByPane: parseIndicatorsByPane(parsed),
     }
