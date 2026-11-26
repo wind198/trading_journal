@@ -259,6 +259,7 @@ export function PriceChart({
   const [pointerCoarse, setPointerCoarse] = useState(false)
   const candlesRef = useRef<BarTimeSeries>(candles ?? [])
   const appliedCandlesRef = useRef<LightweightCandle[]>([])
+  const appliedFutureTimesRef = useRef<number[]>([])
   const indicatorToggleRef = useRef({ showBollinger, showIchimoku })
   const appliedEpochRef = useRef(-1)
   const onLoadOlderRef = useRef(onLoadOlder)
@@ -916,14 +917,20 @@ export function PriceChart({
     if (appliedEpochRef.current !== epoch) {
       appliedEpochRef.current = epoch
       appliedCandlesRef.current = []
+      appliedFutureTimesRef.current = []
     }
 
     const diff = diffCandles(appliedCandlesRef.current, candles)
 
     const tf = timeframe as CandleTimeframe
-    const coordBars = chartCoordinateBars(candles, tf)
-    candlesRef.current = coordBars
-    syncDrawingBars(handle, coordBars)
+    const futureTimes = futureBarTimesUntilChartZoneEod(candles, tf)
+    const previousFuture = appliedFutureTimesRef.current
+    const futureChanged = previousFuture.length !== futureTimes.length || previousFuture.some((time,index)=>time!==futureTimes[index])
+    const coordBars = chartCoordinateBars(candles, tf, futureTimes)
+    const publishCoordinateBars = () => {
+      candlesRef.current = coordBars
+      syncDrawingBars(handle, coordBars)
+    }
 
     applyIndicatorVisibility(handle, showBollinger, showIchimoku)
     const prevToggles = indicatorToggleRef.current
@@ -931,7 +938,7 @@ export function PriceChart({
     const ichimokuToggled = prevToggles.showIchimoku !== showIchimoku
     const indicatorsChanged = bollingerToggled || ichimokuToggled
 
-    if (diff.kind === 'unchanged' && indicatorsChanged) {
+    if (diff.kind === 'unchanged' && !futureChanged && indicatorsChanged) {
       const scale = handle.chart.timeScale()
       const logical = scale.getVisibleLogicalRange()
       const timeOpts = {
@@ -947,10 +954,11 @@ export function PriceChart({
       scale.applyOptions(timeOpts)
       if (logical) scale.setVisibleLogicalRange(logical)
       indicatorToggleRef.current = { showBollinger, showIchimoku }
+      publishCoordinateBars()
       return
     }
 
-    if (diff.kind === 'unchanged') return
+    if (diff.kind === 'unchanged' && !futureChanged) { publishCoordinateBars(); return }
 
     if (indicatorsChanged) {
       indicatorToggleRef.current = { showBollinger, showIchimoku }
@@ -966,7 +974,7 @@ export function PriceChart({
         }
 
     // Hot path: poll updates last bar only. historicalUpdate skips trailing whitespace.
-    if (diff.kind === 'lastUpdated' && !indicatorsChanged) {
+    if (diff.kind === 'lastUpdated' && !futureChanged && !indicatorsChanged) {
       const lastIndex = candles.length - 1
       const bar = candles[lastIndex]
       const level = bands.levels[lastIndex]
@@ -978,12 +986,12 @@ export function PriceChart({
         handle.lower.update({ time, value: level.lower }, true)
       }
       appliedCandlesRef.current = candles
+      publishCoordinateBars()
       handle.firstTime = coordBars[0]?.time ?? null
       return
     }
 
     // Appended bars sit before EOD whitespace → full setData. Same for prepend/replace.
-    const futureTimes = futureBarTimesUntilChartZoneEod(candles, tf)
     const scale = handle.chart.timeScale()
     const keep = handle.fitted ? scale.getVisibleLogicalRange() : null
     const previousFirst = handle.firstTime
@@ -998,9 +1006,11 @@ export function PriceChart({
       ...candles.map((bar, index) => pricePoint(bar, bands.levels[index], chartType)),
       ...futureTimes.map((t) => ({ time: t as Time })),
     ])
+    appliedFutureTimesRef.current = futureTimes
     syncBollingerBandData(handle, candles, showBollinger)
     syncIchimokuSeries(handle, candles, tf, showIchimoku)
     appliedCandlesRef.current = candles
+    publishCoordinateBars()
     handle.firstTime = coordBars[0].time
 
     const snapshot = viewportSnapshotRef.current

@@ -109,9 +109,9 @@ export function clickToPoint(
   try {
     const bars = candles ?? []
     const timeSec = timeAtChartX(handle.chart, point.x, bars)
-    if (timeSec == null) return null
+    if (timeSec == null || !Number.isFinite(timeSec) || timeSec <= 0) return null
     const priceRaw = handle.price.coordinateToPrice(point.y)
-    if (priceRaw == null) return null
+    if (priceRaw == null || !Number.isFinite(Number(priceRaw))) return null
     return { time: timeSec, price: Number(priceRaw) }
   } catch {
     return null
