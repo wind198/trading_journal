@@ -53,21 +53,25 @@ export function classifyRegime(bars: readonly Candle[], f: Foundation, p: Regime
   const close = bars.at(-1)?.close
   const outside = range?.validated && close !== undefined ? close > range.upper ? 1 : close < range.lower ? -1 : 0 : null
   const metrics = { adx, efficiency, slopeAtr, rSquared, diSpread, bandwidthGrowth, atrGrowth, outside }
-  const result = (regime: MarketRegime, reason: string) => ({ regime, reason, metrics, range, policyVersion: p.version, status: p.status })
+  const breakout = range && close !== undefined ? close > range.upper ? 1 : close < range.lower ? -1 : 0 : null
+  const expanding = bandwidthGrowth !== null && atrGrowth !== null && bandwidthGrowth >= p.transition.minBandwidthGrowth && atrGrowth >= p.transition.minAtrGrowth
+  const state = breakout !== null && breakout !== 0 ? 'breakout_candidate' : expanding ? 'expanding' : 'stable'
+  const result = (regime: MarketRegime, reason: string) => ({ regime, reason, metrics, range, state, breakout,
+    boundaryConfidence: range ? range.validated ? 'established' as const : 'provisional' as const : 'unavailable' as const,
+    policyVersion: p.version, status: p.status })
   if (blocked) return result('unknown', 'stale or unavailable current data')
-  if (adx === null || efficiency === null || slopeAtr === null || rSquared === null || diSpread === null ||
-      bandwidthGrowth === null || atrGrowth === null) return result('unknown', 'insufficient numerical evidence')
-  if (outside !== null && outside !== 0) return result('transition', 'close outside validated historical range')
-  if (bandwidthGrowth >= p.transition.minBandwidthGrowth && atrGrowth >= p.transition.minAtrGrowth)
-    return result('transition', 'concurrent volatility and dispersion expansion')
-  const trend = adx >= p.trend.minAdx && efficiency >= p.trend.minEfficiency &&
+  if (!range || atr === null || atr <= 0 || bars.length < p.windows.range + 1 || range.upper <= range.lower)
+    return result('unknown', 'insufficient price history or volatility evidence')
+  // Undefined directional ratios cannot establish a trend but do not erase price boundaries.
+  const directionalAvailable = adx !== null && efficiency !== null && slopeAtr !== null && rSquared !== null && diSpread !== null
+  const trend = directionalAvailable && adx >= p.trend.minAdx && efficiency >= p.trend.minEfficiency &&
     Math.abs(slopeAtr) >= p.trend.minAbsSlopeAtr && rSquared >= p.trend.minRSquared &&
     Math.abs(diSpread) >= p.trend.minAbsDiSpread && Math.sign(slopeAtr) === Math.sign(diSpread)
-  const ranging = !!range?.validated && outside === 0 && adx <= p.range.maxAdx &&
+  const ranging = directionalAvailable && !!range?.validated && outside === 0 && adx <= p.range.maxAdx &&
     efficiency <= p.range.maxEfficiency && Math.abs(slopeAtr) <= p.range.maxAbsSlopeAtr
   if (trend) return result(slopeAtr > 0 ? 'uptrend' : 'downtrend', 'directional metrics agree')
-  if (ranging) return result('ranging', 'bounded structure and weak directional metrics agree')
-  return result('unknown', 'mixed evidence; no regime asserted')
+  if (ranging) return result('choppy', 'established range and weak directional metrics')
+  return result('choppy', range.validated ? 'trend evidence insufficient; established historical boundaries' : 'trend evidence insufficient; provisional observed boundaries')
 }
 export function compareRegimes(m3: MarketRegime, m15: MarketRegime) {
   if (m3 === 'unknown' || m15 === 'unknown') return 'unknown'
@@ -78,7 +82,7 @@ export function compareRegimes(m3: MarketRegime, m15: MarketRegime) {
 }
 export function selectedTools(regime: MarketRegime): readonly string[] {
   const common = ['analyze_volatility', 'analyze_momentum', 'analyze_trend_strength']
-  if (regime === 'uptrend' || regime === 'downtrend') return [...common, 'analyze_trend_extension']
-  if (regime === 'ranging') return [...common, 'analyze_range_position', 'analyze_range_structure']
+  if (regime === 'uptrend' || regime === 'downtrend') return [...common, 'analyze_trend_extension', 'analyze_transition']
+  if (regime === 'ranging' || regime === 'choppy') return [...common, 'analyze_range_position', 'analyze_range_structure', 'analyze_transition']
   return [...common, 'analyze_trend_extension', 'analyze_range_position', 'analyze_range_structure', 'analyze_transition']
 }

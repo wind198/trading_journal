@@ -8,7 +8,7 @@ export interface StructuralReference {
   points: number
   atrDistance: number | null
   timeframe: EvaluationContext['timeframe']
-  source: 'confirmed pivot' | 'validated range boundary' | 'equilibrium' | 'active zone outer edge' | 'active zone near edge' | 'correction root candidate'
+  source: 'confirmed pivot' | 'validated range boundary' | 'provisional range boundary' | 'equilibrium' | 'active zone outer edge' | 'active zone near edge' | 'correction root candidate'
   evidenceIds: readonly string[]
   from: string | null
   through: string | null
@@ -76,13 +76,19 @@ function countertrend(c:EvaluationContext,d:Draft){
 }
 function range(c:EvaluationContext,d:Draft){
   const p=policy.experimental.range,r=c.range
-  if(!r?.validated){warn(c,d,'DATA_INSUFFICIENT','data','No validated range available.','unassessed');return}
+  if(!r||r.upper<=r.lower){warn(c,d,'DATA_INSUFFICIENT','data','No usable observed range available.','unassessed');return}
+  const source=r.validated?'validated range boundary':'provisional range boundary'
+  if(!r.validated)warn(c,d,'PROVISIONAL_RANGE_BOUNDARY','entry','Observed extremes are provisional; repeated boundary tests are insufficient.')
+  d.metrics.boundaryValidated=Number(r.validated);d.metrics.upperBoundaryTests=r.upperTests;d.metrics.lowerBoundaryTests=r.lowerTests;d.metrics.rangeWidthAtr=r.widthAtr
+  d.metrics.adversePressure=c.pressure===null?null:-c.sign*c.pressure
+  if(d.metrics.adversePressure!==null&&d.metrics.adversePressure>policy.experimental.countertrend.maxAdversePressure)warn(c,d,'RANGE_ADVERSE_PRESSURE','entry','Directional pressure opposes range rotation.')
   const position=(c.entry-r.lower)/(r.upper-r.lower)
   const fraction=c.sign===1?position:1-position
   d.metrics.rangePosition=position;d.metrics.entryFraction=fraction
   if(fraction<0||fraction>p.maxEntryFraction)warn(c,d,'ENTRY_RANGE_LOCATION','entry','Entry is outside the range or too far from the favorable boundary.')
-  ref(c,d,'stop',c.sign===1?r.lower:r.upper,'validated range boundary')
-  ref(c,d,'target',c.sign===1?r.upper:r.lower,'validated range boundary')
+  if(position<0||position>1){warn(c,d,'RANGE_BOUNDARY_BREAKOUT','entry','Entry lies outside observed boundaries; rotation references withheld.');return}
+  ref(c,d,'stop',c.sign===1?r.lower:r.upper,source)
+  ref(c,d,'target',c.sign===1?r.upper:r.lower,source)
   checkDistances(c,d,p.minStopAtr)
   d.limitations.push('Range boundary penetration and breakout probability have not been calibrated.')
 }
@@ -114,7 +120,7 @@ export function evaluateStrategy(c:EvaluationContext,mode?:'correction_entry'):S
   const s=d.references.find(r=>r.kind==='stop'),t=d.references.find(r=>r.kind==='target')
   // Only a validated range is strong enough to test constrained rotation feasibility.
   // Strictly beyond the stop boundary: one additional point; no invented buffer.
-  const feasibleWithinReferences=c.strategy==='range'&&s&&t
+  const feasibleWithinReferences=c.strategy==='range'&&c.range?.validated&&s&&t
     ? Math.floor(t.points+1e-7)>=minimumTargetPoints(Math.max(policy.hardConstraints.minStopLossPoints,Math.floor(s.points+1e-7)+1)):null
   if(feasibleWithinReferences===false)warn(c,d,'STRUCTURAL_SPACE_INFEASIBLE','risk','Within these range boundaries the minimum structural stop and hard reward/risk cannot both be satisfied.')
   return {strategy:mode??c.strategy,timeframe:c.timeframe,...d,feasibleWithinReferences}

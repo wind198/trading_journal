@@ -8,7 +8,7 @@ import { TRADE_RISK_POLICY as policy } from './policy'
 export type StrategyId = 'continuation' | 'countertrend' | 'range' | 'transition' | 'unknown'
 export function resolveStrategy(regime: MarketRegime, direction: TradeHypothesis['direction']): StrategyId {
   if(regime==='uptrend'||regime==='downtrend') return (regime==='uptrend')===(direction==='long')?'continuation':'countertrend'
-  return regime==='ranging'?'range':regime==='transition'?'transition':'unknown'
+  return (regime==='ranging'||regime==='choppy')?'range':regime==='transition'?'transition':'unknown'
 }
 export function makeContext(data: WorkspaceAnalysis, h: TradeHypothesis, timeframe: Timeframe) {
   const bars=data.snapshot.bars[timeframe], f=data.indicators[timeframe]

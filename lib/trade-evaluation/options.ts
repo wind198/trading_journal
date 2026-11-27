@@ -20,8 +20,9 @@ export interface TradeOption extends OptionPair {
 }
 type OptionStatus = 'entry_required' | 'context_unresolved' | 'no_structural_pair' | 'no_feasible_option' | 'options_available'
 
-const structuralStop = new Set<StructuralReference['source']>(['active zone outer edge','correction root candidate','validated range boundary'])
-const structuralTarget = new Set<StructuralReference['source']>(['active zone near edge','validated range boundary','confirmed pivot','equilibrium'])
+const rangeBoundary=(source:StructuralReference['source'])=>source==='validated range boundary'||source==='provisional range boundary'
+const structuralStop = new Set<StructuralReference['source']>(['active zone outer edge','correction root candidate','validated range boundary','provisional range boundary'])
+const structuralTarget = new Set<StructuralReference['source']>(['active zone near edge','validated range boundary','provisional range boundary','confirmed pivot','equilibrium'])
 // Snap outwards for SL and inwards for TP, never toward the wrong side.
 function snap(value:number,point:number,up:boolean){
   const units=value/point
@@ -41,8 +42,8 @@ export function pairReferences(h:TradeHypothesis,point:number,assessments:readon
     const atr=a.metrics.atr
     if(atr===null||!Number.isFinite(atr)||atr<=0)continue
     const refs=a.references.filter(r=>r.timeframe===a.timeframe&&Number.isFinite(r.price)&&r.price>0&&r.evidenceIds.length>0)
-    const stops=refs.filter(r=>structuralStop.has(r.source)&&r.kind==='stop'&&(primary==='range'?r.source==='validated range boundary':r.source!=='validated range boundary'))
-    const targets=refs.filter(r=>structuralTarget.has(r.source)&&r.kind==='target'&&(primary==='range'?r.source==='validated range boundary':r.source!=='validated range boundary'&&(r.source!=='equilibrium'||primary==='countertrend')))
+    const stops=refs.filter(r=>structuralStop.has(r.source)&&r.kind==='stop'&&(primary==='range'?rangeBoundary(r.source):!rangeBoundary(r.source)))
+    const targets=refs.filter(r=>structuralTarget.has(r.source)&&r.kind==='target'&&(primary==='range'?rangeBoundary(r.source):!rangeBoundary(r.source)&&(r.source!=='equilibrium'||primary==='countertrend')))
     // In a validated range, never reach beyond its opposite boundary. Other
     // strategies may cross an obstacle, but the full review must disclose it.
     for(const s of stops)for(const t of targets){
@@ -71,7 +72,7 @@ export function generateTradeOptions(data:WorkspaceAnalysis,h:TradeHypothesis){
   let status:OptionStatus='entry_required',attempted=0,rejected=0
   if(h.entryPrice!==null){
     const context=entryReview.context
-    if(!context||['context_unknown','transition_uncertain','range_breakout_uncertain'].includes(context.kind)||entryReview.warnings.some(w=>w.severity==='unassessed'||w.severity==='block')){
+    if(!context||['context_unknown','transition_uncertain'].includes(context.kind)||entryReview.warnings.some(w=>w.severity==='unassessed'||w.severity==='block')){
       status='context_unresolved'
     }else{
       const result=pairReferences(base,data.snapshot.pointSize,entryReview.assessments,context.primary)
