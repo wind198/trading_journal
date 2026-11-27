@@ -29,7 +29,7 @@ export function setupAnnotations(o:OptionPair,entry:number,warnings:readonly Rev
   RANGE_BOUNDARY_PENETRATION:'Boundary penetration',STRUCTURAL_TRANSITION_UNCONFIRMED:'Breakout unconfirmed',
   CORRECTION_RECOVERY_UNCONFIRMED:'Recovery unconfirmed',ENTRY_OVEREXTENDED:'Extended entry',
   FORCE_COVERAGE_LIMITED:'Force evidence incomplete',FORCE_ACTIVE_EQUILIBRIUM:'Active force balance',FORCE_PASSIVE_EQUILIBRIUM:'Weak force balance',
-  FORCE_ADVERSE_PERSISTENCE:'Persistent opposing force',FORCE_ADVERSE_ACCELERATION:'Opposing force growing',FORCE_BOUNDARY_PRESSURE:'Boundary under pressure',FORCE_ABSORPTION_CANDIDATE:'Possible absorption'
+  FORCE_ADVERSE_PERSISTENCE:'Persistent opposing force',FORCE_ADVERSE_ACCELERATION:'Opposing force growing',FORCE_BOUNDARY_PRESSURE:'Boundary under pressure',FORCE_ABSORPTION_CANDIDATE:'Possible absorption',SCALE_DIRECTION_CONFLICT:'Broader trend conflict',SCALE_RANGE_TREND_CONTEXT:'Broader trend vs chop',SCALE_STOP_INSIDE_RANGE:'SL within broader range',SCALE_TARGET_BEYOND_RANGE:'TP beyond broader range'
  }
  const callouts=(['entry','stop','target'] as const).map(dimension=>{
    const matching=warnings.filter(w=>w.dimension===dimension)

@@ -15,6 +15,7 @@ import { generateTradeOptions, type TradeOptions } from '@/lib/trade-evaluation/
 import type { TradeReview } from '@/lib/trade-evaluation/evaluator'
 import { TradeOptionsPanel } from './trade-options-panel'
 import { TradeReviewPanel } from './trade-review-panel'
+import type { ScaleId } from '@/lib/market-analysis/scales'
 import { AnalysisChart, type AnalysisView } from './analysis-chart'
 
 const views: {id:AnalysisView;label:string}[]=[{id:'price',label:'Price'},{id:'overview',label:'Overview'},{id:'trend',label:'Trend'},{id:'range',label:'Range'},{id:'transition',label:'Transition'},{id:'momentum',label:'Momentum'}]
@@ -44,6 +45,7 @@ function EvidenceInspector({ result }: { result: AnalysisResult }) {
 export function MarketAnalysisWorkspace(){
   const [data,setData]=useState<WorkspaceAnalysis|null>(null)
   const [hypothesis,setHypothesis]=useState<TradeHypothesis|null>(null)
+  const [profiles,setProfiles]=useState<Record<Timeframe,ScaleId>>({M3:'baseline',M15:'baseline'})
   const [view,setView]=useState<AnalysisView>('price')
   const [showReferences,setShowReferences]=useState(false)
   const [pending,setPending]=useState(true)
@@ -165,9 +167,13 @@ export function MarketAnalysisWorkspace(){
         {(['M15','M3'] as const).map(tf=><section key={tf} className={'min-h-0 min-w-0 flex-col bg-card '+(expanded&&expanded!==tf?'hidden':'flex')}>
           <div className="flex h-8 shrink-0 items-center gap-1 border-b px-2 text-xs">
             <span className="min-w-0 flex-1 truncate font-medium" title={data.report.classifications[tf].reason}>{tf} · {data.snapshot.bars[tf].length?data.report.regimes[tf]:'No data'}{data.report.classifications[tf].dataQuality!=='usable'&&data.snapshot.bars[tf].length?' · '+data.report.classifications[tf].dataQuality.replaceAll('_',' '):''}</span>
+            <select aria-label={tf+' indicator scale'} className="h-7 max-w-24 rounded border bg-card px-1 text-xs" value={profiles[tf]} onChange={e=>setProfiles(old=>({...old,[tf]:e.target.value as ScaleId}))}>
+              <option value="baseline">1× Base</option><option value="extended">2× Ext</option><option value="structural">4× Struct</option>
+            </select>
             <Button variant="ghost" size="icon-sm" className="size-8" aria-label={(expanded===tf?'Restore both charts':'Expand '+tf)} onClick={()=>setExpanded(expanded===tf?null:tf)}>{expanded===tf?<Minimize2/>:<Maximize2/>}</Button>
           </div>
-          <AnalysisChart data={data} timeframe={tf} view={view} assessment={review?.assessments.find(a=>a.timeframe===tf)} registerMidpoint={registerMidpoint} historyPicking={historyPicking&&tf==='M15'&&!pending} onHistoryPick={chooseHistory} showReferences={showReferences&&!draft&&manual===null} hypothesis={hypothesis} armedLevel={armed&&!pending?'entryPrice':null} draftPrice={draft?.price} onPick={(level,price,timeframe)=>{if(level==='entryPrice')stage(price,timeframe)}}/>
+          <div className="flex shrink-0 gap-2 overflow-x-auto whitespace-nowrap px-2 py-0.5 text-[10px] text-muted-foreground" aria-label={tf+' regime by scale'}>{(['baseline','extended','structural'] as const).map(id=>{const q=id==='baseline'?data.report.classifications[tf]:data.report.scales[tf][id].classification;const quality=id==='baseline'?data.report.classifications[tf].dataQuality:data.report.scales[tf][id].quality;return <span key={id} className={profiles[tf]===id?'font-semibold text-foreground':''}>{id==='baseline'?'1×':id==='extended'?'2×':'4×'} {quality==='usable'?q.regime:quality.replaceAll('_',' ')}</span>})}</div>
+          <AnalysisChart data={data} timeframe={tf} view={view} profile={profiles[tf]} assessment={review?.assessments.find(a=>a.timeframe===tf)} registerMidpoint={registerMidpoint} historyPicking={historyPicking&&tf==='M15'&&!pending} onHistoryPick={chooseHistory} showReferences={showReferences&&!draft&&manual===null} hypothesis={hypothesis} armedLevel={armed&&!pending?'entryPrice':null} draftPrice={draft?.price} onPick={(level,price,timeframe)=>{if(level==='entryPrice')stage(price,timeframe)}}/>
         </section>)}
       </div>
       <footer className="shrink-0 border-t bg-card px-2 pt-1 pb-[max(4px,env(safe-area-inset-bottom))]">

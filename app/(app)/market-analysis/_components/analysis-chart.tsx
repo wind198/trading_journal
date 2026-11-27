@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CandlestickSeries, LineSeries, createChart, ColorType, type UTCTimestamp, type ISeriesApi, type IPriceLine, type MouseEventParams } from 'lightweight-charts'
 import type { WorkspaceAnalysis } from '@/lib/market-analysis/workspace'
+import type { ScaleId } from '@/lib/market-analysis/scales'
 import type { Timeframe } from '@/lib/market-analysis/contracts'
 
 import type { TradeHypothesis, TradeLevel } from '@/lib/trade-evaluation/contracts'
@@ -13,10 +14,11 @@ import { normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 export type AnalysisView = 'price' | 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
 const priceFormat = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 
-export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint, historyPicking=false, onHistoryPick }: {
+export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint, historyPicking=false, onHistoryPick, profile='baseline' }: {
   data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView
   hypothesis: TradeHypothesis; armedLevel: TradeLevel | null
   assessment?: StrategyAssessment; showReferences: boolean; draftPrice?: number
+  profile?:ScaleId
   historyPicking?:boolean; onHistoryPick?:(closeTime:string)=>void
   registerMidpoint: (timeframe:Timeframe, reader:(()=>number|null)|null)=>void
   onPick: (level: TradeLevel, price: number, timeframe: Timeframe) => void
@@ -66,7 +68,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     }
     chart.subscribeClick(click)
     candle.setData(bars.map((b,i) => ({ time: times[i], open:b.open, high:b.high, low:b.low, close:b.close })))
-    const f = data.indicators[timeframe]
+    const f = profile==='baseline'?data.indicators[timeframe]:data.scaleIndicators[timeframe][profile]
     const add = (values: readonly (number|null)[], token: string, title: string, pane = 0) => {
       const line = chart.addSeries(LineSeries, { color: color(token), title, lineWidth: 1,
         lastValueVisible: true, priceLineVisible: false, ...(pane === 0 ? { priceFormat } : {}) }, pane)
@@ -82,7 +84,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
       add(f.bollinger.middle,'--chart-5','Middle')
       add(f.bollinger.lower,'--chart-1','Lower')
     } else if (view === 'momentum') {
-      add(f.force,'--chart-1','Signed force',1)
+      add(data.indicators[timeframe].force,'--chart-1','Signed force',1)
     } else if (view === 'transition') {
       add(f.bollinger.bandwidth,'--chart-1','Bandwidth',1)
       add(f.atr,'--chart-3','ATR',2)
@@ -106,7 +108,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     const observer = new ResizeObserver(() => chart.resize(node.clientWidth, node.clientHeight))
     observer.observe(node)
     return () => { cancelAnimationFrame(frame); registerMidpoint(timeframe,null); drag.current=null; observer.disconnect(); chart.unsubscribeClick(click); candleRef.current = null; lines.current = []; chart.remove() }
-  }, [data,timeframe,view])
+  }, [data,timeframe,view,profile])
   useEffect(() => {
     const candle = candleRef.current
     const node = host.current
@@ -126,7 +128,8 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     }
     // Market boundaries are snapshot evidence, independent of trade submission
     // and the optional SL/TP reference overlay.
-    const classification=data.report.classifications[timeframe]
+    const baseline=data.report.classifications[timeframe]
+    const classification=profile==='baseline'?baseline:data.report.scales[timeframe][profile].classification
     if(classification.regime==='choppy'&&classification.displayRange){
       const outer=classification.displayRange
       const confidence=classification.boundaryConfidence==='established'?'':' ~'
@@ -135,10 +138,10 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
       }
       if(outer.upper===outer.lower)addBoundary(outer.upper,'Flat range'+confidence,'--chart-3')
       else{
-        addBoundary(outer.upper,'Outer high'+confidence,'--chart-3')
-        addBoundary(outer.lower,'Outer low'+confidence,'--chart-3')
+        addBoundary(outer.upper,(profile==='baseline'?'Outer':profile)+' high'+confidence,'--chart-3')
+        addBoundary(outer.lower,(profile==='baseline'?'Outer':profile)+' low'+confidence,'--chart-3')
       }
-      const inner=classification.choppy?.inner
+      const inner=profile==='baseline'?baseline.choppy?.inner:null
       if(inner){
         if(inner.upper!==outer.upper)addBoundary(inner.upper,'Inner high'+(inner.validated?'':' ~'),'--chart-5')
         if(inner.lower!==outer.lower)addBoundary(inner.lower,'Inner low'+(inner.validated?'':' ~'),'--chart-5')
@@ -157,7 +160,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
         addReference(z.lower,'Obstacle lower');addReference(z.upper,'Obstacle upper')
       }
     }
-  }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,assessment,showReferences,draftPrice])
+  }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,profile,assessment,showReferences,draftPrice])
   return <div className="relative min-h-0 flex-1">
     <div ref={host} className={armedLevel || historyPicking ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
     {armedLevel==='entryPrice'&&draftPrice!==undefined&&handleY!==null&&<button type="button" aria-label={timeframe+' drag entry price'} title="Drag entry price"
