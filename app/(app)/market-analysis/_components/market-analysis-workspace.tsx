@@ -40,6 +40,7 @@ function EvidenceInspector({ result }: { result: AnalysisResult }) {
 
 export function MarketAnalysisWorkspace() {
   const [data,setData] = useState<WorkspaceAnalysis|null>(null)
+  const [showReferences,setShowReferences] = useState(true)
   const [view,setView] = useState<AnalysisView>('overview')
   const [pending,setPending] = useState(false)
   const [error,setError] = useState<string|null>(null)
@@ -86,6 +87,7 @@ export function MarketAnalysisWorkspace() {
       </div>
     </header>
     <div role="group" aria-label="Analysis view" className="flex gap-1 overflow-x-auto border-b bg-card px-2 py-1">
+      <Button size="sm" variant={showReferences?'secondary':'ghost'} aria-pressed={showReferences} onClick={()=>setShowReferences(v=>!v)}>References</Button>
       {views.map(v=><Button key={v.id} size="sm" variant={view===v.id?'secondary':'ghost'} aria-pressed={view===v.id} onClick={()=>setView(v.id)}>{v.label}</Button>)}
     </div>
     <div aria-live="polite" className="border-b px-3 py-2 text-xs text-muted-foreground">
@@ -105,7 +107,7 @@ export function MarketAnalysisWorkspace() {
             <span className="text-muted-foreground">{data.snapshot.bars[tf].length} closed bars · UTC close</span>
           </div>
           <p className="px-3 py-1 text-xs text-muted-foreground">{data.report.classifications[tf].reason}</p>
-          <AnalysisChart data={data} timeframe={tf} view={view} hypothesis={hypothesis} armedLevel={armedLevel} onPick={(level,price,timeframe)=>{setHypothesis(h=>h?setTradeLevel(h,level,price,data.snapshot.pointSize,timeframe):h);setArmedLevel(null)}}/>
+          <AnalysisChart data={data} timeframe={tf} view={view} assessment={review?.assessments.find(a=>a.timeframe===tf)} showReferences={showReferences} hypothesis={hypothesis} armedLevel={armedLevel} onPick={(level,price,timeframe)=>{setHypothesis(h=>h?setTradeLevel(h,level,price,data.snapshot.pointSize,timeframe):h);setArmedLevel(null)}}/>
         </section>)}
       </div>
       <aside className="min-w-0 border-t bg-card xl:col-start-2 xl:row-start-2 xl:border-l xl:border-t-0">

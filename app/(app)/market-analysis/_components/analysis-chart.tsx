@@ -6,14 +6,16 @@ import type { WorkspaceAnalysis } from '@/lib/market-analysis/workspace'
 import type { Timeframe } from '@/lib/market-analysis/contracts'
 
 import type { TradeHypothesis, TradeLevel } from '@/lib/trade-evaluation/contracts'
+import type { StrategyAssessment } from '@/lib/trade-evaluation/strategies'
 import { normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 
 export type AnalysisView = 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
 const priceFormat = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 
-export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick }: {
+export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences }: {
   data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView
   hypothesis: TradeHypothesis; armedLevel: TradeLevel | null
+  assessment?: StrategyAssessment; showReferences: boolean
   onPick: (level: TradeLevel, price: number, timeframe: Timeframe) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
@@ -95,7 +97,20 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
       lines.current.push(candle.createPriceLine({ price, title, color: css.getPropertyValue(token).trim(),
         lineWidth: 2, axisLabelVisible: true, lineVisible: true }))
     }
-  }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view])
+    if(showReferences&&assessment){
+      const seen=new Set(levels.filter(([price])=>price!==null).map(([price])=>price!.toFixed(5)))
+      const addReference=(price:number,title:string)=>{
+        const key=price.toFixed(5)
+        if(seen.has(key))return
+        seen.add(key)
+        lines.current.push(candle.createPriceLine({price,title,color:css.getPropertyValue('--muted-foreground').trim(),lineWidth:1,axisLabelVisible:true,lineVisible:true}))
+      }
+      for(const r of assessment.references) addReference(r.price,(r.kind==='stop'?'SL ref':'TP ref')+' · '+r.source)
+      for(const z of (assessment.structure?.obstacles??[]).slice(0,3)){
+        addReference(z.lower,'Obstacle lower');addReference(z.upper,'Obstacle upper')
+      }
+    }
+  }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,assessment,showReferences])
   return <div className="relative min-h-0 flex-1">
     <div ref={host} className={armedLevel ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
     {!data.snapshot.bars[timeframe].length && <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">No completed bars</div>}
