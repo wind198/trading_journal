@@ -8,12 +8,14 @@
     ".": "./generated/typescript/index.ts"
   },
   "scripts": {
-    "validate": "asyncapi validate asyncapi.yaml",
+    "validate": "node scripts/validate-asyncapi.mjs",
     "generate:ts": "python3 scripts/compile_schemas.py && node scripts/generate-typescript.mjs",
-    "generate": "bash ./scripts/generate.sh"
+    "generate": "bash ./scripts/generate.sh",
+    "bundle": "node scripts/bundle-asyncapi.mjs"
   },
   "devDependencies": {
-    "@asyncapi/cli": "2.16.1",
+    "@asyncapi/bundler": "0.6.4",
+    "@asyncapi/parser": "3.6.6",
     "json-schema-to-typescript": "15.0.4"
   }
 }

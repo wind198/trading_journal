@@ -5,8 +5,7 @@ AsyncAPI **3.1** YAML + JSON Schema fragments are the **source of truth** for th
 ## First-time setup
 
 ```bash
-cd contracts
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 ## Edit workflow
@@ -34,6 +33,8 @@ bash scripts/check-generated.sh
 ```bash
 pnpm run contracts:validate
 ```
+
+Validation and bundling use pinned parser/bundler libraries directly; the full AsyncAPI CLI and Studio are intentionally excluded. Do not use unpinned npx or npm install inside generation scripts.
 
 ## TypeScript consumer
 
