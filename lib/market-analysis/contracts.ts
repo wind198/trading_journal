@@ -1,6 +1,6 @@
 /** Specification-stage contracts; no runtime implementation yet. */
 export type Timeframe = "M3" | "M15";
-export type MarketRegime = "uptrend" | "downtrend" | "ranging" | "transition" | "unknown";
+export type MarketRegime = "uptrend" | "downtrend" | "choppy" | "ranging" | "transition" | "unknown";
 export type AnalysisStatus = "ok" | "insufficient_data" | "not_applicable" | "error";
 export interface Candle {
   readonly closeTime: string;

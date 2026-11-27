@@ -20,8 +20,10 @@ export function resolveTradeContext(structural:PhaseObservation,execution:PhaseO
   if(structural.regime==='transition'||execution.regime==='transition')return result('transition_uncertain','At least one timeframe is transitioning; breakout/retest structure is unconfirmed.')
   if(structural.phase==='unknown'||execution.phase==='unknown')return result('context_unknown','At least one timeframe phase is unresolved.')
   if(primary==='range'){
+    if(structural.phase==='transition'||execution.phase==='transition')return result('range_breakout_uncertain','Choppy structural context with expansion or breakout evidence; conditional rotation only.')
     return result(local==='range'?'range_rotation':'range_breakout_uncertain',local==='range'?'Both timeframes show ranging conditions.':'Local directional behavior within the broader range may be rotation or breakout; neither is confirmed.')
   }
+  if(structural.phase==='transition'||execution.phase==='transition')return result('transition_uncertain','Expansion or breakout within directional regime; structure not confirmed.')
   if(primary==='continuation'){
     if(local==='countertrend'||structural.phase==='correction_candidate'||execution.phase==='correction_candidate')
       return result('potential_correction_entry','Direction agrees with M15; local correction may be unfinished. Correction root and completion require evidence.')

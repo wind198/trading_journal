@@ -46,3 +46,20 @@ test('scan preserves both timeframes, policy and evidence',()=>{
   assert.ok(report.results.some(r=>r.toolId==='analyze_timeframe_alignment'))
   assert.deepEqual(scanMarket(s),report)
 })
+
+test('adequate non-directional history defaults to choppy, even without validated boundaries',()=>{
+  const data=bars(Array.from({length:160},(_,i)=>1.2+Math.sin(i*1.7)*0.0003))
+  const f=calculateFoundation(data,config)
+  const c=classifyRegime(data,{...f,dmi:{...f.dmi,adx:f.dmi.adx.map(()=>10)}})
+  assert.equal(c.regime,'choppy')
+  assert.ok(c.range)
+  assert.notEqual(c.boundaryConfidence,'unavailable')
+})
+test('breakout is a secondary state, not a regime',()=>{
+  const data=bars(Array.from({length:160},(_,i)=>1.2+Math.cos(i*Math.PI/5)*0.002))
+  const last={...data.at(-1)!,open:1.21,high:1.211,low:1.209,close:1.21}
+  const altered=[...data.slice(0,-1),last]
+  const c=classifyRegime(altered,calculateFoundation(altered,config))
+  assert.equal(c.state,'breakout_candidate')
+  assert.ok(['choppy','uptrend','downtrend'].includes(c.regime))
+})

@@ -10,7 +10,7 @@ export function scanMarket(snapshot: MarketSnapshot) {
   const foundation = analyzeFoundation(snapshot)
   const numerical = runNumericalTools(snapshot, p.windows)
   const classify = (tf: Timeframe) => classifyRegime(snapshot.bars[tf], foundation.timeframes[tf], p,
-    foundation.limitations.some(x => x.startsWith(tf + ':') && (x.includes('stale') || x.includes('no completed'))))
+    foundation.limitations.some(x => x.startsWith(tf + ':') && (x.includes('stale') || x.includes('no completed') || x.includes('cadence gaps'))))
   const classifications = { M3: classify('M3'), M15: classify('M15') }
   const regimes = { M3: classifications.M3.regime, M15: classifications.M15.regime }
   const results: AnalysisResult[] = []
@@ -40,8 +40,8 @@ export function scanMarket(snapshot: MarketSnapshot) {
       diSpread: [c.metrics.diSpread, 'score', config.adxDmi.period],
       bandwidthGrowth: [c.metrics.bandwidthGrowth, 'ratio', p.windows.transition],
       atrGrowth: [c.metrics.atrGrowth, 'ratio', p.windows.transition],
-    }, [c.reason, 'Experimental policy ' + p.version])
-    if (c.regime === 'unknown') results[results.length - 1] = { ...results[results.length - 1], status: 'insufficient_data' }
+    }, [c.reason, 'Market state: ' + c.state, 'Boundary confidence: ' + c.boundaryConfidence, 'Experimental policy ' + p.version])
+    results[results.length - 1] = { ...results[results.length - 1], status: c.regime === 'unknown' ? 'insufficient_data' : 'ok' }
     if (selected.includes('analyze_range_structure')) {
       const r = c.range
       emit('analyze_range_structure', {
@@ -51,12 +51,13 @@ export function scanMarket(snapshot: MarketSnapshot) {
         lowerTests: [r?.lowerTests ?? null, 'count', p.windows.range],
         widthAtr: [r?.widthAtr ?? null, 'ATR', p.windows.range],
         validated: [r ? Number(r.validated) : null, 'boolean', p.windows.range],
-      }, ['Experimental pivot-based boundary validation; not proof of future containment.'])
+      }, ['Boundary confidence: ' + c.boundaryConfidence + '; not proof of future containment.'])
     }
     if (selected.includes('analyze_transition')) emit('analyze_transition', {
       bandwidthGrowth: [c.metrics.bandwidthGrowth, 'ratio', p.windows.transition],
       atrGrowth: [c.metrics.atrGrowth, 'ratio', p.windows.transition],
       outsideValidatedRange: [c.metrics.outside, 'direction', p.windows.range],
+      outsideObservedRange: [c.breakout, 'direction', p.windows.range],
     })
   }
   const alignment = compareRegimes(regimes.M3, regimes.M15)

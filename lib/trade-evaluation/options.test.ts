@@ -43,3 +43,12 @@ test('empty market data withholds options without mutating hypothesis',()=>{
  const r=generateTradeOptions(data,input)
  assert.equal(r.status,'context_unresolved');assert.equal(r.options.length,0);assert.equal(input.stopLossPrice,null)
 })
+
+test('provisional range boundaries support conditional pairs without relaxing hard limits',()=>{
+ const refs=[ref('stop',1.1996,'provisional range boundary'),ref('target',1.2008,'provisional range boundary')]
+ const result=pairReferences(h(),point,[assess(refs,'range')],'range')
+ assert.equal(result.pairs.length,1)
+ assert.ok(result.pairs[0].grossRewardRisk>=1.5)
+ const narrow=[refs[0],ref('target',1.2002,'provisional range boundary')]
+ assert.equal(pairReferences(h(),point,[assess(narrow,'range')],'range').pairs.length,0)
+})

@@ -65,3 +65,14 @@ test('snapshot mismatch and missing data remain incomplete; hard block wins',()=
   assert.equal(evaluateTrade(data,hypothesis(1.1999,1.2001)).state,'BLOCKED')
   assert.equal(evaluateTrade(data,{...hypothesis(1.1995,1.201),snapshotId:'other'}).state,'INCOMPLETE')
 })
+
+test('choppy provisional boundaries are evaluable and carry uncertainty',()=>{
+ const c=context('range',hypothesis(null,null))
+ c.regime='choppy'
+ c.range={lower:1.1996,upper:1.2008,from:'a',through:'b',upperTests:1,lowerTests:1,widthAtr:6,tolerance:0.0001,validated:false}
+ const a=evaluateStrategy(c)
+ assert.equal(a.references.length,2)
+ assert.ok(a.references.every(r=>r.source==='provisional range boundary'))
+ assert.ok(a.warnings.some(w=>w.code==='PROVISIONAL_RANGE_BOUNDARY'))
+ assert.equal(a.feasibleWithinReferences,null)
+})
