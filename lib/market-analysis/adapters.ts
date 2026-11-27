@@ -4,16 +4,18 @@ import { defaultForceCandlesConfig } from '../market-indicators/force-candles-co
 import { buildVolumeProfile, type VolumeProfileBin } from '../market-indicators/volume-profile'
 import { TIMEFRAME_SECONDS } from './snapshot'
 import { ratio } from './indicators'
+import { rollingQuantile } from '../market-indicators/candle-features'
 
 export function forceSeries(bars: readonly Candle[], timeframe: Timeframe) {
   const cfg=defaultForceCandlesConfig()
   const input=bars.map(b=>({...b,time:Date.parse(b.closeTime)/1000-TIMEFRAME_SECONDS[timeframe]}))
   const scores=new Map(calculateForceScores(input,cfg).map(p=>[p.time,p]))
+  const bodies=input.map(b=>Math.abs(b.close-b.open)),ranges=input.map(b=>b.high-b.low)
   return input.map((b,i)=>{
     const p=scores.get(b.time)
     if(p)return p.direction==='BULLISH'?p.score:-p.score
     // Neutral valid candles after warmup contribute zero, undefined baselines remain null.
-    if(i>=cfg.lookback&&b.open===b.close&&b.high>b.low)return 0
+    if(i>=cfg.lookback&&b.open===b.close&&b.high>b.low&&rollingQuantile(bodies,i,cfg.lookback,cfg.percentile)>0&&rollingQuantile(ranges,i,cfg.lookback,cfg.percentile)>0)return 0
     return null
   })
 }
