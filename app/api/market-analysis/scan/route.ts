@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { requireSessionUser } from '@/lib/auth/require-session-user'
 import { fetchHistoricalCandles } from '@/lib/ticks/fetch'
 import { snapshotFromProvider } from '@/lib/market-analysis/acquire'
+import { attachTickVolume } from '@/lib/market-analysis/volume-acquisition'
 import { buildWorkspaceAnalysis } from '@/lib/market-analysis/workspace'
 import { resolveScanCutoff } from '@/lib/market-analysis/scan-cutoff'
 import { TIMEFRAME_SECONDS } from '@/lib/market-analysis/snapshot'
@@ -31,7 +32,9 @@ export async function POST(request:Request) {
       fetchHistoricalCandles({ symbol: 'EURUSD', timeframe: '15m', before: before(TIMEFRAME_SECONDS.M15), limit: LIMIT }),
     ])
     const snapshot = snapshotFromProvider(randomUUID(), asOf, { M3, M15 })
-    return NextResponse.json(buildWorkspaceAnalysis(snapshot), { headers: { 'Cache-Control': 'no-store' } })
+    let volumeBars:Awaited<ReturnType<typeof attachTickVolume>>=[]
+    try{volumeBars=await attachTickVolume(M3,asOf)}catch{console.warn('M3 tick volume unavailable')}
+    return NextResponse.json({...buildWorkspaceAnalysis(snapshot),volumeBars}, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('market analysis scan failed', error instanceof Error ? error.message : 'unknown')
     return NextResponse.json({ error: 'Unable to acquire or analyze market data.' }, { status: 500 })

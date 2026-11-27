@@ -17,4 +17,4 @@ export function buildWorkspaceAnalysis(snapshot: MarketSnapshot) {
     },
   }
 }
-export type WorkspaceAnalysis = ReturnType<typeof buildWorkspaceAnalysis>
+export type WorkspaceAnalysis = ReturnType<typeof buildWorkspaceAnalysis> & {volumeBars?:readonly import('./contracts').Candle[]}

@@ -1,0 +1,9 @@
+{
+  "version": "0.1.0",
+  "lookback": 100,
+  "volumePercentile": 0.95,
+  "refreshIntervalMs": 60000,
+  "strongThreshold": 70,
+  "extremeThreshold": 90,
+  "scaleMax": 100
+}
