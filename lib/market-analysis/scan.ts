@@ -66,7 +66,7 @@ export function scanMarket(snapshot: MarketSnapshot, larger={M3:inspectLargerSca
         upper:[r?.upper??null,'price',profile.rangeWindow],
         lower:[r?.lower??null,'price',profile.rangeWindow],
         validated:[r?Number(r.validated):null,'boolean',profile.rangeWindow]
-      ],['Scale '+profile.multiplier+'x; '+profile.quality+'; '+q.reason,'Experimental independent profile; not a replacement for baseline.'])
+      },['Scale '+profile.multiplier+'x; '+profile.quality+'; '+q.reason,'Experimental independent profile; not a replacement for baseline.'])
       const last=results.at(-1)!
       results[results.length-1]={...last,status:profile.quality==='usable'?last.status:'insufficient_data',evidence:last.evidence.map(e=>({...e,configVersion:SCALE_POLICY.version+' / '+foundation.configVersion}))}
     }
