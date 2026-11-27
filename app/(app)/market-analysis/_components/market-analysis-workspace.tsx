@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Play, X, AlertTriangle, ChartNoAxesCombined, Crosshair, Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,8 @@ import type { TradeHypothesis } from '@/lib/trade-evaluation/contracts'
 import type { AnalysisResult, Timeframe } from '@/lib/market-analysis/contracts'
 import { createHypothesis, normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 import { confirmEntry, changeEntryDirection, refreshEntrySnapshot, type EntryDraft } from '@/lib/trade-evaluation/entry-selection'
-import { generateTradeOptions } from '@/lib/trade-evaluation/options'
-import { evaluateTrade } from '@/lib/trade-evaluation/evaluator'
+import { generateTradeOptions, type TradeOptions } from '@/lib/trade-evaluation/options'
+import type { TradeReview } from '@/lib/trade-evaluation/evaluator'
 import { TradeOptionsPanel } from './trade-options-panel'
 import { TradeReviewPanel } from './trade-review-panel'
 import { AnalysisChart, type AnalysisView } from './analysis-chart'
@@ -53,6 +53,13 @@ export function MarketAnalysisWorkspace(){
   const [sheet,setSheet]=useState<'review'|'evidence'|null>(null)
   const [manual,setManual]=useState<string|null>(null)
   const [manualError,setManualError]=useState(false)
+  const [submitted,setSubmitted]=useState<TradeOptions|null>(null)
+  const [previewReview,setPreviewReview]=useState<TradeReview|null>(null)
+  const midpointReaders=useRef<Partial<Record<Timeframe,()=>number|null>>>({})
+  const registerMidpoint=useCallback((tf:Timeframe,reader:(()=>number|null)|null)=>{
+    if(reader)midpointReaders.current[tf]=reader
+    else delete midpointReaders.current[tf]
+  },[])
   const active=useRef<AbortController|null>(null)
   const reviewButton=useRef<HTMLButtonElement>(null)
   const evidenceButton=useRef<HTMLButtonElement>(null)
@@ -73,26 +80,44 @@ export function MarketAnalysisWorkspace(){
       if(!response.ok)throw new Error(response.status===401?'Session expired. Sign in again.':'Market scan failed. Retry.')
       const next=await response.json() as WorkspaceAnalysis
       if(!controller.signal.aborted){
-        setData(next)
+        setData(next);setSubmitted(null);setPreviewReview(null)
         setHypothesis(old=>old?refreshEntrySnapshot(old,next.snapshot.id):createHypothesis(crypto.randomUUID(),next.snapshot.id))
       }
     }catch(e){if(!controller.signal.aborted)setError(e instanceof Error?e.message:'Market scan failed.')}
     finally{if(active.current===controller){active.current=null;setPending(false)}}
   }
   function cancel(){active.current?.abort();active.current=null;setPending(false)}
-  const review=useMemo(()=>data&&hypothesis?evaluateTrade(data,hypothesis):null,[data,hypothesis])
-  const options=useMemo(()=>data&&hypothesis?generateTradeOptions(data,hypothesis):null,[data,hypothesis])
+  const options=submitted&&hypothesis&&submitted.snapshotId===hypothesis.snapshotId&&submitted.hypothesisId===hypothesis.id?submitted:null
+  const review=previewReview??options?.entryReview??null
+  function invalidateReview(){setSubmitted(null);setPreviewReview(null)}
+  function beginPick(){
+    if(!data||!hypothesis||pending)return
+    const tf=expanded??'M3'
+    const price=midpointReaders.current[tf]?.()??null
+    if(price===null){setManualError(true);return}
+    stage(price,tf);setArmed(true)
+  }
   function stage(price:number,timeframe:Timeframe){
     if(!data||!hypothesis||pending)return
     const snapped=normalizePrice(price,data.snapshot.pointSize)
     if(snapped===null)return
+    invalidateReview()
     setDraft({price:snapped,timeframe,snapshotId:hypothesis.snapshotId,hypothesisId:hypothesis.id,revision:hypothesis.revision})
     setManual(null);setManualError(false)
   }
-  function confirm(){
-    if(!draft||!data||pending)return
-    setHypothesis(h=>h?confirmEntry(h,draft,data.snapshot.pointSize):h)
-    cancelPick()
+  function submit(){
+    if(!data||!hypothesis||pending)return
+    let next=hypothesis
+    if(manual!==null){
+      const price=normalizePrice(Number(manual),data.snapshot.pointSize)
+      if(price===null){setManualError(true);return}
+      next=confirmEntry(hypothesis,{price,timeframe:draft?.timeframe??hypothesis.entryTimeframe,snapshotId:hypothesis.snapshotId,hypothesisId:hypothesis.id,revision:hypothesis.revision},data.snapshot.pointSize)
+    }else if(draft)next=confirmEntry(hypothesis,draft,data.snapshot.pointSize)
+    if(next.entryPrice===null)return
+    // Evaluation is invoked exclusively by this explicit submission.
+    const result=generateTradeOptions(data,next)
+    setHypothesis(next);setSubmitted(result);setPreviewReview(null)
+    cancelPick();returnFocus.current='review';setSheet('review')
   }
   function openSheet(which:'review'|'evidence'){cancelPick();returnFocus.current=which;setSheet(which)}
   const ready=!!data&&!!hypothesis
@@ -119,7 +144,7 @@ export function MarketAnalysisWorkspace(){
             <span className="min-w-0 flex-1 truncate font-medium" title={data.report.classifications[tf].reason}>{tf} · {data.report.regimes[tf]}</span>
             <Button variant="ghost" size="icon-sm" className="size-8" aria-label={(expanded===tf?'Restore both charts':'Expand '+tf)} onClick={()=>setExpanded(expanded===tf?null:tf)}>{expanded===tf?<Minimize2/>:<Maximize2/>}</Button>
           </div>
-          <AnalysisChart data={data} timeframe={tf} view={view} assessment={review?.assessments.find(a=>a.timeframe===tf)} showReferences={showReferences&&!draft} hypothesis={hypothesis} armedLevel={armed&&!pending?'entryPrice':null} draftPrice={draft?.price} onPick={(level,price,timeframe)=>{if(level==='entryPrice')stage(price,timeframe)}}/>
+          <AnalysisChart data={data} timeframe={tf} view={view} assessment={review?.assessments.find(a=>a.timeframe===tf)} registerMidpoint={registerMidpoint} showReferences={showReferences&&!draft&&manual===null} hypothesis={hypothesis} armedLevel={armed&&!pending?'entryPrice':null} draftPrice={draft?.price} onPick={(level,price,timeframe)=>{if(level==='entryPrice')stage(price,timeframe)}}/>
         </section>)}
       </div>
       <footer className="shrink-0 border-t bg-card px-2 pt-1 pb-[max(4px,env(safe-area-inset-bottom))]">
@@ -127,17 +152,21 @@ export function MarketAnalysisWorkspace(){
           <div className="min-w-0 flex-1">
             <Input aria-label="Entry price" inputMode="decimal" className="h-9 font-mono text-sm" placeholder="Entry price" aria-invalid={manualError}
               value={manual??(draft?.price??hypothesis.entryPrice)?.toFixed(5)??''}
-              onChange={e=>{setManual(e.target.value);setDraft(null);setManualError(false);setArmed(false)}}
-              onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(manual!==null){const n=normalizePrice(Number(manual),data.snapshot.pointSize);if(n===null)setManualError(true);else stage(n,hypothesis.entryTimeframe)}else confirm()}}}/>
+              onChange={e=>{invalidateReview();setManual(e.target.value);setDraft(null);setManualError(false);setArmed(false)}}
+              onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();submit()}}}/>
           </div>
-          <Button className="h-9 px-2" variant={armed?'secondary':'outline'} aria-pressed={armed} aria-label="Pick entry on chart" disabled={pending} onClick={()=>{if(armed)cancelPick();else{cancelPick();setArmed(true)}}}><Crosshair/></Button>
-          {(['long','short'] as const).map(d=><Button key={d} className="h-9 px-2" size="sm" variant={hypothesis.direction===d?'default':'outline'} aria-pressed={hypothesis.direction===d} disabled={pending} onClick={()=>{cancelPick();setHypothesis(h=>h?changeEntryDirection(h,d):h)}}>{d==='long'?'Long':'Short'}</Button>)}
+          <Button className="h-9 px-2" variant={armed?'secondary':'outline'} aria-pressed={armed} aria-label="Pick entry on chart" disabled={pending} onClick={()=>{if(armed)cancelPick();else beginPick()}}><Crosshair/></Button>
+          {(['long','short'] as const).map(d=><Button key={d} className="h-9 px-2" size="sm" variant={hypothesis.direction===d?'default':'outline'} aria-pressed={hypothesis.direction===d} disabled={pending} onClick={()=>{invalidateReview();setHypothesis(h=>h?changeEntryDirection(h,d):h);if(draft)setDraft({...draft,revision:hypothesis.revision+(hypothesis.direction===d?0:1)})}}>{d==='long'?'Long':'Short'}</Button>)}
         </div>
-        {manual!==null?<div className="mt-1 flex items-center gap-1"><span className="flex-1 text-xs text-muted-foreground">{manualError?'Invalid price':'Set a draft price'}</span><Button className="h-9" size="sm" onClick={()=>{const n=normalizePrice(Number(manual),data.snapshot.pointSize);if(n===null)setManualError(true);else stage(n,hypothesis.entryTimeframe)}}>Set draft</Button><Button className="h-9" variant="ghost" size="sm" onClick={cancelPick}>Cancel</Button></div>:draft?<div className="mt-1 flex items-center gap-1"><span className="flex-1 text-xs">{draft.timeframe} · Confirm entry</span><Button className="h-9" size="sm" onClick={confirm}>Confirm</Button><Button className="h-9" variant="ghost" size="sm" onClick={cancelPick}>Cancel</Button></div>:armed?<p className="py-1 text-xs text-muted-foreground">Tap either price chart to stage an entry.</p>:null}
+        {(armed||draft||manual!==null||manualError)&&<div className="mt-1 flex items-center gap-1">
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{manualError?'Invalid price or no visible candles.':armed?'Drag the entry line or tap a new price.':'Edit entry, then submit.'}</p>
+          <Button className="h-8" variant="ghost" size="sm" onClick={cancelPick}>Cancel</Button>
+        </div>}
         <div className="mt-1 flex gap-1">
-          <Button ref={reviewButton} className="h-9 min-w-0 flex-1" disabled={pending||armed||!!draft||manual!==null||hypothesis.entryPrice===null} onClick={()=>openSheet('review')}>Review{options?.options.length?' · '+options.options.length+' options':''}</Button>
+          <Button ref={reviewButton} className="h-9 min-w-0 flex-1" disabled={pending||(!draft&&manual===null&&hypothesis.entryPrice===null)} onClick={submit}>Submit</Button>
+          {options&&<Button className="h-9" variant="outline" onClick={()=>openSheet('review')}>Review</Button>}
           <Button ref={evidenceButton} className="h-9" variant="outline" disabled={pending} onClick={()=>openSheet('evidence')}>Evidence</Button>
-          <Button className="h-9" variant="ghost" size="sm" onClick={()=>{cancelPick();setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction))}}>Clear</Button>
+          <Button className="h-9" variant="ghost" size="sm" onClick={()=>{cancelPick();invalidateReview();setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction))}}>Clear</Button>
         </div>
         {hypothesis.stopLossPrice!==null&&hypothesis.takeProfitPrice!==null&&!draft&&<p className="truncate py-1 font-mono text-[11px] text-muted-foreground">Preview · SL {hypothesis.stopLossPrice.toFixed(5)} · TP {hypothesis.takeProfitPrice.toFixed(5)}</p>}
       </footer>
@@ -151,8 +180,10 @@ export function MarketAnalysisWorkspace(){
           <div className="min-h-0 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
             {sheet==='review'?<>
               {options&&<TradeOptionsPanel result={options} onSelect={o=>{
-                setHypothesis(h=>h&&h.id===options.hypothesisId&&h.revision===options.revision&&h.snapshotId===options.snapshotId?{...h,stopLossPrice:o.stopLossPrice,takeProfitPrice:o.takeProfitPrice,revision:h.revision+1}:h)
-                setSheet(null)
+                if(hypothesis.id!==options.hypothesisId||hypothesis.revision!==options.revision||hypothesis.snapshotId!==options.snapshotId)return
+                // Preview uses the already evaluated option; do not run evaluation again.
+                setHypothesis({...hypothesis,stopLossPrice:o.stopLossPrice,takeProfitPrice:o.takeProfitPrice})
+                setPreviewReview(o.review);setSheet(null)
               }}/>}
               {review&&<details><summary className="cursor-pointer p-3 text-sm font-medium">Detailed assessment</summary><TradeReviewPanel review={review}/></details>}
             </>:<>

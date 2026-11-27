@@ -1,0 +1,5 @@
+# Entry editing and explicit submission
+
+Crosshair seeds a draft from the midpoint of visible candle high/low extremes on M3, or the expanded timeframe. This defines median as midrange rather than median close. If no visible candles exist, show an error, not an invented price. Draft is point-snapped and synchronized across the input and charts. Tap chart or drag the horizontal entry handle with pointer capture; keyboard arrow keys adjust one point. The handle is limited to the price pane and ordinary chart gestures outside it remain available. No SL/TP trade evaluation during editing. Submit commits draft and generates options exactly on explicit button/Enter action; review opens immediately. Preview uses cached option assessment. Editing or refreshing invalidates submitted results. Market scan still computes numerical market context, not trade hypothesis evaluation. No order execution.
+
+Browser touch/pointer, chart coordinate/pane height behavior, mobile layout and build/tests are unverified in connector environment; installed Next/chart docs unavailable. Added visible midrange fixture. No dependencies or migrations.
