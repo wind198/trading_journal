@@ -1,14 +1,19 @@
 import type { WorkspaceAnalysis } from '../market-analysis/workspace'
 import type { TradeHypothesis } from './contracts'
 import type { StructuralReference, StrategyAssessment } from './strategies'
-import { evaluateTrade, type TradeReview } from './evaluator'
-import { SEARCH_STAGES,searchAssessments,type SearchStage } from './search-anchors'
+import { evaluateTrade,prepareTradeEvaluation, type TradeReview } from './evaluator'
+import { SEARCH_STAGES,searchAssessments,type SearchStage,type AnchorCache } from './search-anchors'
+import { distinctGeometry } from './candidate-diversity'
+export { distinctGeometry } from './candidate-diversity'
+import { seedCandidates,selectFinal,type SeedCandidate,type SeedId } from './candidate-search'
 import { evaluateHardPolicy } from './policy'
 import policy from '../../ai/trading_knowledge/config/option-policy.json' with { type: 'json' }
 
 export interface OptionPair {
   id: string
   searchStage?:SearchStage
+  seed?:SeedId
+  origins?:string[]
   stopBufferAtr?:number
   targetBufferPoints?:number
   stopLossPrice: number
@@ -77,85 +82,90 @@ export function pairReferences(h:TradeHypothesis,point:number,assessments:readon
 }
 export type SearchStop='TARGET_REACHED'|'RUNTIME_LIMIT'|'EVALUATION_LIMIT'|'SEARCH_EXHAUSTED'|'DATA_INSUFFICIENT'
 export interface SearchProgress{stage:SearchStage;found:number;passed:number;failed:number;evaluated:number;elapsedMs:number;target:number}
-/** Order-independent relative distance; the larger distance must be at least 1.2x the smaller. */
-export function distinctGeometry(a:OptionPair,b:OptionPair){
- const different=(x:number,y:number)=>Number.isFinite(x)&&Number.isFinite(y)&&x>0&&y>0&&Math.max(x,y)-Math.min(x,y)>=Math.min(x,y)*policy.minRelativeDifference-1e-9
- return different(a.riskPoints,b.riskPoints)||different(a.rewardPoints,b.rewardPoints)
-}
 export function generateTradeOptions(data:WorkspaceAnalysis,h:TradeHypothesis,onProgress?:(p:SearchProgress)=>void,clock=()=>performance.now()){
  const start=clock(),base={...h,stopLossPrice:null,takeProfitPrice:null}
- const entryReview=evaluateTrade(data,base)
- const options:TradeOption[]=[],failedOptions:FailedOption[]=[]
- const retained:OptionPair[]=[],attemptedIds=new Set<string>()
+ const prepared=h.entryPrice===null?undefined:prepareTradeEvaluation(data,base)
+ const entryReview=evaluateTrade(data,base,prepared)
+ const passed:TradeOption[]=[],failed:FailedOption[]=[]
  let attempted=0,rejected=0,unchartable=0,evaluated=0,similarSkipped=0
- const targetPassed=2 // Prefer useful passing alternatives without weakening any gate.
- let stopReason:SearchStop='SEARCH_EXHAUSTED'
- let status:OptionStatus='entry_required'
+ let stopReason:SearchStop='SEARCH_EXHAUSTED',status:OptionStatus='entry_required'
  const stages:{stage:SearchStage;found:number;evaluated:number}[]=[]
  const context=entryReview.context
  const blocked=!context||['context_unknown','transition_uncertain'].includes(context.kind)||entryReview.warnings.some(w=>w.severity==='unassessed'||w.severity==='block')
- const progress=(stage:SearchStage)=>onProgress?.({stage,found:retained.length,passed:options.length,failed:failedOptions.length,evaluated,elapsedMs:Math.round(clock()-start),target:policy.targetTotal})
- const budget=():SearchStop|null=>retained.length>=policy.targetTotal&&(options.length>=targetPassed||blocked)?'TARGET_REACHED':clock()-start>=policy.runtimeMs?'RUNTIME_LIMIT':evaluated>=policy.maxEvaluations?'EVALUATION_LIMIT':null
+ const pool=new Map<string,SeedCandidate>()
+ const expired=()=>clock()-start>=policy.runtimeMs
+ // Reserve half the budget for actual review. Check between each bounded
+ // assessment/variant rather than enumerating all history pools in one call.
+ const discoveryExpired=()=>clock()-start>=policy.runtimeMs*0.5
+ const progress=(stage:SearchStage)=>{
+  const selected=selectFinal(passed,failed)
+  onProgress?.({stage,found:selected.options.length+selected.failedOptions.length,passed:selected.options.length,failed:selected.failedOptions.length,evaluated,elapsedMs:Math.round(clock()-start),target:policy.targetTotal})
+ }
  if(h.entryPrice!==null&&context){
-  const pools:StrategyAssessment[][]=[]
-  outer:for(const stage of SEARCH_STAGES){
-   const before=retained.length,evBefore=evaluated
-   const limit=budget();if(limit){stopReason=limit;break}
+  const pools:StrategyAssessment[][]=[],anchorCache:AnchorCache=new Map()
+  discovery:for(const stage of SEARCH_STAGES){
+   if(discoveryExpired())break
+   const before=pool.size
    progress(stage)
-   const assessments=stage==='buffer_sensitivity'?pools.flat():searchAssessments(data,base,entryReview,stage,context.primary)
+   const assessments=stage==='buffer_sensitivity'?pools.flat():searchAssessments(data,base,entryReview,stage,context.primary,anchorCache)
    if(stage!=='buffer_sensitivity')pools.push(assessments)
-   const buffers=stage==='buffer_sensitivity'?policy.stopBufferVariants:[policy.stopBufferAtr]
-   const targets=stage==='buffer_sensitivity'?[policy.targetBufferPoints,...policy.targetBufferVariantsPoints]:[policy.targetBufferPoints]
-   for(const buffer of buffers)for(const targetBuffer of targets){
-    const preLimit=budget();if(preLimit){stopReason=preLimit;stages.push({stage,found:retained.length-before,evaluated:evaluated-evBefore});break outer}
-    const result=pairReferences(base,data.snapshot.pointSize,assessments,context.primary,buffer,stage!=='baseline',targetBuffer)
-    attempted+=result.attempted
-    unchartable+=result.rejected-result.failedPairs.length
-    // Interleave hard-pass and hard-fail candidates rather than consuming the
-    // whole budget on one outcome. Prefer distinct anchor pairs before buffers.
-    const candidates:OptionPair[]=[]
-    for(let i=0;i<Math.max(result.pairs.length,result.failedPairs.length);i++){
-     if(result.pairs[i])candidates.push(result.pairs[i])
-     if(result.failedPairs[i])candidates.push(result.failedPairs[i])
-    }
-    for(const raw of candidates){
-     const limit=budget()
-     if(limit){stopReason=limit;stages.push({stage,found:retained.length-before,evaluated:evaluated-evBefore});break outer}
-     if(attemptedIds.has(raw.id))continue
-     attemptedIds.add(raw.id)
-     const conflicts=retained.filter(p=>!distinctGeometry(p,raw))
-     const hardPass=!evaluateHardPolicy({...base,stopLossPrice:raw.stopLossPrice,takeProfitPrice:raw.takeProfitPrice},data.snapshot.pointSize).warnings.some(w=>w.severity==='block')
-     if(conflicts.some(p=>options.some(o=>o.id===p.id))||((conflicts.length>0||retained.length>=policy.targetTotal)&&(!hardPass||blocked))){similarSkipped++;continue}
-     const pair={...raw,searchStage:stage,stopBufferAtr:buffer,targetBufferPoints:targetBuffer}
-     const review=evaluateTrade(data,{...base,stopLossPrice:pair.stopLossPrice,takeProfitPrice:pair.takeProfitPrice})
-     evaluated++
-     const failureState:FailedOption['failureState']|null=review.state==='BLOCKED'?'failed_hard_policy':
-      review.state==='INFEASIBLE'?'failed_structure':
-      review.warnings.some(w=>w.severity==='unassessed')?'failed_data_quality':
-      blocked||review.state==='INCOMPLETE'?'failed_context':null
-     if(failureState&&(conflicts.length||retained.length>=policy.targetTotal)){rejected++;continue}
-     if(!failureState){
-      // A passing geometry may replace a similar failed example; no retained
-      // pair may violate diversity, including across the two outcome groups.
-      const evict=new Set(conflicts.map(p=>p.id))
-      if(!evict.size&&retained.length>=policy.targetTotal&&failedOptions.length)evict.add(failedOptions[failedOptions.length-1].id)
-      for(let i=retained.length-1;i>=0;i--)if(evict.has(retained[i].id))retained.splice(i,1)
-      for(let i=failedOptions.length-1;i>=0;i--)if(evict.has(failedOptions[i].id))failedOptions.splice(i,1)
-     }
-     if(retained.length>=policy.targetTotal)continue
-     retained.push(pair)
-     if(failureState){rejected++;failedOptions.push({...pair,review,failureState})}
-     else options.push({...pair,review})
-     progress(stage)
+   const variants=stage==='buffer_sensitivity'?
+    [...policy.stopBufferVariants.map(b=>[b,policy.targetBufferPoints] as const),...policy.targetBufferVariantsPoints.map(t=>[policy.stopBufferAtr,t] as const)]:[[policy.stopBufferAtr,policy.targetBufferPoints] as const]
+   for(const [buffer,targetBuffer] of variants)for(const assessment of assessments){
+    if(discoveryExpired()){stages.push({stage,found:pool.size-before,evaluated:0});break discovery}
+    const r=pairReferences(base,data.snapshot.pointSize,[assessment],context.primary,buffer,stage!=='baseline',targetBuffer)
+    attempted+=r.attempted;unchartable+=r.rejected-r.failedPairs.length
+    for(const [list,hardPass] of [[r.pairs,true],[r.failedPairs,false]] as const)for(const raw of list){
+     const origin=stage+':'+assessment.timeframe+':'+(assessment.metrics.searchLookback??'default')
+     const existing=pool.get(raw.id)
+     if(existing){if(!existing.origins?.includes(origin))existing.origins?.push(origin);continue}
+     pool.set(raw.id,{...raw,searchStage:stage,stopBufferAtr:buffer,targetBufferPoints:targetBuffer,hardPass,seed:'primary_structure',origins:[origin]})
     }
    }
-   stages.push({stage,found:retained.length-before,evaluated:evaluated-evBefore})
-   const limitAfter=budget();if(limitAfter){stopReason=limitAfter;break}
+   stages.push({stage,found:pool.size-before,evaluated:0})
   }
+  const queues=seedCandidates([...pool.values()])
+  const visited=new Set<string>()
+  let rounds=0
+  // First round covers every eligible seed before checking target count.
+  // Later rounds explore alternatives; final selection is global.
+  while(queues.some(q=>q.queue.length)){
+   for(const q of queues){
+    if(expired()){stopReason='RUNTIME_LIMIT';break}
+    if(evaluated>=policy.maxEvaluations){stopReason='EVALUATION_LIMIT';break}
+    let raw=q.queue.shift()
+    while(raw&&visited.has(raw.id))raw=q.queue.shift()
+    if(!raw)continue
+    visited.add(raw.id)
+    const review=evaluateTrade(data,{...base,stopLossPrice:raw.stopLossPrice,takeProfitPrice:raw.takeProfitPrice},prepared)
+    evaluated++
+    const failureState:FailedOption['failureState']|null=review.state==='BLOCKED'?'failed_hard_policy':
+     review.state==='INFEASIBLE'?'failed_structure':
+     review.warnings.some(w=>w.severity==='unassessed')?'failed_data_quality':
+     blocked||review.state==='INCOMPLETE'?'failed_context':null
+    if(failureState){rejected++;failed.push({...raw,review,failureState})}
+    else passed.push({...raw,review})
+    const stage=stages.find(s=>s.stage===raw!.searchStage)
+    if(stage)stage.evaluated++
+   }
+   rounds++
+   progress('buffer_sensitivity')
+   if(stopReason==='RUNTIME_LIMIT'||stopReason==='EVALUATION_LIMIT')break
+   const selected=selectFinal(passed,failed)
+   // Explore at least two rounds whenever queues permit, even if the first
+   // round already filled the display quota.
+   if(rounds>=2&&selected.options.length+selected.failedOptions.length>=policy.targetTotal&&(selected.options.length>=policy.preferredPassed||blocked)){stopReason='TARGET_REACHED';break}
+  }
+  const selected=selectFinal(passed,failed)
+  const {options,failedOptions}=selected
+  similarSkipped=[...passed,...failed].filter(c=>![...options,...failedOptions].some(s=>s.id===c.id)&&[...options,...failedOptions].some(s=>!distinctGeometry(s,c))).length
   status=options.length?'options_available':blocked?'context_unresolved':attempted?'no_feasible_option':'no_structural_pair'
-  if(!retained.length&&blocked&&stopReason==='SEARCH_EXHAUSTED')stopReason='DATA_INSUFFICIENT'
- }else if(h.entryPrice!==null){status='context_unresolved';stopReason='DATA_INSUFFICIENT'}
- return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected:rejected+unchartable,unchartable,options,failedOptions,entryReview,
-  search:{target:policy.targetTotal,evaluated,similarSkipped,minRelativeDifference:policy.minRelativeDifference,elapsedMs:Math.round(clock()-start),stopReason,stages}}
+  if(!options.length&&!failedOptions.length&&blocked&&stopReason==='SEARCH_EXHAUSTED')stopReason='DATA_INSUFFICIENT'
+  return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected:rejected+unchartable,unchartable,options,failedOptions,entryReview,
+   search:{target:policy.targetTotal,evaluated,similarSkipped,minRelativeDifference:policy.minRelativeDifference,elapsedMs:Math.round(clock()-start),stopReason,stages,seeds:queues.map(q=>({seed:q.seed,eligible:q.eligible,remaining:q.queue.length})),uniqueGeometries:pool.size}}
+ }
+ if(h.entryPrice!==null){status='context_unresolved';stopReason='DATA_INSUFFICIENT'}
+ return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected,unchartable,options:passed,failedOptions:failed,entryReview,
+  search:{target:policy.targetTotal,evaluated,similarSkipped,minRelativeDifference:policy.minRelativeDifference,elapsedMs:Math.round(clock()-start),stopReason,stages,seeds:[],uniqueGeometries:0}}
 }
 export type TradeOptions=ReturnType<typeof generateTradeOptions>

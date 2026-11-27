@@ -5,13 +5,14 @@ import type { TradeReview } from './evaluator'
 import { inspectActiveStructure } from '../market-analysis/active-structure'
 import { inspectRange,EXPERIMENTAL_REGIME_POLICY } from '../market-analysis/regimes'
 import { TIMEFRAME_SECONDS } from '../market-analysis/snapshot'
-import { confirmedPivots } from '../market-analysis/structure'
+import { confirmedPivots,type ConfirmedPivot } from '../market-analysis/structure'
 import policy from '../../ai/trading_knowledge/config/option-policy.json' with {type:'json'}
 
 export const SEARCH_STAGES=['baseline','extended','structural','alternative_anchors','deep_history','buffer_sensitivity'] as const
 export type SearchStage=typeof SEARCH_STAGES[number]
 type Primary=NonNullable<TradeReview['context']>['primary']
-export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,review:TradeReview,stage:SearchStage,primary:Primary):StrategyAssessment[]{
+export type AnchorCache=Map<string,ConfirmedPivot[]>
+export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,review:TradeReview,stage:SearchStage,primary:Primary,cache:AnchorCache=new Map()):StrategyAssessment[]{
  if(stage==='baseline')return review.assessments
  if(h.entryPrice===null||primary==='unknown'||primary==='transition')return []
  const entry=h.entryPrice,sign=h.direction==='long'?1:-1
@@ -30,6 +31,13 @@ export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,revie
   if(!evidenceIds.length)continue
   let refs:StructuralReference[]=[]
   const bars=data.snapshot.bars[tf]
+  const pivotsFor=(n:number)=>{
+   const left=data.report.policy.structure.pivotLeft,right=data.report.policy.structure.pivotRight
+   let all=cache.get(tf)
+   if(!all){all=confirmedPivots(bars,left,right);cache.set(tf,all)}
+   const offset=Math.max(0,bars.length-n)
+   return all.filter(p=>p.pivotIndex>=offset+left).map(p=>({...p,pivotIndex:p.pivotIndex-offset,confirmedIndex:p.confirmedIndex-offset}))
+  }
   const add=(kind:StructuralReference['kind'],price:number,source:StructuralReference['source'],from:string|null,through:string|null,rangeId?:StructuralReference['rangeId'])=>{
    const distance=(price-entry)*sign*(kind==='stop'?-1:1)
    if(distance<=0||!Number.isFinite(price))return
@@ -57,14 +65,14 @@ export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,revie
    }
    for(const n of policy.anchorSearchWindows){
     if(!contiguous(n))continue
-    const history=bars.slice(-n),structure=inspectActiveStructure(history,atr,h.direction,n)
+    const history=bars.slice(-n),structure=inspectActiveStructure(history,atr,h.direction,n,pivotsFor(n))
     for(const z of structure?.zones??[]){
      if(sign===1?z.side==='support'&&z.upper<entry:z.side==='resistance'&&z.lower>entry)
       add('stop',sign===1?z.lower:z.upper,'active zone outer edge',structure!.from,z.confirmedThrough)
      if(sign===1?z.side==='resistance'&&z.lower>entry:z.side==='support'&&z.upper<entry)
       add('target',sign===1?z.lower:z.upper,'active zone near edge',structure!.from,z.confirmedThrough)
     }
-    for(const pivot of confirmedPivots(history,data.report.policy.structure.pivotLeft,data.report.policy.structure.pivotRight)){
+    for(const pivot of pivotsFor(history.length)){
      const stop=pivot.side===(sign===1?'low':'high')
      if(stop&&history.slice(pivot.pivotIndex+1).some(b=>sign===1?b.low<pivot.price:b.high>pivot.price))continue
      // In a range, intact swing pairs are a distinct diagnostic geometry.
@@ -83,7 +91,7 @@ export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,revie
    }
   }else if(primary!=='range'){
    // Larger profiles supply independently observed anchors, never cross-timeframe pairs.
-   const structure=larger?inspectActiveStructure(bars,atr,h.direction,larger.rangeWindow*2):a.structure
+   const structure=larger?inspectActiveStructure(bars,atr,h.direction,larger.rangeWindow*2,pivotsFor(larger.rangeWindow*2)):a.structure
    for(const z of structure?.zones??[]){
     if(sign===1?z.side==='support'&&z.upper<entry:z.side==='resistance'&&z.lower>entry)
      add('stop',sign===1?z.lower:z.upper,'active zone outer edge',structure!.from,z.confirmedThrough)
