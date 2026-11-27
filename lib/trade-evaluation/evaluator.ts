@@ -28,6 +28,8 @@ export function evaluateTrade(data:WorkspaceAnalysis,h:TradeHypothesis){
       warnings.push({code:'STRUCTURAL_TRANSITION_UNCONFIRMED',dimension:'entry',severity:'warning',message:context.reason,evidenceIds:contextEvidence})
     for(const tf of ['M15','M3'] as const){
       const c=makeContext(data,h,tf)
+      const quality=data.report.classifications[tf].dataQuality
+      if(quality!=='usable')warnings.push({code:'DATA_INSUFFICIENT',dimension:'data',severity:'unassessed',message:'Market data quality: '+quality+'; current trade options withheld.',timeframe:tf,evidenceIds:c.evidenceIds})
       // Local contrary movement within broader continuation is assessed as a correction,
       // not a standalone countertrend thesis. Keep the local regime visible.
       const correction=context.kind==='potential_correction_entry'&&tf==='M3'&&c.strategy==='countertrend'

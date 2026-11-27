@@ -14,7 +14,7 @@ export function makeContext(data: WorkspaceAnalysis, h: TradeHypothesis, timefra
   const bars=data.snapshot.bars[timeframe], f=data.indicators[timeframe]
   const last=bars.at(-1)
   const stale=!last || Date.parse(data.snapshot.asOf)-Date.parse(last.closeTime)>=TIMEFRAME_SECONDS[timeframe]*1000
-  const regime=stale?'unknown':data.report.regimes[timeframe]
+  const regime=data.report.regimes[timeframe]
   const atr=f.atr.at(-1)??null
   const kijun=f.ichimoku.kijun.at(-1)??null
   const sign=h.direction==='long'?1:-1

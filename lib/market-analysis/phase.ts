@@ -47,8 +47,8 @@ export function observePhase(data:WorkspaceAnalysis,timeframe:Timeframe):PhaseOb
     kijunExtensionAtr:valid&&latest&&kijun!=null?(latest.close-kijun)/atr:null,
     adxChange:valid&&adx!=null&&oldAdx!=null?adx-oldAdx:null,
     efficiency:valid?f.efficiencyRatio.at(-1)??null:null}
-  const regime=fresh?data.report.regimes[timeframe]:'unknown'
-  const observation=valid?(regime!=='unknown'&&(data.report.classifications[timeframe].state==='breakout_candidate'||data.report.classifications[timeframe].state==='expanding')?{phase:'transition' as const,reason:'Breakout candidate or volatility expansion; underlying regime retained.'}:classifyPhase(regime,metrics)):{phase:'unknown' as const,reason:'Stale, missing or discontinuous recent data.'}
+  const regime=data.report.regimes[timeframe]
+  const observation=valid&&data.report.classifications[timeframe].dataQuality!=='recent_gap'?(regime!=='unknown'&&(data.report.classifications[timeframe].state==='breakout_candidate'||data.report.classifications[timeframe].state==='expanding')?{phase:'transition' as const,reason:'Breakout candidate or volatility expansion; underlying regime retained.'}:classifyPhase(regime,metrics)):{phase:'unknown' as const,reason:'Stale, missing or discontinuous recent data.'}
   return {timeframe,regime,...observation,metrics,policyVersion:policy.version,
     evidenceIds:data.report.results.filter(r=>r.timeframe===timeframe&&['classify_market_regime','analyze_trend_strength','analyze_volatility','analyze_trend_extension'].includes(r.toolId)).flatMap(r=>r.evidence.map(e=>e.id)),
     from:prior?.closeTime??null,through:latest?.closeTime??null}

@@ -116,6 +116,26 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
       lines.current.push(candle.createPriceLine({ price, title, color: css.getPropertyValue(token).trim(),
         lineWidth: 2, axisLabelVisible: true, lineVisible: true }))
     }
+    // Market boundaries are snapshot evidence, independent of trade submission
+    // and the optional SL/TP reference overlay.
+    const classification=data.report.classifications[timeframe]
+    if(classification.regime==='choppy'&&classification.displayRange){
+      const outer=classification.displayRange
+      const confidence=classification.boundaryConfidence==='established'?'':' ~'
+      const addBoundary=(price:number,title:string,token:string)=>{
+        lines.current.push(candle.createPriceLine({price,title,color:css.getPropertyValue(token).trim(),lineWidth:1,axisLabelVisible:true,lineVisible:true}))
+      }
+      if(outer.upper===outer.lower)addBoundary(outer.upper,'Flat range'+confidence,'--chart-3')
+      else{
+        addBoundary(outer.upper,'Outer high'+confidence,'--chart-3')
+        addBoundary(outer.lower,'Outer low'+confidence,'--chart-3')
+      }
+      const inner=classification.choppy?.inner
+      if(inner){
+        if(inner.upper!==outer.upper)addBoundary(inner.upper,'Inner high'+(inner.validated?'':' ~'),'--chart-5')
+        if(inner.lower!==outer.lower)addBoundary(inner.lower,'Inner low'+(inner.validated?'':' ~'),'--chart-5')
+      }
+    }
     if(showReferences&&assessment){
       const seen=new Set(levels.filter(([price])=>price!==null).map(([price])=>price!.toFixed(5)))
       const addReference=(price:number,title:string)=>{

@@ -141,7 +141,7 @@ export function MarketAnalysisWorkspace(){
       <div className={'grid min-h-0 min-w-0 flex-1 gap-px bg-border '+(expanded?'grid-cols-1 grid-rows-1':'grid-cols-1 grid-rows-2 landscape:grid-cols-2 landscape:grid-rows-1 md:grid-cols-2 md:grid-rows-1')}>
         {(['M15','M3'] as const).map(tf=><section key={tf} className={'min-h-0 min-w-0 flex-col bg-card '+(expanded&&expanded!==tf?'hidden':'flex')}>
           <div className="flex h-8 shrink-0 items-center gap-1 border-b px-2 text-xs">
-            <span className="min-w-0 flex-1 truncate font-medium" title={data.report.classifications[tf].reason}>{tf} · {data.report.regimes[tf]}</span>
+            <span className="min-w-0 flex-1 truncate font-medium" title={data.report.classifications[tf].reason}>{tf} · {data.snapshot.bars[tf].length?data.report.regimes[tf]:'No data'}{data.report.classifications[tf].dataQuality!=='usable'&&data.snapshot.bars[tf].length?' · '+data.report.classifications[tf].dataQuality.replaceAll('_',' '):''}</span>
             <Button variant="ghost" size="icon-sm" className="size-8" aria-label={(expanded===tf?'Restore both charts':'Expand '+tf)} onClick={()=>setExpanded(expanded===tf?null:tf)}>{expanded===tf?<Minimize2/>:<Maximize2/>}</Button>
           </div>
           <AnalysisChart data={data} timeframe={tf} view={view} assessment={review?.assessments.find(a=>a.timeframe===tf)} registerMidpoint={registerMidpoint} showReferences={showReferences&&!draft&&manual===null} hypothesis={hypothesis} armedLevel={armed&&!pending?'entryPrice':null} draftPrice={draft?.price} onPick={(level,price,timeframe)=>{if(level==='entryPrice')stage(price,timeframe)}}/>
