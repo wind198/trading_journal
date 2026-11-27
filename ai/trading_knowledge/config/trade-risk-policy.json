@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "hardConstraints": {
+    "minStopLossPoints": 30,
+    "minTakeProfitPoints": 30,
+    "minRewardRiskRatio": 1.5,
+    "maxLossUsd": null
+  },
+  "softConstraints": {
+    "preferredTakeProfitPoints": 50
+  },
+  "experimental": {
+    "version": "0.1.0",
+    "pivotLookback": 100,
+    "continuation": {
+      "maxEntryExtensionAtr": 2,
+      "minStopAtr": 1,
+      "maxTargetAtr": 4
+    },
+    "countertrend": {
+      "minExtensionAtr": 1.5,
+      "maxAdversePressure": 0.25,
+      "minStopAtr": 1.5,
+      "maxTargetAtr": 2
+    },
+    "range": {
+      "maxEntryFraction": 0.35,
+      "minStopAtr": 0.75
+    },
+    "transition": {
+      "minStopAtr": 2,
+      "maxTargetAtr": 3
+    }
+  }
+}

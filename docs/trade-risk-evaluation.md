@@ -1,0 +1,9 @@
+# Trade risk evaluation — phase 4a
+
+Global hard policy: minimum stop 30 points, target 30 points, gross reward/risk 1.5, valid price geometry. Preferred 50-point TP is a warning. Minimum target = max(30, ceil(stop points * 1.5)). Monetary limit is reserved but not enforced until position size and execution costs exist; exposure is explicitly unassessed. Policy is separate from experimental market heuristics. No override, execution or automatic price adjustment.
+
+Independent strategy selection for M3 and M15: continuation, countertrend, range rotation, transition and unknown. Each has separate entry and distance rules. Trend pivot references are historical candidates only; not certified roots or active zones. Countertrend extension is not exhaustion. Range references require validated structural bounds and test conservative minimum stop beyond boundary against target space within boundary. INFEASIBLE denotes constrained rotation on at least one timeframe, not universal trade impossibility. Unknown/transition withhold unsupported references. No calibration or probability claim.
+
+Review automatically derives from current frozen snapshot and hypothesis revision; references do not modify the selected prices. Inspector shows separate timeframe assessments, hard violations, warnings, distances and evidence identifiers. Hard violation precedence over structural infeasibility, then incomplete, warnings and no-warning-detected. No-warning is not approval. Actual drag handles, reference chart overlays, correction root identification, historical adverse excursions, active structural zones, Volume Profile, session context, monetary exposure and AI review are follow-ups. No migration or new dependencies.
+
+Validation: run pnpm test:market-analysis, pnpm build and mobile/desktop review. Connector-only implementation; installed Next docs/typings, tests, build and browser validation unavailable.

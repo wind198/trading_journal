@@ -1,0 +1,31 @@
+'use client'
+
+import type { TradeReview } from '@/lib/trade-evaluation/evaluator'
+
+export function TradeReviewPanel({review}:{review:TradeReview}){
+  return <section className="space-y-3 border-b p-3" aria-live="polite">
+    <div><h2 className="text-sm font-semibold">Trade risk review</h2>
+      <p className={'text-xs font-medium '+(review.state==='BLOCKED'||review.state==='INFEASIBLE'?'text-destructive':'text-muted-foreground')}>{review.state.replaceAll('_',' ')}</p>
+      <p className="text-xs text-muted-foreground">Revision {review.revision} · Policy {review.policyVersion} · Experimental market checks</p>
+    </div>
+    {review.hard.minimumTargetPoints!==null&&<p className="text-xs">Minimum TP for selected SL: <strong>{review.hard.minimumTargetPoints} points</strong></p>}
+    {review.warnings.map((w,i)=><div key={w.code+':'+w.timeframe+':'+i} className="border-l-2 border-warning pl-2 text-xs">
+      <p className={'font-medium '+(w.severity==='block'?'text-destructive':'')}>{w.severity==='block'?'Blocked':w.severity==='unassessed'?'Unassessed':'Warning'} · {w.dimension} {w.timeframe??''}</p>
+      <p>{w.message}</p><p className="break-all text-muted-foreground">{w.code}</p>
+    </div>)}
+    {review.assessments.map(a=><details key={a.timeframe} open className="space-y-2 border-t pt-2 text-xs">
+      <summary className="cursor-pointer font-medium">{a.timeframe} · {a.strategy}</summary>
+      {a.references.map(r=><div key={r.kind+':'+r.source} className="flex justify-between gap-2">
+        <span>{r.kind==='stop'?'SL':'TP'} reference<br/><span className="text-muted-foreground">{r.source}</span></span>
+        <span className="text-right font-mono">{r.price.toFixed(5)}<br/>{r.points.toFixed(1)} pts</span>
+      </div>)}
+      {!a.references.length&&<p className="text-muted-foreground">No structural reference established.</p>}
+      {Object.entries(a.metrics).map(([name,v])=><div key={name} className="flex justify-between gap-2"><span className="break-all">{name}</span><span className="font-mono">{v===null?'—':v.toFixed(3)}</span></div>)}
+      {a.limitations.map(l=><p key={l} className="text-muted-foreground">{l}</p>)}
+      <details><summary className="cursor-pointer text-muted-foreground">Evidence references</summary>
+        {[...new Set(a.references.flatMap(r=>r.evidenceIds).concat(a.warnings.flatMap(w=>w.evidenceIds)))].map(id=><p key={id} className="break-all text-muted-foreground">{id}</p>)}
+      </details>
+    </details>)}
+    {review.limitations.map(l=><p key={l} className="text-xs text-muted-foreground">{l}</p>)}
+  </section>
+}
