@@ -18,6 +18,7 @@ export interface OptionPair {
 export interface TradeOption extends OptionPair {
   review: TradeReview
 }
+export type FailedOption = TradeOption & {failureState:'failed_hard_policy'|'failed_structure'|'failed_context'|'failed_data_quality'}
 type OptionStatus = 'entry_required' | 'context_unresolved' | 'no_structural_pair' | 'no_feasible_option' | 'options_available'
 
 const rangeBoundary=(source:StructuralReference['source'])=>source==='validated range boundary'||source==='provisional range boundary'
@@ -29,9 +30,9 @@ function snap(value:number,point:number,up:boolean){
   return Number(((up?Math.ceil(units-1e-7):Math.floor(units+1e-7))*point).toPrecision(15))
 }
 export function pairReferences(h:TradeHypothesis,point:number,assessments:readonly StrategyAssessment[],primary:NonNullable<TradeReview['context']>['primary']){
-  const pairs:OptionPair[]=[]
+  const pairs:OptionPair[]=[],failedPairs:OptionPair[]=[]
   let rejected=0,attempted=0
-  if(h.entryPrice===null||!Number.isFinite(h.entryPrice)||h.entryPrice<=0||!Number.isFinite(point)||point<=0)return {pairs,rejected,attempted}
+  if(h.entryPrice===null||!Number.isFinite(h.entryPrice)||h.entryPrice<=0||!Number.isFinite(point)||point<=0)return {pairs,failedPairs,rejected,attempted}
   const long=h.direction==='long'
   const seen=new Set<string>()
   // Pair within a single coherent timeframe and strategy. A local countertrend
@@ -55,39 +56,47 @@ export function pairReferences(h:TradeHypothesis,point:number,assessments:readon
       const tp=snap(t.price+(long?-1:1)*policy.targetBufferPoints*point,point,!long)
       const hard=evaluateHardPolicy({...h,stopLossPrice:sl,takeProfitPrice:tp},point)
       const g=hard.geometry
-      if(g.mode!=='complete'||g.riskPoints===null||g.rewardPoints===null||g.grossRewardRisk===null||hard.warnings.some(w=>w.severity==='block')){rejected++;continue}
+      if(g.mode!=='complete'||g.riskPoints===null||g.rewardPoints===null||g.grossRewardRisk===null){rejected++;continue}
       const id=sl.toFixed(5)+':'+tp.toFixed(5)
       if(seen.has(id))continue
       seen.add(id)
-      pairs.push({id,stopLossPrice:sl,takeProfitPrice:tp,stopReference:s,targetReference:t,riskPoints:g.riskPoints,rewardPoints:g.rewardPoints,grossRewardRisk:g.grossRewardRisk})
+      const destination=hard.warnings.some(w=>w.severity==='block')?failedPairs:pairs
+      if(destination===failedPairs)rejected++
+      destination.push({id,stopLossPrice:sl,takeProfitPrice:tp,stopReference:s,targetReference:t,riskPoints:g.riskPoints,rewardPoints:g.rewardPoints,grossRewardRisk:g.grossRewardRisk})
     }
   }
   // Stable enumeration, not probability ranking: narrower risk first, then
   // shorter target distance. Never label any option as recommended or safe.
   pairs.sort((a,b)=>a.riskPoints-b.riskPoints||a.rewardPoints-b.rewardPoints||a.id.localeCompare(b.id))
-  return {pairs,rejected,attempted}
+  return {pairs,failedPairs,rejected,attempted}
 }
 export function generateTradeOptions(data:WorkspaceAnalysis,h:TradeHypothesis){
   const base={...h,stopLossPrice:null,takeProfitPrice:null}
   const entryReview=evaluateTrade(data,base)
-  const options:TradeOption[]=[]
+  const options:TradeOption[]=[],failedOptions:FailedOption[]=[]
+  let unchartable=0
   let status:OptionStatus='entry_required',attempted=0,rejected=0
   if(h.entryPrice!==null){
     const context=entryReview.context
-    if(!context||['context_unknown','transition_uncertain'].includes(context.kind)||entryReview.warnings.some(w=>w.severity==='unassessed'||w.severity==='block')){
-      status='context_unresolved'
-    }else{
+    const contextBlocked=!context||['context_unknown','transition_uncertain'].includes(context.kind)||entryReview.warnings.some(w=>w.severity==='unassessed'||w.severity==='block')
+    if(context){
       const result=pairReferences(base,data.snapshot.pointSize,entryReview.assessments,context.primary)
-      attempted=result.attempted;rejected=result.rejected
-      for(const pair of result.pairs){
+      attempted=result.attempted
+      unchartable=result.rejected-result.failedPairs.length
+      rejected=unchartable
+      for(const pair of [...result.pairs,...result.failedPairs]){
         const review=evaluateTrade(data,{...base,stopLossPrice:pair.stopLossPrice,takeProfitPrice:pair.takeProfitPrice})
-        if(review.state==='BLOCKED'||review.state==='INFEASIBLE'||review.state==='INCOMPLETE'){rejected++;continue}
-        options.push({...pair,review})
-        if(options.length>=policy.maxOptions)break
+        const failureState:FailedOption['failureState']|null=
+          review.state==='BLOCKED'?'failed_hard_policy':
+          review.state==='INFEASIBLE'?'failed_structure':
+          review.warnings.some(w=>w.severity==='unassessed')?'failed_data_quality':
+          contextBlocked||review.state==='INCOMPLETE'?'failed_context':null
+        if(failureState){rejected++;failedOptions.push({...pair,review,failureState})}
+        else if(options.length<policy.maxOptions)options.push({...pair,review})
       }
-      status=options.length?'options_available':attempted?'no_feasible_option':'no_structural_pair'
     }
+    status=options.length?'options_available':contextBlocked?'context_unresolved':attempted?'no_feasible_option':'no_structural_pair'
   }
-  return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected,options,entryReview}
+  return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected,unchartable,options,failedOptions,entryReview}
 }
 export type TradeOptions=ReturnType<typeof generateTradeOptions>

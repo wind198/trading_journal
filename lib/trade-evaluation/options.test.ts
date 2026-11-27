@@ -22,6 +22,9 @@ test('pairs are buffered beyond stop structure and before target in both directi
 test('no artificial widening or target extension to satisfy hard limits',()=>{
  const r=pairReferences(h(),point,[assess([ref('stop',1.1999,'active zone outer edge'),ref('target',1.2002,'active zone near edge')])],'continuation')
  assert.equal(r.pairs.length,0);assert.equal(r.rejected,1)
+ assert.equal(r.failedPairs.length,1)
+ assert.ok(r.failedPairs[0].riskPoints<30)
+ assert.ok(r.failedPairs[0].rewardPoints<30)
 })
 test('no cross-timeframe pairing or standalone countertrend exits for continuation',()=>{
  const r=pairReferences(h(),point,[assess([ref('stop',1.1996,'active zone outer edge')]),assess([ref('target',1.201,'active zone near edge','M3')],'correction_entry','M3'),assess([ref('stop',1.1996,'active zone outer edge','M3'),ref('target',1.201,'equilibrium','M3')],'countertrend','M3')],'continuation')
@@ -63,3 +66,4 @@ test('nested range pairs do not mix inner and outer boundaries',()=>{
  assert.equal(result.pairs.length,2)
  assert.ok(result.pairs.every(p=>p.stopReference.rangeId===p.targetReference.rangeId))
 })
+

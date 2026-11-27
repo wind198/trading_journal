@@ -20,7 +20,7 @@ export function setupAnnotations(o:OptionPair,entry:number,warnings:readonly Rev
     levels.push({price,label:'Target obstacle'})
  }
  const short:Partial<Record<ReviewWarning['code'],string>>={
-  SL_INSIDE_NOISE:'Stop within noise',SL_BEFORE_INVALIDATION:'Stop before invalidation',SL_ACTIVE_ZONE_EXPOSURE:'Stop exposed to zone',
+  SL_TOO_CLOSE:'FAIL: stop below minimum',TP_TOO_CLOSE:'FAIL: target below minimum',RR_INSUFFICIENT:'FAIL: reward/risk below minimum',STRUCTURAL_SPACE_INFEASIBLE:'FAIL: insufficient range space',SL_INSIDE_NOISE:'Stop within noise',SL_BEFORE_INVALIDATION:'Stop before invalidation',SL_ACTIVE_ZONE_EXPOSURE:'Stop exposed to zone',
   SL_INNER_RANGE_EXPOSURE:'Stop inside inner range',SL_CORRECTION_ROOT_EXPOSURE:'Root exposure',
   TP_INNER_RANGE_OBSTACLE:'Inner range obstacle',TP_ACTIVE_ZONE_OBSTACLES:'Structural obstacles',TP_STRUCTURAL_OBSTRUCTION:'Target crosses reference',
   TP_EXCESSIVE_EXTENSION:'Extended target',TP_OUTSIDE_VALIDATED_RANGE:'Outside range',TP_BELOW_PREFERRED:'Below preferred target',
@@ -34,7 +34,7 @@ export function setupAnnotations(o:OptionPair,entry:number,warnings:readonly Rev
  const callouts=(['entry','stop','target'] as const).map(dimension=>{
    const matching=warnings.filter(w=>w.dimension===dimension)
    const local=matching.filter(w=>!w.timeframe||w.timeframe===o.stopReference.timeframe)
-   const w=local.find(w=>w.code.startsWith('FORCE_')&&w.anchorPrice!==undefined)??local.find(w=>w.code.startsWith('FORCE_'))??local[0]??matching[0]
+   const w=matching.find(w=>w.severity==='block')??local.find(w=>w.code.startsWith('FORCE_')&&w.anchorPrice!==undefined)??local.find(w=>w.code.startsWith('FORCE_'))??local[0]??matching[0]
    return w?{dimension,price:w.timeframe===o.stopReference.timeframe&&w.anchorPrice!==undefined?w.anchorPrice:dimension==='entry'?entry:dimension==='stop'?o.stopLossPrice:o.takeProfitPrice,label:(w.timeframe?w.timeframe+' · ':'')+(short[w.code]??w.code.toLowerCase().replaceAll('_',' ')),count:matching.length}:null
  }).filter(x=>x!==null)
  return {levels:levels.filter((l,i)=>levels.findIndex(x=>x.price===l.price)===i).slice(0,4),callouts}
