@@ -1,0 +1,22 @@
+{
+  "version": "0.1.0",
+  "status": "experimental",
+  "acquisitionBars": 800,
+  "profiles": {
+    "baseline": {
+      "multiplier": 1,
+      "minAbsSlopeAtr": 0.08,
+      "maxAbsSlopeAtr": 0.05
+    },
+    "extended": {
+      "multiplier": 2,
+      "minAbsSlopeAtr": 0.08,
+      "maxAbsSlopeAtr": 0.05
+    },
+    "structural": {
+      "multiplier": 4,
+      "minAbsSlopeAtr": 0.08,
+      "maxAbsSlopeAtr": 0.05
+    }
+  }
+}

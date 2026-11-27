@@ -8,7 +8,7 @@ import { resolveScanCutoff } from '@/lib/market-analysis/scan-cutoff'
 import { TIMEFRAME_SECONDS } from '@/lib/market-analysis/snapshot'
 
 export const runtime = 'nodejs'
-const LIMIT = 400
+const LIMIT = 800
 
 export async function POST(request:Request) {
   const user = await requireSessionUser()

@@ -1,4 +1,5 @@
 import type { AnalysisResult, EvidenceReference, MarketSnapshot, NumericalFeature, Timeframe } from './contracts'
+import { inspectLargerScales,SCALE_POLICY } from './scales'
 import { TIMEFRAME_SECONDS } from './snapshot'
 import { inspectChoppyRanges } from './choppy'
 import { forceSeries } from './adapters'
@@ -9,7 +10,7 @@ import { runNumericalTools } from './tools'
 import { classifyRegime, compareRegimes, EXPERIMENTAL_REGIME_POLICY, selectedTools } from './regimes'
 
 /** Experimental observation only. No order, risk clearance or price prediction. */
-export function scanMarket(snapshot: MarketSnapshot) {
+export function scanMarket(snapshot: MarketSnapshot, larger={M3:inspectLargerScales(snapshot,'M3'),M15:inspectLargerScales(snapshot,'M15')}) {
   const p = EXPERIMENTAL_REGIME_POLICY
   const foundation = analyzeFoundation(snapshot)
   const numerical = runNumericalTools(snapshot, p.windows)
@@ -53,6 +54,22 @@ export function scanMarket(snapshot: MarketSnapshot) {
       atrGrowth: [c.metrics.atrGrowth, 'ratio', p.windows.transition],
     }, [c.reason, 'Data quality: ' + c.dataQuality, 'Market state: ' + c.state, 'Boundary confidence: ' + c.boundaryConfidence, 'Experimental policy ' + p.version])
     results[results.length - 1] = { ...results[results.length - 1], status: c.regime === 'unknown' || c.dataQuality!=='usable' ? 'insufficient_data' : 'ok' }
+    for(const profile of [larger[tf].extended,larger[tf].structural]){
+      const q=profile.classification,r=q.range,f=profile.indicators
+      const toolId='analyze_scale_'+profile.id
+      emit(toolId,{
+        regime:[profile.quality==='usable'?(q.regime==='uptrend'?1:q.regime==='downtrend'?-1:0):null,'direction',profile.rangeWindow],
+        adx:[q.metrics.adx,'score',profile.config.adxDmi.period],
+        efficiency:[q.metrics.efficiency,'ratio',profile.config.efficiencyRatio.period],
+        kijun:[f.ichimoku.kijun.at(-1)??null,'price',profile.config.ichimoku.kijun],
+        atr:[f.atr.at(-1)??null,'price',profile.config.atr.period],
+        upper:[r?.upper??null,'price',profile.rangeWindow],
+        lower:[r?.lower??null,'price',profile.rangeWindow],
+        validated:[r?Number(r.validated):null,'boolean',profile.rangeWindow]
+      ],['Scale '+profile.multiplier+'x; '+profile.quality+'; '+q.reason,'Experimental independent profile; not a replacement for baseline.'])
+      const last=results.at(-1)!
+      results[results.length-1]={...last,status:profile.quality==='usable'?last.status:'insufficient_data',evidence:last.evidence.map(e=>({...e,configVersion:SCALE_POLICY.version+' / '+foundation.configVersion}))}
+    }
     if(c.regime==='choppy'){
       const d=observeForceDynamics(bars,forceSeries(bars,tf),foundation.timeframes[tf].atr.at(-1)??null)
       const values:Record<string,[number|null,string,number]>={}
@@ -101,7 +118,8 @@ export function scanMarket(snapshot: MarketSnapshot) {
     features: { agreement: { value: alignment === 'aligned' ? 1 : alignment === 'opposed' ? -1 : alignment === 'mixed' ? 0 : null,
       unit: 'direction agreement', lookbackBars: 0, evidenceIds: alignmentEvidence.map(e => e.id) } },
     evidence: alignmentEvidence, limitations: ['Timeframe disagreement does not establish reversal; transition has no directional agreement score.'] })
-  return { snapshotId: snapshot.id, asOf: snapshot.asOf, configVersion: foundation.configVersion,
+  const summarize=(tf:Timeframe)=>Object.fromEntries(Object.entries(larger[tf]).map(([id,{indicators,...summary}])=>[id,summary])) as Record<'extended'|'structural',Omit<ReturnType<typeof inspectLargerScales>['extended'],'indicators'>>
+  return { scales:{M3:summarize('M3'),M15:summarize('M15')},scalePolicyVersion:SCALE_POLICY.version,snapshotId: snapshot.id, asOf: snapshot.asOf, configVersion: foundation.configVersion,
     policy: p, status: 'experimental' as const, regimes, classifications, alignment, results,
     limitations: [...foundation.limitations, 'Experimental thresholds; not calibrated or a trading clearance.'] }
 }
