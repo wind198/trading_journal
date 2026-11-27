@@ -1,0 +1,37 @@
+{
+  "version": "0.1.0",
+  "status": "uncalibrated",
+  "symbol": "EURUSD",
+  "timeframes": [
+    "M3",
+    "M15"
+  ],
+  "atr": {
+    "period": 14
+  },
+  "adxDmi": {
+    "period": 14
+  },
+  "efficiencyRatio": {
+    "period": 20
+  },
+  "bollinger": {
+    "period": 20,
+    "stdDev": 2
+  },
+  "ichimoku": {
+    "tenkan": 9,
+    "kijun": 26,
+    "spanB": 52,
+    "displacement": 26
+  },
+  "regression": {
+    "periods": [
+      20,
+      50
+    ]
+  },
+  "thresholds": null,
+  "percentileLookback": null,
+  "swing": null
+}
