@@ -171,8 +171,9 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     }
   }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,profile,assessment,showReferences,draftPrice])
   useEffect(()=>{const candle=candleRef.current;if(candle)candle.priceScale().applyOptions({autoScale:true})},[setups,data,timeframe,view,profile])
+  const showSetups=!!(!armedLevel&&!historyPicking&&setups?.length&&hypothesis.entryPrice!==null&&onReview)
   return <div className="relative min-h-0 flex-1">
-    <div ref={host} className={armedLevel || historyPicking ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
+    <div ref={host} className={'absolute inset-x-0 top-0 '+(showSetups?'bottom-8':'bottom-0')+(armedLevel||historyPicking?' cursor-crosshair':'')} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
     {!armedLevel&&!historyPicking&&setups?.length&&hypothesis.entryPrice!==null&&onReview?<TradeOptionOverlay setups={setups} entry={hypothesis.entryPrice} coordinates={coordinates} onReview={onReview}/>:null}
     {armedLevel==='entryPrice'&&draftPrice!==undefined&&handleY!==null&&<button type="button" aria-label={timeframe+' drag entry price'} title="Drag entry price"
       className="absolute left-1 right-16 z-10 h-8 -translate-y-1/2 touch-none cursor-ns-resize bg-transparent focus-visible:outline-2 focus-visible:outline-ring"
