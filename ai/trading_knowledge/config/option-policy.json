@@ -1,0 +1,7 @@
+{
+  "version": "0.1.0",
+  "status": "experimental",
+  "maxOptions": 3,
+  "stopBufferAtr": 0.15,
+  "targetBufferPoints": 1
+}
