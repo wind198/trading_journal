@@ -1,0 +1,34 @@
+{
+  "version": "0.1.0",
+  "status": "experimental",
+  "trend": {
+    "minAdx": 25,
+    "minEfficiency": 0.55,
+    "minAbsSlopeAtr": 0.08,
+    "minRSquared": 0.6,
+    "minAbsDiSpread": 5
+  },
+  "range": {
+    "maxAdx": 20,
+    "maxEfficiency": 0.35,
+    "maxAbsSlopeAtr": 0.05
+  },
+  "transition": {
+    "minBandwidthGrowth": 0.25,
+    "minAtrGrowth": 0.2
+  },
+  "structure": {
+    "pivotLeft": 2,
+    "pivotRight": 2,
+    "minTestsPerSide": 2,
+    "minTestSeparation": 3,
+    "toleranceAtr": 0.5,
+    "minWidthAtr": 2
+  },
+  "windows": {
+    "force": 20,
+    "range": 50,
+    "percentile": 100,
+    "transition": 5
+  }
+}

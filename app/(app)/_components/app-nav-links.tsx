@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChartCandlestick, Calculator } from 'lucide-react'
+import { ChartCandlestick, Calculator, ChartNoAxesCombined } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const LINKS = [
   { href: '/trading-dashboard', label: 'Workspace', icon: ChartCandlestick },
+  { href: '/market-analysis', label: 'Analysis', icon: ChartNoAxesCombined },
   { href: '/calculator', label: 'Calculator', icon: Calculator },
 ] as const
 

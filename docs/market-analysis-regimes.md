@@ -1,0 +1,9 @@
+# Phase 2c — regime classification and dispatch
+
+Experimental policy is versioned in ai/trading_knowledge/config/regime-policy.json. ADX, efficiency, normalized slope, R² and DMI agreement determine trend; weak directional metrics AND repeated confirmed range boundary tests determine ranging. Concurrent ATR and Bollinger bandwidth growth or a close outside a validated historical range flag transition. Ambiguous or insufficient data remains unknown; stale inputs do not receive a regime label. No price prediction or risk verdict.
+
+Historical range uses prior N closed bars excluding current close. Strict extrema confirmed within that historical window, proximity to each boundary measured in ATR, independent tests separated by a minimum number of bars. Validation is a heuristic, not proof of support/resistance. ATR tolerance uses current ATR, so a volatility change may alter test validation; replay must use the same as-of data. No hysteresis or persistent phase tracking yet.
+
+Scan dispatch: common volatility/momentum/trend strength always; trending adds extension; ranging adds range position and structure; transition/unknown inspect both plus expansion. Independent M3/M15 classifications are compared without interpreting conflict as reversal. Raw numerical tool function remains compatible and uncalibrated. Current dispatch filters computed baseline outputs rather than optimizing execution; no SDK or UI changes.
+
+Persist policy, indicator config version, snapshot, classification reasons and evidence together. Thresholds are explicit engineering starting points, not fitted EURUSD rules. Do not use experimental labels as trade clearance. Test chronological replay, coverage and confusion matrices before promoting policy. Run pnpm test:market-analysis. Next: independent chart workspace and market snapshot acquisition, then SDK integration.
