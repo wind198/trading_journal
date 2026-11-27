@@ -7,7 +7,7 @@ import type { TradeOption } from '@/lib/trade-evaluation/options'
 import { setupAnnotations } from '@/lib/trade-evaluation/visual-review'
 
 /** A separate read-only chart; the entry editing runtime is never reconfigured. */
-export function SetupReviewChart({data,entry,option}:{data:WorkspaceAnalysis;entry:number;option:TradeOption}){
+export function SetupReviewChart({data,entry,option,failed=false}:{data:WorkspaceAnalysis;entry:number;option:TradeOption;failed?:boolean}){
  const host=useRef<HTMLDivElement>(null),overlay=useRef<HTMLDivElement>(null)
  const tf=option.stopReference.timeframe
  useEffect(()=>{
@@ -23,7 +23,7 @@ export function SetupReviewChart({data,entry,option}:{data:WorkspaceAnalysis;ent
   const candle=chart.addSeries(CandlestickSeries,{upColor:color('--success'),downColor:color('--destructive'),borderVisible:false,wickUpColor:color('--success'),wickDownColor:color('--destructive'),priceFormat:fmt})
   candle.setData(bars.map(b=>({time:Date.parse(b.closeTime)/1000 as UTCTimestamp,open:b.open,high:b.high,low:b.low,close:b.close})))
   const a=setupAnnotations(option,entry,option.review.warnings,option.review.assessments.find(a=>a.timeframe===tf))
-  const levels=[{price:entry,title:'Entry',token:'--primary'},{price:option.stopLossPrice,title:'SL −'+option.riskPoints+' pts',token:'--destructive'},{price:option.takeProfitPrice,title:'TP +'+option.rewardPoints+' pts',token:'--success'}]
+  const levels=[{price:entry,title:'Entry',token:'--primary'},{price:option.stopLossPrice,title:(option.review.hard.warnings.some(w=>w.code==='SL_TOO_CLOSE')?'FAIL · ':'')+'SL −'+option.riskPoints+' pts',token:'--destructive'},{price:option.takeProfitPrice,title:(option.review.hard.warnings.some(w=>w.code==='TP_TOO_CLOSE')?'FAIL · ':'')+'TP +'+option.rewardPoints+' pts',token:'--success'}]
   // Invisible line series include the setup endpoints in the autoscale range.
   const time=Date.parse(bars.at(-1)!.closeTime)/1000 as UTCTimestamp
   for(const l of levels){
@@ -65,12 +65,12 @@ export function SetupReviewChart({data,entry,option}:{data:WorkspaceAnalysis;ent
  },[data,entry,option,tf])
  const annotations=setupAnnotations(option,entry,option.review.warnings,option.review.assessments.find(a=>a.timeframe===tf))
  return <figure className="m-0 min-w-0 border-y bg-card">
-  <figcaption className="flex items-center justify-between gap-2 px-2 py-1 text-xs"><span>{tf} · {data.report.regimes[tf]} · last 60 closed bars</span><strong className="font-mono">R:R 1:{option.grossRewardRisk.toFixed(2)}</strong></figcaption>
+  <figcaption className="flex items-center justify-between gap-2 px-2 py-1 text-xs"><span>{tf} · {data.report.regimes[tf]} · last 60 closed bars</span><strong className={'font-mono '+(failed?'text-destructive':'')}>{failed?'Failed · ':''}R:R 1:{option.grossRewardRisk.toFixed(2)}</strong></figcaption>
   <div className="relative h-[clamp(200px,38dvh,340px)] overflow-hidden">
    <div ref={host} className="absolute inset-0" role="img" aria-label={tf+' candle chart with entry '+entry.toFixed(5)+', stop '+option.stopLossPrice.toFixed(5)+', target '+option.takeProfitPrice.toFixed(5)}/>
    <div ref={overlay} className="pointer-events-none absolute top-0 left-0 overflow-hidden" aria-hidden="true">
     <div data-region="risk" hidden className="absolute right-0 left-1/3 border-x border-destructive/40 bg-destructive/15"/>
-    <div data-region="reward" hidden className="absolute right-0 left-1/3 border-x border-success/40 bg-success/15"/>
+    <div data-region="reward" hidden className={failed?"absolute right-0 left-1/3 border-x border-destructive/40 bg-destructive/10":"absolute right-0 left-1/3 border-x border-success/40 bg-success/15"}/>
     {annotations.levels.map((l,i)=><span hidden key={'level'+i} data-anchor-price={l.price} className="absolute left-1 max-w-[92%] truncate rounded-sm border bg-card/95 px-1 text-[11px] leading-5 text-muted-foreground">{l.label}</span>)}
     {annotations.callouts.map(c=><span hidden key={c.dimension} data-anchor-price={c.price} className="absolute left-1 max-w-[92%] truncate rounded-sm border border-destructive/40 bg-card/95 px-1 text-[11px] leading-5">{c.label}{c.count>1?' +'+(c.count-1):''}</span>)}
    </div>
