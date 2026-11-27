@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback,useEffect, useRef, useState } from 'react'
-import { CandlestickSeries, LineSeries, createChart, ColorType, type UTCTimestamp, type ISeriesApi, type IPriceLine, type MouseEventParams } from 'lightweight-charts'
+import { CandlestickSeries, HistogramSeries, LineSeries, createChart, ColorType, type UTCTimestamp, type ISeriesApi, type IPriceLine, type MouseEventParams } from 'lightweight-charts'
+import {mountVolumeForce} from './volume-force-runtime'
+import type {VolumeForcePoint} from '@/lib/market-analysis/volume-weighted-force'
 import {TradeOptionOverlay,type OverlayCoordinates} from './trade-option-overlay'
 import type {PlottedSetup} from '@/lib/trade-evaluation/overlay-layout'
 import type { WorkspaceAnalysis } from '@/lib/market-analysis/workspace'
@@ -16,17 +18,20 @@ import { normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 export type AnalysisView = 'price' | 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
 const priceFormat = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 
-export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint, historyPicking=false, onHistoryPick, profile='baseline',setups,onReview }: {
+export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint, historyPicking=false, onHistoryPick, profile='baseline',setups,onReview,liveVolume=false }: {
   data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView
   hypothesis: TradeHypothesis; armedLevel: TradeLevel | null
   assessment?: StrategyAssessment; showReferences: boolean; draftPrice?: number
   profile?:ScaleId
+  liveVolume?:boolean
   setups?:readonly PlottedSetup[];onReview?:(id:string)=>void
   historyPicking?:boolean; onHistoryPick?:(closeTime:string)=>void
   registerMidpoint: (timeframe:Timeframe, reader:(()=>number|null)|null)=>void
   onPick: (level: TradeLevel, price: number, timeframe: Timeframe) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
+  const [volumeStatus,setVolumeStatus]=useState('')
+  const [volumeTooltip,setVolumeTooltip]=useState<{point:VolumeForcePoint;active:boolean}|null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const lines = useRef<IPriceLine[]>([])
   const coordinateReader=useRef<(()=>OverlayCoordinates|null)|null>(null)
@@ -83,6 +88,9 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
         lastValueVisible: true, priceLineVisible: false, ...(pane === 0 ? { priceFormat } : {}) }, pane)
       line.setData(values.map((value,i) => value === null ? { time: times[i] } : { time: times[i], value }))
     }
+    let volumeRuntime:ReturnType<typeof mountVolumeForce>|undefined
+    let volumePoints=new Map<number,VolumeForcePoint>(),volumeAsOf=Date.parse(data.snapshot.asOf)
+    const crosshair=(event:MouseEventParams)=>{const p=typeof event.time==='number'?volumePoints.get(event.time):undefined;setVolumeTooltip(p?{point:p,active:Date.parse(p.closeTime)>volumeAsOf}:null)}
     if (view === 'trend') {
       add(f.ichimoku.tenkan,'--chart-1','Tenkan')
       add(f.ichimoku.kijun,'--chart-3','Kijun')
@@ -93,7 +101,12 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
       add(f.bollinger.middle,'--chart-5','Middle')
       add(f.bollinger.lower,'--chart-1','Lower')
     } else if (view === 'momentum') {
-      add(data.indicators[timeframe].force,'--chart-1','Signed force',1)
+      if(timeframe==='M3'){
+        const histogram=chart.addSeries(HistogramSeries,{base:0,title:'VW force',priceFormat:{type:'custom',formatter:v=>v.toFixed(0)},lastValueVisible:false,priceLineVisible:false,autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})},1)
+        histogram.priceScale().applyOptions({autoScale:true,scaleMargins:{top:0.04,bottom:0}})
+        volumeRuntime=mountVolumeForce({series:histogram,bars:data.volumeBars?.length?data.volumeBars:data.snapshot.bars.M3,live:liveVolume,asOf:volumeAsOf,bull:color('--success'),bear:color('--destructive'),onStatus:setVolumeStatus,onPoints:(points,asOf)=>{volumePoints=points;volumeAsOf=asOf}})
+        chart.subscribeCrosshairMove(crosshair)
+      }else add(data.indicators[timeframe].force,'--chart-1','Signed force',1)
     } else if (view === 'transition') {
       add(f.bollinger.bandwidth,'--chart-1','Bandwidth',1)
       add(f.atr,'--chart-3','ATR',2)
@@ -116,8 +129,8 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     frame=requestAnimationFrame(syncHandle)
     const observer = new ResizeObserver(() => chart.resize(node.clientWidth, node.clientHeight))
     observer.observe(node)
-    return () => { cancelAnimationFrame(frame); registerMidpoint(timeframe,null); drag.current=null; observer.disconnect(); chart.unsubscribeClick(click); coordinateReader.current=null; candleRef.current = null; lines.current = []; chart.remove() }
-  }, [data,timeframe,view,profile])
+    return () => { volumeRuntime?.stop();chart.unsubscribeCrosshairMove(crosshair);cancelAnimationFrame(frame); registerMidpoint(timeframe,null); drag.current=null; observer.disconnect(); chart.unsubscribeClick(click); coordinateReader.current=null; candleRef.current = null; lines.current = []; chart.remove() }
+  }, [data,timeframe,view,profile,liveVolume])
   useEffect(() => {
     const candle = candleRef.current
     const node = host.current
@@ -173,6 +186,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
   useEffect(()=>{const candle=candleRef.current;if(candle)candle.priceScale().applyOptions({autoScale:true})},[setups,data,timeframe,view,profile])
   return <div className="relative min-h-0 flex-1">
     <div ref={host} className={armedLevel||historyPicking?'absolute inset-0 cursor-crosshair':'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
+    {timeframe==='M3'&&view==='momentum'&&<div className="pointer-events-none absolute left-1 top-1 z-10 max-w-[80%] rounded bg-card/90 px-1 text-[10px] text-muted-foreground" role="status">{volumeStatus}{volumeTooltip&&<p className="font-mono">{volumeTooltip.active?'Provisional · ':''}Force {volumeTooltip.point.force?.toFixed(1)??'—'} · Ticks {volumeTooltip.point.tickCount??'—'} · Rel {volumeTooltip.point.relativeVolume===null?'—':(volumeTooltip.point.relativeVolume*100).toFixed(0)+'%'} · VW {volumeTooltip.point.value?.toFixed(1)??'—'}</p>}</div>}
     {!armedLevel&&!historyPicking&&setups?.length&&hypothesis.entryPrice!==null&&onReview?<TradeOptionOverlay setups={setups} entry={hypothesis.entryPrice} coordinates={coordinates} onReview={onReview}/>:null}
     {armedLevel==='entryPrice'&&draftPrice!==undefined&&handleY!==null&&<button type="button" aria-label={timeframe+' drag entry price'} title="Drag entry price"
       className="absolute left-1 right-16 z-10 h-8 -translate-y-1/2 touch-none cursor-ns-resize bg-transparent focus-visible:outline-2 focus-visible:outline-ring"
