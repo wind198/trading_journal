@@ -13,10 +13,11 @@ import { normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 export type AnalysisView = 'price' | 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
 const priceFormat = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 
-export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint }: {
+export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint, historyPicking=false, onHistoryPick }: {
   data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView
   hypothesis: TradeHypothesis; armedLevel: TradeLevel | null
   assessment?: StrategyAssessment; showReferences: boolean; draftPrice?: number
+  historyPicking?:boolean; onHistoryPick?:(closeTime:string)=>void
   registerMidpoint: (timeframe:Timeframe, reader:(()=>number|null)|null)=>void
   onPick: (level: TradeLevel, price: number, timeframe: Timeframe) => void
 }) {
@@ -28,8 +29,8 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
   const drag=useRef<{id:number;offset:number}|null>(null)
   const paneHeight=useRef(0)
   useEffect(()=>{draftRef.current=draftPrice;if(draftPrice===undefined)drag.current=null},[draftPrice])
-  const interaction = useRef({ armedLevel, onPick })
-  useEffect(() => { interaction.current = { armedLevel, onPick } }, [armedLevel, onPick])
+  const interaction = useRef({ armedLevel, onPick, historyPicking, onHistoryPick })
+  useEffect(() => { interaction.current = { armedLevel, onPick, historyPicking, onHistoryPick } }, [armedLevel, onPick, historyPicking, onHistoryPick])
   useEffect(() => {
     const node = host.current
     const bars = data.snapshot.bars[timeframe]
@@ -50,6 +51,13 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     candleRef.current = candle
     const click = (event: MouseEventParams) => {
       const active = interaction.current
+      if(active.historyPicking){
+        if(timeframe==='M15'&&event.paneIndex===0&&typeof event.time==='number'){
+          const bar=bars.find(b=>Date.parse(b.closeTime)/1000===event.time)
+          if(bar)active.onHistoryPick?.(bar.closeTime)
+        }
+        return
+      }
       if (!active.armedLevel || !event.point || event.paneIndex !== 0 || event.time === undefined) return
       const raw = candle.coordinateToPrice(event.point.y)
       if (raw === null) return
@@ -151,7 +159,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     }
   }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,assessment,showReferences,draftPrice])
   return <div className="relative min-h-0 flex-1">
-    <div ref={host} className={armedLevel ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
+    <div ref={host} className={armedLevel || historyPicking ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
     {armedLevel==='entryPrice'&&draftPrice!==undefined&&handleY!==null&&<button type="button" aria-label={timeframe+' drag entry price'} title="Drag entry price"
       className="absolute left-1 right-16 z-10 h-8 -translate-y-1/2 touch-none cursor-ns-resize bg-transparent focus-visible:outline-2 focus-visible:outline-ring"
       style={{top:handleY}}
