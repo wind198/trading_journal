@@ -1,0 +1,12 @@
+{
+  "version": "0.1.0",
+  "status": "experimental",
+  "lookbackBars": 10,
+  "minExpansionAtr": 1.5,
+  "minCorrectionAtr": 0.75,
+  "maxConsolidationAtr": 0.8,
+  "maxConsolidationEfficiency": 0.35,
+  "minExhaustionExtensionAtr": 2,
+  "minAdxDecay": 5,
+  "maxExhaustionDisplacementAtr": 0.5
+}

@@ -13,7 +13,7 @@ export interface StructuralReference {
   through: string | null
 }
 export interface StrategyAssessment {
-  strategy: StrategyId
+  strategy: StrategyId | 'correction_entry'
   timeframe: EvaluationContext['timeframe']
   metrics: Record<string, number | null>
   references: StructuralReference[]
@@ -91,14 +91,23 @@ function transition(c:EvaluationContext,d:Draft){
   d.limitations.push('Structural SL and TP references withheld in transition until breakout invalidation is established.')
 }
 const strategies:Record<Exclude<StrategyId,'unknown'>,(c:EvaluationContext,d:Draft)=>void>={continuation,countertrend,range,transition}
-export function evaluateStrategy(c:EvaluationContext):StrategyAssessment{
+export function evaluateStrategy(c:EvaluationContext,mode?:'correction_entry'):StrategyAssessment{
   const d=draft()
   d.metrics.atr=c.atr
   if(c.strategy==='unknown'){
     warn(c,d,c.stale?'DATA_INSUFFICIENT':'REGIME_UNCERTAIN','data','Market regime cannot be established for this timeframe.','unassessed')
   }else{
     if(c.atr===null||c.atr<=0)warn(c,d,'DATA_INSUFFICIENT','data','ATR unavailable.','unassessed')
-    strategies[c.strategy](c,d)
+    if(mode==='correction_entry'&&c.strategy==='countertrend'){
+      const p=policy.experimental.continuation
+      pivots(c,d)
+      d.metrics.entryKijunAtr=c.kijun===null?null:divide((c.entry-c.kijun)*c.sign,c.atr)
+      d.metrics.adversePressure=c.pressure===null?null:-c.sign*c.pressure
+      checkDistances(c,d,p.minStopAtr,p.maxTargetAtr)
+      if(d.metrics.adversePressure!==null&&d.metrics.adversePressure>policy.experimental.countertrend.maxAdversePressure)
+        warn(c,d,'CORRECTION_ADVERSE_MOMENTUM','entry','Local force still opposes the broader continuation hypothesis.')
+      d.limitations.push('Local pivots are provisional correction references; correction root and completion are not confirmed.')
+    }else strategies[c.strategy](c,d)
   }
   const s=d.references.find(r=>r.kind==='stop'),t=d.references.find(r=>r.kind==='target')
   // Only a validated range is strong enough to test constrained rotation feasibility.
@@ -106,5 +115,5 @@ export function evaluateStrategy(c:EvaluationContext):StrategyAssessment{
   const feasibleWithinReferences=c.strategy==='range'&&s&&t
     ? Math.floor(t.points+1e-7)>=minimumTargetPoints(Math.max(policy.hardConstraints.minStopLossPoints,Math.floor(s.points+1e-7)+1)):null
   if(feasibleWithinReferences===false)warn(c,d,'STRUCTURAL_SPACE_INFEASIBLE','risk','Within these range boundaries the minimum structural stop and hard reward/risk cannot both be satisfied.')
-  return {strategy:c.strategy,timeframe:c.timeframe,...d,feasibleWithinReferences}
+  return {strategy:mode??c.strategy,timeframe:c.timeframe,...d,feasibleWithinReferences}
 }

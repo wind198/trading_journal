@@ -8,6 +8,17 @@ export function TradeReviewPanel({review}:{review:TradeReview}){
       <p className={'text-xs font-medium '+(review.state==='BLOCKED'||review.state==='INFEASIBLE'?'text-destructive':'text-muted-foreground')}>{review.state.replaceAll('_',' ')}</p>
       <p className="text-xs text-muted-foreground">Revision {review.revision} · Policy {review.policyVersion} · Experimental market checks</p>
     </div>
+    {review.context&&<div className="space-y-2 rounded-md border p-2 text-xs">
+      <h3 className="font-medium">Trade context · {review.context.kind.replaceAll('_',' ')}</h3>
+      <p>{review.context.reason}</p>
+      {[review.context.structural,review.context.execution].map(p=><details key={p.timeframe}>
+        <summary className="cursor-pointer">{p.timeframe} · {p.regime} · {p.phase.replaceAll('_',' ')}</summary>
+        <p className="text-muted-foreground">{p.reason}</p>
+        {Object.entries(p.metrics).map(([k,v])=><div key={k} className="flex justify-between gap-2"><span>{k}</span><span className="font-mono">{v===null?'—':v.toFixed(3)}</span></div>)}
+        <p className="text-muted-foreground">Phase policy {p.policyVersion} · {p.from??'—'} — {p.through??'—'}</p>
+        {p.evidenceIds.map(id=><p key={id} className="break-all text-muted-foreground">{id}</p>)}
+      </details>)}
+    </div>}
     {review.hard.minimumTargetPoints!==null&&<p className="text-xs">Minimum TP for selected SL: <strong>{review.hard.minimumTargetPoints} points</strong></p>}
     {review.warnings.map((w,i)=><div key={w.code+':'+w.timeframe+':'+i} className="border-l-2 border-warning pl-2 text-xs">
       <p className={'font-medium '+(w.severity==='block'?'text-destructive':'')}>{w.severity==='block'?'Blocked':w.severity==='unassessed'?'Unassessed':'Warning'} · {w.dimension} {w.timeframe??''}</p>
