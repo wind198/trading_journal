@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "status": "experimental",
+  "lookback": 100,
+  "pivotLeft": 2,
+  "pivotRight": 2,
+  "zoneToleranceAtr": 0.35,
+  "minTests": 2,
+  "minSeparationBars": 4,
+  "breakBufferAtr": 0.15,
+  "minCorrectionDepthAtr": 1,
+  "minRecoveryAtr": 0.5
+}

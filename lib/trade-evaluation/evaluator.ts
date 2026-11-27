@@ -3,6 +3,8 @@ import type { TradeHypothesis } from './contracts'
 import { evaluateHardPolicy, TRADE_RISK_POLICY as policy, type ReviewWarning } from './policy'
 import { observePhase } from '../market-analysis/phase'
 import { resolveTradeContext, type HierarchicalContext } from './hierarchical-context'
+import { inspectActiveStructure } from '../market-analysis/active-structure'
+import { enrichStructure } from './structure-review'
 import { makeContext } from './context'
 import { evaluateStrategy, type StrategyAssessment } from './strategies'
 
@@ -27,7 +29,7 @@ export function evaluateTrade(data:WorkspaceAnalysis,h:TradeHypothesis){
       // Local contrary movement within broader continuation is assessed as a correction,
       // not a standalone countertrend thesis. Keep the local regime visible.
       const correction=context.kind==='potential_correction_entry'&&tf==='M3'&&c.strategy==='countertrend'
-      const assessment=evaluateStrategy(c,correction?'correction_entry':undefined)
+      const assessment=enrichStructure(c,evaluateStrategy(c,correction?'correction_entry':undefined),inspectActiveStructure(data.snapshot.bars[tf],c.atr,h.direction))
       assessments.push(assessment);warnings.push(...assessment.warnings)
       if(c.strategy==='countertrend'&&tf==='M15')warnings.push({code:'ENTRY_TIMEFRAME_CONFLICT',dimension:'entry',severity:'warning',message:'Trade direction opposes the experimental M15 trend classification.',timeframe:tf,evidenceIds:c.evidenceIds})
     }

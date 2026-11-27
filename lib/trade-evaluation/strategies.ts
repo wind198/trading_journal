@@ -1,3 +1,4 @@
+import type { ActiveStructure, ActiveZone } from '../market-analysis/active-structure'
 import type { EvaluationContext, StrategyId } from './context'
 import { TRADE_RISK_POLICY as policy, type ReviewWarning, type WarningCode, minimumTargetPoints } from './policy'
 
@@ -7,7 +8,7 @@ export interface StructuralReference {
   points: number
   atrDistance: number | null
   timeframe: EvaluationContext['timeframe']
-  source: 'confirmed pivot' | 'validated range boundary' | 'equilibrium'
+  source: 'confirmed pivot' | 'validated range boundary' | 'equilibrium' | 'active zone outer edge' | 'active zone near edge' | 'correction root candidate'
   evidenceIds: readonly string[]
   from: string | null
   through: string | null
@@ -20,6 +21,7 @@ export interface StrategyAssessment {
   warnings: ReviewWarning[]
   limitations: string[]
   feasibleWithinReferences: boolean | null
+  structure?: ActiveStructure & { obstacles: ActiveZone[] }
 }
 type Draft = Pick<StrategyAssessment,'metrics'|'references'|'warnings'|'limitations'>
 function draft(): Draft { return {metrics:{},references:[],warnings:[],limitations:[]} }
