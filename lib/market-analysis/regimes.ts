@@ -15,9 +15,10 @@ const growth = (s: readonly (number | null)[], lag: number) => {
 }
 
 export function inspectRange(bars: readonly Candle[], atr: number | null, p: RegimePolicy) {
-  const bounds = observedRange(bars, p.windows.range)
+  const countBars=Math.min(p.windows.range,bars.length-1)
+  const bounds=countBars>=2?observedRange(bars,countBars):null
   if (!bounds || atr === null || atr <= 0) return null
-  const historical = bars.slice(-p.windows.range - 1, -1)
+  const historical = bars.slice(-countBars - 1, -1)
   const pivots = confirmedPivots(historical, p.structure.pivotLeft, p.structure.pivotRight)
   const tolerance = atr * p.structure.toleranceAtr
   const count = (side: 'high' | 'low', boundary: number) => {
@@ -35,7 +36,7 @@ export function inspectRange(bars: readonly Candle[], atr: number | null, p: Reg
   const lowerTests = count('low', bounds.lower)
   const widthAtr = (bounds.upper - bounds.lower) / atr
   return { ...bounds, upperTests, lowerTests, widthAtr, tolerance,
-    validated: upperTests >= p.structure.minTestsPerSide &&
+    validated: countBars===p.windows.range && upperTests >= p.structure.minTestsPerSide &&
       lowerTests >= p.structure.minTestsPerSide && widthAtr >= p.structure.minWidthAtr &&
       bounds.upper - bounds.lower > 2 * tolerance }
 }
@@ -56,12 +57,17 @@ export function classifyRegime(bars: readonly Candle[], f: Foundation, p: Regime
   const breakout = range && close !== undefined ? close > range.upper ? 1 : close < range.lower ? -1 : 0 : null
   const expanding = bandwidthGrowth !== null && atrGrowth !== null && bandwidthGrowth >= p.transition.minBandwidthGrowth && atrGrowth >= p.transition.minAtrGrowth
   const state = breakout !== null && breakout !== 0 ? 'breakout_candidate' : expanding ? 'expanding' : 'stable'
-  const result = (regime: MarketRegime, reason: string) => ({ regime, reason, metrics, range, state, breakout,
-    boundaryConfidence: range ? range.validated ? 'established' as const : 'provisional' as const : 'unavailable' as const,
+  const history=bars.slice(-p.windows.range-1,-1)
+  // A single completed candle still has observed extrema, but no historical rotation evidence.
+  const displayBars=history.length?history:bars.slice(-1)
+  const displayRange=displayBars.length?{lower:Math.min(...displayBars.map(b=>b.low)),upper:Math.max(...displayBars.map(b=>b.high)),from:displayBars[0].closeTime,through:displayBars.at(-1)!.closeTime}:null
+  const result = (regime: MarketRegime, reason: string) => ({ regime, reason, metrics, range, displayRange, state, breakout,
+    boundaryConfidence: range?.validated ? 'established' as const : displayRange ? 'provisional' as const : 'unavailable' as const,
     policyVersion: p.version, status: p.status })
-  if (blocked) return result('unknown', 'stale or unavailable current data')
+  if (!bars.length) return result('unknown', 'no completed candles')
+  if (blocked) return result('choppy', 'Provisional choppy: stale or interrupted history; not a current trade assessment')
   if (!range || atr === null || atr <= 0 || bars.length < p.windows.range + 1 || range.upper <= range.lower)
-    return result('unknown', 'insufficient price history or volatility evidence')
+    return result('choppy', 'Provisional choppy: short or flat history; trend and volatility evidence not established')
   // Undefined directional ratios cannot establish a trend but do not erase price boundaries.
   const directionalAvailable = adx !== null && efficiency !== null && slopeAtr !== null && rSquared !== null && diSpread !== null
   const trend = directionalAvailable && adx >= p.trend.minAdx && efficiency >= p.trend.minEfficiency &&

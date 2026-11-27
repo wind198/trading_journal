@@ -1,4 +1,6 @@
 import type { AnalysisResult, EvidenceReference, MarketSnapshot, NumericalFeature, Timeframe } from './contracts'
+import { TIMEFRAME_SECONDS } from './snapshot'
+import { inspectChoppyRanges } from './choppy'
 import { analyzeFoundation } from './foundation'
 import config from '../../ai/trading_knowledge/config/indicators.json' with { type: 'json' }
 import { runNumericalTools } from './tools'
@@ -9,8 +11,15 @@ export function scanMarket(snapshot: MarketSnapshot) {
   const p = EXPERIMENTAL_REGIME_POLICY
   const foundation = analyzeFoundation(snapshot)
   const numerical = runNumericalTools(snapshot, p.windows)
-  const classify = (tf: Timeframe) => classifyRegime(snapshot.bars[tf], foundation.timeframes[tf], p,
-    foundation.limitations.some(x => x.startsWith(tf + ':') && (x.includes('stale') || x.includes('no completed') || x.includes('cadence gaps'))))
+  const classify = (tf: Timeframe) => {
+    const bars=snapshot.bars[tf], step=TIMEFRAME_SECONDS[tf]*1000
+    const recent=bars.slice(-p.windows.range-1)
+    const stale=!bars.length||Date.parse(snapshot.asOf)-Date.parse(bars.at(-1)!.closeTime)>=step
+    const recentGap=recent.some((b,i)=>i>0&&Date.parse(b.closeTime)-Date.parse(recent[i-1].closeTime)!==step)
+    const c=classifyRegime(bars,foundation.timeframes[tf],p,stale||recentGap)
+    return {...c,dataQuality:stale?'stale':recentGap?'recent_gap':bars.length<p.windows.range+1?'warming_up':'usable',
+      choppy:c.regime==='choppy'?inspectChoppyRanges(bars,foundation.timeframes[tf].atr.at(-1)??null,c.range):null}
+  }
   const classifications = { M3: classify('M3'), M15: classify('M15') }
   const regimes = { M3: classifications.M3.regime, M15: classifications.M15.regime }
   const results: AnalysisResult[] = []
@@ -40,8 +49,8 @@ export function scanMarket(snapshot: MarketSnapshot) {
       diSpread: [c.metrics.diSpread, 'score', config.adxDmi.period],
       bandwidthGrowth: [c.metrics.bandwidthGrowth, 'ratio', p.windows.transition],
       atrGrowth: [c.metrics.atrGrowth, 'ratio', p.windows.transition],
-    }, [c.reason, 'Market state: ' + c.state, 'Boundary confidence: ' + c.boundaryConfidence, 'Experimental policy ' + p.version])
-    results[results.length - 1] = { ...results[results.length - 1], status: c.regime === 'unknown' ? 'insufficient_data' : 'ok' }
+    }, [c.reason, 'Data quality: ' + c.dataQuality, 'Market state: ' + c.state, 'Boundary confidence: ' + c.boundaryConfidence, 'Experimental policy ' + p.version])
+    results[results.length - 1] = { ...results[results.length - 1], status: c.regime === 'unknown' || c.dataQuality!=='usable' ? 'insufficient_data' : 'ok' }
     if (selected.includes('analyze_range_structure')) {
       const r = c.range
       emit('analyze_range_structure', {
