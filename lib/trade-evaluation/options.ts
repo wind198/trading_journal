@@ -76,15 +76,17 @@ export function pairReferences(h:TradeHypothesis,point:number,assessments:readon
 }
 export type SearchStop='TARGET_REACHED'|'RUNTIME_LIMIT'|'EVALUATION_LIMIT'|'SEARCH_EXHAUSTED'|'DATA_INSUFFICIENT'
 export interface SearchProgress{stage:SearchStage;found:number;passed:number;failed:number;evaluated:number;elapsedMs:number;target:number}
-export function distinctGeometry(a:OptionPair,b:OptionPair,point:number){
- return Math.max(Math.abs(a.stopLossPrice-b.stopLossPrice),Math.abs(a.takeProfitPrice-b.takeProfitPrice))/point>=policy.minDifferencePoints-1e-7
+/** Order-independent relative distance; the larger distance must be at least 1.2x the smaller. */
+export function distinctGeometry(a:OptionPair,b:OptionPair){
+ const different=(x:number,y:number)=>Number.isFinite(x)&&Number.isFinite(y)&&x>0&&y>0&&Math.max(x,y)-Math.min(x,y)>=Math.min(x,y)*policy.minRelativeDifference-1e-9
+ return different(a.riskPoints,b.riskPoints)||different(a.rewardPoints,b.rewardPoints)
 }
 export function generateTradeOptions(data:WorkspaceAnalysis,h:TradeHypothesis,onProgress?:(p:SearchProgress)=>void,clock=()=>performance.now()){
  const start=clock(),base={...h,stopLossPrice:null,takeProfitPrice:null}
  const entryReview=evaluateTrade(data,base)
  const options:TradeOption[]=[],failedOptions:FailedOption[]=[]
  const retained:OptionPair[]=[],attemptedIds=new Set<string>()
- let attempted=0,rejected=0,unchartable=0,evaluated=0
+ let attempted=0,rejected=0,unchartable=0,evaluated=0,similarSkipped=0
  let stopReason:SearchStop='SEARCH_EXHAUSTED'
  let status:OptionStatus='entry_required'
  const stages:{stage:SearchStage;found:number;evaluated:number}[]=[]
@@ -117,7 +119,7 @@ export function generateTradeOptions(data:WorkspaceAnalysis,h:TradeHypothesis,on
      if(limit){stopReason=limit;stages.push({stage,found:retained.length-before,evaluated:evaluated-evBefore});break outer}
      if(attemptedIds.has(raw.id))continue
      attemptedIds.add(raw.id)
-     if(retained.some(p=>!distinctGeometry(p,raw,data.snapshot.pointSize)))continue
+     if(retained.some(p=>!distinctGeometry(p,raw))){similarSkipped++;continue}
      const pair={...raw,searchStage:stage,stopBufferAtr:buffer}
      const review=evaluateTrade(data,{...base,stopLossPrice:pair.stopLossPrice,takeProfitPrice:pair.takeProfitPrice})
      evaluated++
@@ -138,6 +140,6 @@ export function generateTradeOptions(data:WorkspaceAnalysis,h:TradeHypothesis,on
   if(!retained.length&&blocked&&stopReason==='SEARCH_EXHAUSTED')stopReason='DATA_INSUFFICIENT'
  }else if(h.entryPrice!==null){status='context_unresolved';stopReason='DATA_INSUFFICIENT'}
  return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected:rejected+unchartable,unchartable,options,failedOptions,entryReview,
-  search:{target:policy.targetTotal,evaluated,elapsedMs:Math.round(clock()-start),stopReason,stages}}
+  search:{target:policy.targetTotal,evaluated,similarSkipped,minRelativeDifference:policy.minRelativeDifference,elapsedMs:Math.round(clock()-start),stopReason,stages}}
 }
 export type TradeOptions=ReturnType<typeof generateTradeOptions>

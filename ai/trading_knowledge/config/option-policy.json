@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "status": "experimental",
   "maxOptions": 5,
   "stopBufferAtr": 0.15,
@@ -7,10 +7,10 @@
   "targetTotal": 5,
   "maxEvaluations": 100,
   "runtimeMs": 2000,
-  "minDifferencePoints": 5,
   "stopBufferVariants": [
     0.25,
     0.5
   ],
-  "maxAnchorsPerSide": 8
+  "maxAnchorsPerSide": 8,
+  "minRelativeDifference": 0.2
 }
