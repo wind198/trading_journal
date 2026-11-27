@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Play, X, AlertTriangle, ChartNoAxesCombined } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { WorkspaceAnalysis } from '@/lib/market-analysis/workspace'
 import type { TradeHypothesis, TradeLevel } from '@/lib/trade-evaluation/contracts'
 import { createHypothesis, setTradeDirection, setTradeLevel, rebindSnapshot } from '@/lib/trade-evaluation/hypothesis'
+import { evaluateTrade } from '@/lib/trade-evaluation/evaluator'
+import { TradeReviewPanel } from './trade-review-panel'
 import { TradeHypothesisPanel } from './trade-hypothesis-panel'
 import type { AnalysisResult } from '@/lib/market-analysis/contracts'
 import { AnalysisChart, type AnalysisView } from './analysis-chart'
@@ -73,6 +75,7 @@ export function MarketAnalysisWorkspace() {
   function cancel() {
     active.current?.abort();active.current=null;setPending(false)
   }
+  const review = useMemo(()=>data&&hypothesis?evaluateTrade(data,hypothesis):null,[data,hypothesis])
   const tradePanel = data && hypothesis ? (<TradeHypothesisPanel hypothesis={hypothesis} pointSize={data.snapshot.pointSize} armedLevel={armedLevel} onArm={setArmedLevel} onPrice={(level,value)=>setHypothesis(h=>h?setTradeLevel(h,level,value,data.snapshot.pointSize):h)} onDirection={direction=>setHypothesis(h=>h?setTradeDirection(h,direction):h)} onClear={()=>{setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction));setArmedLevel(null)}}/>) : null
   return <div className="flex min-h-full min-w-0 flex-col">
     <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-2">
@@ -107,6 +110,7 @@ export function MarketAnalysisWorkspace() {
       </div>
       <aside className="min-w-0 border-t bg-card xl:col-start-2 xl:row-start-2 xl:border-l xl:border-t-0">
         
+        {review && <TradeReviewPanel review={review}/>}
         <div className="border-b p-3"><h2 className="text-sm font-semibold">Evidence inspector</h2><p className="text-xs text-muted-foreground">Policy {data.report.policy.version} · indicator config {data.report.configVersion}</p></div>
         {data.report.results.map(r=><EvidenceInspector key={r.timeframe+':'+r.toolId} result={r}/>)}
         <div className="space-y-1 p-3 text-xs text-muted-foreground"><h2 className="font-medium text-foreground">Limitations</h2>{data.report.limitations.map((l,i)=><p key={i}>{l}</p>)}<p>AI risk review is not integrated. No warning does not mean safe to trade.</p></div>

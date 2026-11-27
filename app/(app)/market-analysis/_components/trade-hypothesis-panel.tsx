@@ -53,6 +53,6 @@ export function TradeHypothesisPanel({hypothesis,pointSize,armedLevel,onArm,onPr
       <div><dt>Gross R:R</dt><dd className="font-mono font-semibold">{geometry.grossRewardRisk===null?'—':'1:'+geometry.grossRewardRisk.toFixed(2)}</dd></div>
     </dl>
     {geometry.errors.map(e=><p role="alert" key={e} className="text-xs text-destructive">{e}</p>)}
-    <p className="text-xs text-muted-foreground">Entry timeframe {hypothesis.entryTimeframe} · Revision {hypothesis.revision} · {geometry.mode}. Gross geometry only; costs, SL/TP suitability and AI risk review not evaluated. No orders are submitted.</p>
+    <p className="text-xs text-muted-foreground">Entry timeframe {hypothesis.entryTimeframe} · Revision {hypothesis.revision} · {geometry.mode}. Gross geometry; see deterministic trade risk review for market checks. Costs and AI review not evaluated. No orders are submitted.</p>
   </section>
 }
