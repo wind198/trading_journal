@@ -3,10 +3,12 @@ import type { TradeHypothesis } from './contracts'
 import type { StrategyAssessment,StructuralReference } from './strategies'
 import type { TradeReview } from './evaluator'
 import { inspectActiveStructure } from '../market-analysis/active-structure'
+import { inspectRange,EXPERIMENTAL_REGIME_POLICY } from '../market-analysis/regimes'
+import { TIMEFRAME_SECONDS } from '../market-analysis/snapshot'
 import { confirmedPivots } from '../market-analysis/structure'
 import policy from '../../ai/trading_knowledge/config/option-policy.json' with {type:'json'}
 
-export const SEARCH_STAGES=['baseline','extended','structural','alternative_anchors','buffer_sensitivity'] as const
+export const SEARCH_STAGES=['baseline','extended','structural','alternative_anchors','deep_history','buffer_sensitivity'] as const
 export type SearchStage=typeof SEARCH_STAGES[number]
 type Primary=NonNullable<TradeReview['context']>['primary']
 export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,review:TradeReview,stage:SearchStage,primary:Primary):StrategyAssessment[]{
@@ -26,12 +28,51 @@ export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,revie
   if(atr===null||atr<=0)continue
   const evidenceIds=data.report.results.filter(r=>r.timeframe===tf&&(larger?r.toolId==='analyze_scale_'+scale:true)).flatMap(r=>r.evidence.map(e=>e.id))
   if(!evidenceIds.length)continue
-  const refs:StructuralReference[]=[]
+  let refs:StructuralReference[]=[]
   const bars=data.snapshot.bars[tf]
   const add=(kind:StructuralReference['kind'],price:number,source:StructuralReference['source'],from:string|null,through:string|null,rangeId?:StructuralReference['rangeId'])=>{
    const distance=(price-entry)*sign*(kind==='stop'?-1:1)
    if(distance<=0||!Number.isFinite(price))return
    refs.push({kind,price,source,scale,rangeId,points:distance/data.snapshot.pointSize,atrDistance:distance/atr,timeframe:tf,evidenceIds,from,through})
+  }
+  if(stage==='deep_history'){
+   const contiguous=(n:number)=>bars.length>=n&&bars.slice(-n).every((b,i,all)=>i===0||Date.parse(b.closeTime)-Date.parse(all[i-1].closeTime)===TIMEFRAME_SECONDS[tf]*1000)
+   // Each range or historical zone pool is an independent assessment: do not mix
+   // opposite boundaries from different observation windows.
+   const retainPool=(window:number)=>{
+    if(refs.some(r=>r.kind==='stop')&&refs.some(r=>r.kind==='target'))
+     out.push({...a,references:limitRefs(refs),metrics:{...a.metrics,atr,searchLookback:window}})
+    refs=[]
+   }
+   if(primary==='range'){
+    for(const n of policy.rangeSearchWindows){
+     if(!contiguous(n+1))continue
+     const r=inspectRange(bars,atr,{...EXPERIMENTAL_REGIME_POLICY,windows:{...EXPERIMENTAL_REGIME_POLICY.windows,range:n}})
+     if(!r||entry<=r.lower||entry>=r.upper)continue
+     const source=r.validated?'validated range boundary':'provisional range boundary'
+     add('stop',sign===1?r.lower:r.upper,source,r.from,r.through,'outer')
+     add('target',sign===1?r.upper:r.lower,source,r.from,r.through,'outer')
+     retainPool(n)
+    }
+   }
+   for(const n of policy.anchorSearchWindows){
+    if(!contiguous(n))continue
+    const history=bars.slice(-n),structure=inspectActiveStructure(history,atr,h.direction,n)
+    for(const z of structure?.zones??[]){
+     if(sign===1?z.side==='support'&&z.upper<entry:z.side==='resistance'&&z.lower>entry)
+      add('stop',sign===1?z.lower:z.upper,'active zone outer edge',structure!.from,z.confirmedThrough)
+     if(sign===1?z.side==='resistance'&&z.lower>entry:z.side==='support'&&z.upper<entry)
+      add('target',sign===1?z.lower:z.upper,'active zone near edge',structure!.from,z.confirmedThrough)
+    }
+    for(const pivot of confirmedPivots(history,data.report.policy.structure.pivotLeft,data.report.policy.structure.pivotRight)){
+     const stop=pivot.side===(sign===1?'low':'high')
+     if(stop&&history.slice(pivot.pivotIndex+1).some(b=>sign===1?b.low<pivot.price:b.high>pivot.price))continue
+     // In a range, intact swing pairs are a distinct diagnostic geometry.
+     add(stop?'stop':'target',pivot.price,'confirmed pivot',pivot.pivotTime,pivot.confirmedTime)
+    }
+    retainPool(n)
+   }
+   continue
   }
   if(primary==='range'&&larger){
    const r=larger.classification.range
@@ -74,8 +115,17 @@ export function searchAssessments(data:WorkspaceAnalysis,h:TradeHypothesis,revie
     }
    }
   }
-  const limited=(['stop','target'] as const).flatMap(kind=>refs.filter(r=>r.kind===kind).sort((x,y)=>x.points-y.points).filter((r,i,all)=>all.findIndex(x=>x.price===r.price)===i).slice(0,policy.maxAnchorsPerSide))
+  const limited=limitRefs(refs)
   if(limited.length)out.push({...a,references:limited,metrics:{...a.metrics,atr}})
  }
  return out
+}
+
+/** Retain a representative spread, rather than only the nearest N anchors. */
+function limitRefs(refs:StructuralReference[]){
+ return (['stop','target'] as const).flatMap(kind=>{
+  const unique=refs.filter(r=>r.kind===kind).sort((a,b)=>a.points-b.points).filter((r,i,all)=>all.findIndex(x=>x.price===r.price&&x.source===r.source)===i)
+  if(unique.length<=policy.maxAnchorsPerSide)return unique
+  return Array.from({length:policy.maxAnchorsPerSide},(_,i)=>unique[Math.round(i*(unique.length-1)/(policy.maxAnchorsPerSide-1))])
+ })
 }

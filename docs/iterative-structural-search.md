@@ -4,3 +4,6 @@ Submit starts a dedicated module Web Worker with the frozen workspace snapshot a
 
 ## Relative diversity (policy 0.3.0)
 A 50-point stop and 100-point target are equivalent to 59/119 but distinct from 60/100 or 50/120. Absolute FX price, source scale and outcome do not bypass the geometry test. Search continues through remaining stages if similar candidates are skipped. No threshold relaxation to reach five. Tests updated but not run.
+
+## Expanded coverage (0.4.0)
+Six stages including deep history. Scan independently validated/provisional ranges of 50–600 bars and active zones/intact pivot pools of 100–600 bars, requiring contiguous history. Pair within each pool; no mixed range boundaries or pivot/zone pairs for range. 24 anchors per side sampled across price distance. Stop buffers 0.15/0.25/0.5/0.75/1 ATR and target buffers 1/3/5/10 points inside existing anchor. Budget 4 seconds cooperative, 200 full evaluations; stage enumeration itself can overrun. Seek five total, preferably at least two passing if available: passing candidate can replace similar failed candidates, maintaining pairwise 20% separation. Stage counts are net retained, not total discoveries. RR hard policy 1.5–3 inclusive; above 3 blocked and visually explained, not silently truncated. Historical cutoff unchanged. Existing baseline strategy gates still apply. Tests/build/browser not run.

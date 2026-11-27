@@ -1,10 +1,11 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "hardConstraints": {
     "minStopLossPoints": 30,
     "minTakeProfitPoints": 30,
     "minRewardRiskRatio": 1.5,
-    "maxLossUsd": null
+    "maxLossUsd": null,
+    "maxRewardRiskRatio": 3
   },
   "softConstraints": {
     "preferredTakeProfitPoints": 50

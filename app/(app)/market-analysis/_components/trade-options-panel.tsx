@@ -28,7 +28,7 @@ export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOpti
  const global=result.entryReview.warnings.filter(w=>w.dimension==='entry'||w.dimension==='data')
  const warnings=selected?.review.warnings??[]
  return <section className="min-w-0 space-y-2 border-b pb-3">
-  <div className="px-3 pt-3"><h2 className="text-sm font-semibold">Alternative setups</h2><p className="text-xs text-muted-foreground">{messages[result.status]}</p><p className="mt-1 text-xs text-muted-foreground">{result.options.length+result.failedOptions.length} / {result.search.target} setups · {result.search.elapsedMs} ms · {result.search.stopReason.replaceAll('_',' ').toLowerCase()}</p><details className="mt-1 text-xs"><summary>Search coverage</summary><p>{result.search.similarSkipped} near-duplicate candidates skipped · {Math.round(result.search.minRelativeDifference*100)}% minimum SL or TP difference</p>{result.search.stages.map(s=><p key={s.stage}>{s.stage.replaceAll('_',' ')} · {s.found} found · {s.evaluated} evaluated</p>)}</details></div>
+  <div className="px-3 pt-3"><h2 className="text-sm font-semibold">Alternative setups</h2><p className="text-xs text-muted-foreground">{messages[result.status]}</p><p className="mt-1 text-xs text-muted-foreground">{result.options.length+result.failedOptions.length} / {result.search.target} setups · {result.search.elapsedMs} ms · {result.search.stopReason.replaceAll('_',' ').toLowerCase()}</p><details className="mt-1 text-xs"><summary>Search coverage</summary><p>{result.search.similarSkipped} near-duplicate candidates skipped · {Math.round(result.search.minRelativeDifference*100)}% minimum SL or TP difference</p>{result.search.stages.map(s=><p key={s.stage}>{s.stage.replaceAll('_',' ')} · {s.found>=0?'+':''}{s.found} net retained · {s.evaluated} evaluated</p>)}</details></div>
   <div className="flex gap-1 px-3" role="group" aria-label="Setup outcome">
    <Button size="sm" className="flex-1" variant={group==='passed'?'default':'outline'} aria-pressed={group==='passed'} disabled={!result.options.length} onClick={()=>{setGroup('passed');setSelectedId(null)}}>Passed · {result.options.length}</Button>
    <Button size="sm" className="flex-1" variant={group==='failed'?'default':'outline'} aria-pressed={group==='failed'} onClick={()=>{setGroup('failed');setSelectedId(null)}}>Failed · {failed.length}</Button>
@@ -49,11 +49,11 @@ export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOpti
    {rejected&&<div className="space-y-2 px-3 text-xs">
     {failureComparisons(rejected).map(v=>{const max=Math.max(v.actual,v.required,1);return <div key={v.id}>
       <div className="flex justify-between gap-2"><strong>{v.label}</strong><span className={v.failed?'text-destructive font-medium':'text-muted-foreground'}>{v.failed?'FAIL':'Meets limit'}</span></div>
-      <div className="relative mt-1 h-3 rounded-sm bg-muted" role="img" aria-label={v.label+': actual '+v.actual.toFixed(v.unit?0:2)+', minimum '+v.required+' '+v.unit}>
+      <div className="relative mt-1 h-3 rounded-sm bg-muted" role="img" aria-label={v.label+': actual '+v.actual.toFixed(v.unit?0:2)+(v.maximum?', maximum ':', minimum ')+v.required+' '+v.unit}>
        <div className={'h-full rounded-sm '+(v.failed?'bg-destructive':'bg-success')} style={{width:100*v.actual/max+'%'}}/>
        <div className="absolute top-0 bottom-0 border-l-2 border-foreground" style={{left:'min(calc(100% - 2px), '+100*v.required/max+'%)'}}/>
       </div>
-      <p className="mt-1 text-muted-foreground">Actual {v.actual.toFixed(v.unit?0:2)} {v.unit} · Required {v.required} {v.unit}{v.failed?' · Shortfall '+(v.required-v.actual).toFixed(v.unit?0:2)+' '+v.unit:''}</p>
+      <p className="mt-1 text-muted-foreground">Actual {v.actual.toFixed(v.unit?0:2)} {v.unit} · {v.maximum?'Maximum':'Minimum'} {v.required} {v.unit}{v.failed?(v.maximum?' · Excess ':' · Shortfall ')+Math.abs(v.required-v.actual).toFixed(v.unit?0:2)+' '+v.unit:''}</p>
     </div>})}
    </div>}
    {selected.review.assessments.filter(a=>a.forceState).map(a=><div key={a.timeframe} className="space-y-1 px-3 py-1 text-xs">

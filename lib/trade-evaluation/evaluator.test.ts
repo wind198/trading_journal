@@ -76,3 +76,11 @@ test('choppy provisional boundaries are evaluable and carry uncertainty',()=>{
  assert.ok(a.warnings.some(w=>w.code==='PROVISIONAL_RANGE_BOUNDARY'))
  assert.equal(a.feasibleWithinReferences,null)
 })
+
+test('maximum gross reward/risk is inclusive at 3 and blocks above it in either direction',()=>{
+ for(const d of ['long','short'] as const){
+  const s=d==='long'?1:-1
+  assert.ok(!evaluateHardPolicy(hypothesis(1.2-s*30*point,1.2+s*90*point,d),point).warnings.some(w=>w.code==='RR_EXCESSIVE'))
+  assert.ok(evaluateHardPolicy(hypothesis(1.2-s*30*point,1.2+s*91*point,d),point).warnings.some(w=>w.code==='RR_EXCESSIVE'&&w.severity==='block'))
+ }
+})

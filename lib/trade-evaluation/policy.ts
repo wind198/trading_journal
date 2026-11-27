@@ -3,7 +3,7 @@ import type { TradeHypothesis } from './contracts'
 import { evaluateGeometry } from './hypothesis'
 
 export const TRADE_RISK_POLICY = policy
-export type WarningCode = 'INVALID_GEOMETRY' | 'SL_TOO_CLOSE' | 'TP_TOO_CLOSE' | 'RR_INSUFFICIENT' |
+export type WarningCode = 'INVALID_GEOMETRY' | 'SL_TOO_CLOSE' | 'TP_TOO_CLOSE' | 'RR_INSUFFICIENT' | 'RR_EXCESSIVE' |
   'TP_BELOW_PREFERRED' | 'REGIME_UNCERTAIN' | 'DATA_INSUFFICIENT' | 'ENTRY_OVEREXTENDED' |
   'ENTRY_TIMEFRAME_CONFLICT' | 'COUNTERTREND_NOT_EXTENDED' | 'COUNTERTREND_ADVERSE_MOMENTUM' |
   'ENTRY_RANGE_LOCATION' | 'SL_INSIDE_NOISE' | 'SL_BEFORE_INVALIDATION' | 'TP_STRUCTURAL_OBSTRUCTION' |
@@ -34,6 +34,8 @@ export function evaluateHardPolicy(h: TradeHypothesis, pointSize: number) {
   if (riskPoints !== null && riskPoints < limits.minStopLossPoints) add('SL_TOO_CLOSE','stop','SL distance is below '+limits.minStopLossPoints+' points.')
   if (rewardPoints !== null && rewardPoints < limits.minTakeProfitPoints) add('TP_TOO_CLOSE','target','TP distance is below '+limits.minTakeProfitPoints+' points.')
   if (grossRewardRisk !== null && grossRewardRisk < limits.minRewardRiskRatio) add('RR_INSUFFICIENT','risk','Gross reward/risk is below '+limits.minRewardRiskRatio+'.')
+  if (grossRewardRisk !== null && grossRewardRisk > limits.maxRewardRiskRatio)
+    add('RR_EXCESSIVE','risk','Gross reward/risk exceeds '+limits.maxRewardRiskRatio+'.')
   if (rewardPoints !== null && rewardPoints >= limits.minTakeProfitPoints && rewardPoints < policy.softConstraints.preferredTakeProfitPoints)
     add('TP_BELOW_PREFERRED','target','Target is below the preferred '+policy.softConstraints.preferredTakeProfitPoints+' points.','warning')
   return {geometry,warnings,minimumTargetPoints:riskPoints===null?null:minimumTargetPoints(riskPoints)}

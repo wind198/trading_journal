@@ -5,9 +5,10 @@ export function failureComparisons(option:FailedOption){
  return [
  {id:'sl',label:'Stop distance',actual:option.riskPoints,required:p.minStopLossPoints,unit:'pts'},
  {id:'tp',label:'Target distance',actual:option.rewardPoints,required:p.minTakeProfitPoints,unit:'pts'},
- {id:'rr',label:'Reward / risk',actual:option.grossRewardRisk,required:p.minRewardRiskRatio,unit:''},
+ {id:'rr',label:'Reward / risk minimum',actual:option.grossRewardRisk,required:p.minRewardRiskRatio,unit:'',maximum:false},
+ {id:'rr-max',label:'Reward / risk maximum',actual:option.grossRewardRisk,required:p.maxRewardRiskRatio,unit:'',maximum:true},
  {id:'space',label:'Reward space required for this stop',actual:option.rewardPoints,required:minimumTargetPoints(option.riskPoints),unit:'pts'}
- ].map(v=>({...v,failed:v.actual<v.required}))
+ ].map(v=>({...v,failed:v.maximum===true?v.actual>v.required:v.actual<v.required}))
 }
 export function failureLabel(state:FailedOption['failureState']){
  return ({failed_hard_policy:'Hard risk limit failed',failed_structure:'Structural space infeasible',failed_context:'Context unresolved',failed_data_quality:'Data quality insufficient'})[state]
