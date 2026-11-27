@@ -1,0 +1,19 @@
+{
+  "version": "0.1.0",
+  "windows": [
+    5,
+    10,
+    20
+  ],
+  "intensityHistory": 100,
+  "balanceMax": 0.2,
+  "dominanceMin": 0.35,
+  "pressureChangeMin": 0.25,
+  "persistenceMin": 0.6,
+  "lowIntensityPercentile": 0.25,
+  "highIntensityPercentile": 0.75,
+  "minIntensityHistory": 30,
+  "nearBoundaryAtr": 0.5,
+  "minSideMeanForce": 20,
+  "maxAbsorptionProgressAtr": 0.25
+}

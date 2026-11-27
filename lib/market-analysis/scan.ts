@@ -1,6 +1,8 @@
 import type { AnalysisResult, EvidenceReference, MarketSnapshot, NumericalFeature, Timeframe } from './contracts'
 import { TIMEFRAME_SECONDS } from './snapshot'
 import { inspectChoppyRanges } from './choppy'
+import { forceSeries } from './adapters'
+import { observeForceDynamics, FORCE_DYNAMICS_POLICY } from './force-dynamics'
 import { analyzeFoundation } from './foundation'
 import config from '../../ai/trading_knowledge/config/indicators.json' with { type: 'json' }
 import { runNumericalTools } from './tools'
@@ -51,6 +53,24 @@ export function scanMarket(snapshot: MarketSnapshot) {
       atrGrowth: [c.metrics.atrGrowth, 'ratio', p.windows.transition],
     }, [c.reason, 'Data quality: ' + c.dataQuality, 'Market state: ' + c.state, 'Boundary confidence: ' + c.boundaryConfidence, 'Experimental policy ' + p.version])
     results[results.length - 1] = { ...results[results.length - 1], status: c.regime === 'unknown' || c.dataQuality!=='usable' ? 'insufficient_data' : 'ok' }
+    if(c.regime==='choppy'){
+      const d=observeForceDynamics(bars,forceSeries(bars,tf),foundation.timeframes[tf].atr.at(-1)??null)
+      const values:Record<string,[number|null,string,number]>={}
+      for(const w of d.windows){
+        for(const key of ['bull','bear','pressure','intensity','bullPersistence','bearPersistence','coverage'] as const)
+          values[key+'_'+w.n]=[w[key],key==='bull'||key==='bear'||key==='intensity'?'mean score':'ratio',w.n]
+      }
+      Object.assign(values,{
+        pressureChange:[d.pressureChange,'ratio',d.short.n*2],
+        bullChange:[d.bullChange,'mean score',d.short.n*2],
+        bearChange:[d.bearChange,'mean score',d.short.n*2],
+        intensityPercentile:[d.intensityPercentile,'ratio',FORCE_DYNAMICS_POLICY.intensityHistory],
+        displacementAtr:[d.displacementAtr,'ATR',d.short.n],
+        bullEfficiency:[d.bullEfficiency,'ATR per normalized force unit',d.short.n],
+        bearEfficiency:[d.bearEfficiency,'ATR per normalized force unit',d.short.n]
+      })
+      emit('analyze_choppy_force_dynamics',values,['Policy '+d.policyVersion+'; '+d.state,'Candle force proxy, not aggressive order flow; absorption is provisional.'])
+    }
     if (selected.includes('analyze_range_structure')) {
       const r = c.range
       emit('analyze_range_structure', {
