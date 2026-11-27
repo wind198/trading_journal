@@ -1,8 +1,10 @@
+import type { ChoppyRanges } from '../market-analysis/choppy'
 import type { ActiveStructure, ActiveZone } from '../market-analysis/active-structure'
 import type { EvaluationContext, StrategyId } from './context'
 import { TRADE_RISK_POLICY as policy, type ReviewWarning, type WarningCode, minimumTargetPoints } from './policy'
 
 export interface StructuralReference {
+  rangeId?: 'outer' | 'inner'
   kind: 'stop' | 'target'
   price: number
   points: number
@@ -21,6 +23,7 @@ export interface StrategyAssessment {
   warnings: ReviewWarning[]
   limitations: string[]
   feasibleWithinReferences: boolean | null
+  choppy?: ChoppyRanges
   structure?: ActiveStructure & { obstacles: ActiveZone[] }
 }
 type Draft = Pick<StrategyAssessment,'metrics'|'references'|'warnings'|'limitations'>

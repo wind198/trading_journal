@@ -47,6 +47,8 @@ export function pairReferences(h:TradeHypothesis,point:number,assessments:readon
     // In a validated range, never reach beyond its opposite boundary. Other
     // strategies may cross an obstacle, but the full review must disclose it.
     for(const s of stops)for(const t of targets){
+      // Never mix inner stop and outer target to manufacture reward/risk.
+      if(primary==='range'&&(s.rangeId??'outer')!==(t.rangeId??'outer'))continue
       attempted++
       const buffer=Math.max(point,atr*policy.stopBufferAtr)
       const sl=snap(s.price+(long?-buffer:buffer),point,!long)
