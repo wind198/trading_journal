@@ -17,8 +17,8 @@ export interface CorrectionReference {
   recoveryAtr: number
   recovered: boolean
 }
-export function inspectActiveStructure(input: readonly Candle[], atr: number | null, direction: 'long'|'short') {
-  const bars=input.slice(-policy.lookback)
+export function inspectActiveStructure(input: readonly Candle[], atr: number | null, direction: 'long'|'short',lookback=policy.lookback) {
+  const bars=input.slice(-lookback)
   if(atr===null||!Number.isFinite(atr)||atr<=0||bars.length<policy.pivotLeft+policy.pivotRight+1)return null
   const pivots=confirmedPivots(bars,policy.pivotLeft,policy.pivotRight)
   const tolerance=atr*policy.zoneToleranceAtr,buffer=atr*policy.breakBufferAtr

@@ -4,6 +4,7 @@ import type { EvaluationContext, StrategyId } from './context'
 import { TRADE_RISK_POLICY as policy, type ReviewWarning, type WarningCode, minimumTargetPoints } from './policy'
 
 export interface StructuralReference {
+  scale?: 'baseline'|'extended'|'structural'
   rangeId?: 'outer' | 'inner'
   kind: 'stop' | 'target'
   price: number

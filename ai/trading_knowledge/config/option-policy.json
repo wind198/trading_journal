@@ -1,7 +1,16 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "status": "experimental",
-  "maxOptions": 3,
+  "maxOptions": 5,
   "stopBufferAtr": 0.15,
-  "targetBufferPoints": 1
+  "targetBufferPoints": 1,
+  "targetTotal": 5,
+  "maxEvaluations": 100,
+  "runtimeMs": 2000,
+  "minDifferencePoints": 5,
+  "stopBufferVariants": [
+    0.25,
+    0.5
+  ],
+  "maxAnchorsPerSide": 8
 }
