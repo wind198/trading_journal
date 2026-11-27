@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createHypothesis } from './hypothesis'
+import { geometryDistance,farthest } from './candidate-diversity'
 import { pairReferences, generateTradeOptions, distinctGeometry } from './options'
 import type { StructuralReference, StrategyAssessment } from './strategies'
 import { buildWorkspaceAnalysis } from '../market-analysis/workspace'
@@ -93,4 +94,12 @@ test('expanded confirmed stop anchors are opt-in, not baseline behavior',()=>{
  const a=assess([ref('stop',1.1996,'confirmed pivot'),ref('target',1.2008,'confirmed pivot')])
  assert.equal(pairReferences(h(),point,[a],'continuation').pairs.length,0)
  assert.equal(pairReferences(h(),point,[a],'continuation',0.15,true).pairs.length,1)
+})
+
+test('farthest selection favors a genuinely different geometry',()=>{
+ const r=pairReferences(h(),point,[assess([ref('stop',1.1996,'active zone outer edge'),ref('target',1.2008,'active zone near edge')])],'continuation')
+ const a={...r.pairs[0],riskPoints:50,rewardPoints:100}
+ const near={...a,riskPoints:60,rewardPoints:100},far={...a,riskPoints:120,rewardPoints:260}
+ assert.ok(geometryDistance(a,far)>geometryDistance(a,near))
+ assert.equal(farthest([near,far],[a]),far)
 })

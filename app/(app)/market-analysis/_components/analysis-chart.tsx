@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback,useEffect, useRef, useState } from 'react'
 import { CandlestickSeries, LineSeries, createChart, ColorType, type UTCTimestamp, type ISeriesApi, type IPriceLine, type MouseEventParams } from 'lightweight-charts'
+import {TradeOptionOverlay,type OverlayCoordinates} from './trade-option-overlay'
+import type {PlottedSetup} from '@/lib/trade-evaluation/overlay-layout'
 import type { WorkspaceAnalysis } from '@/lib/market-analysis/workspace'
 import type { ScaleId } from '@/lib/market-analysis/scales'
 import type { Timeframe } from '@/lib/market-analysis/contracts'
@@ -14,11 +16,12 @@ import { normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 export type AnalysisView = 'price' | 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
 const priceFormat = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 
-export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint, historyPicking=false, onHistoryPick, profile='baseline' }: {
+export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice, registerMidpoint, historyPicking=false, onHistoryPick, profile='baseline',setups,onReview }: {
   data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView
   hypothesis: TradeHypothesis; armedLevel: TradeLevel | null
   assessment?: StrategyAssessment; showReferences: boolean; draftPrice?: number
   profile?:ScaleId
+  setups?:readonly PlottedSetup[];onReview?:(id:string)=>void
   historyPicking?:boolean; onHistoryPick?:(closeTime:string)=>void
   registerMidpoint: (timeframe:Timeframe, reader:(()=>number|null)|null)=>void
   onPick: (level: TradeLevel, price: number, timeframe: Timeframe) => void
@@ -26,6 +29,10 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
   const host = useRef<HTMLDivElement>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const lines = useRef<IPriceLine[]>([])
+  const coordinateReader=useRef<(()=>OverlayCoordinates|null)|null>(null)
+  const coordinates=useCallback(()=>coordinateReader.current?.()??null,[])
+  const geometryRef=useRef<readonly PlottedSetup[]>(setups??[])
+  useEffect(()=>{geometryRef.current=setups??[]},[setups])
   const [handleY,setHandleY]=useState<number|null>(null)
   const draftRef=useRef(draftPrice)
   const drag=useRef<{id:number;offset:number}|null>(null)
@@ -51,6 +58,8 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
       wickUpColor: color('--success'), wickDownColor: color('--destructive'), priceFormat,
     })
     candleRef.current = candle
+    coordinateReader.current=()=>({width:chart.timeScale().width(),height:chart.panes()[0]?.getHeight()??0,priceToY:p=>candle.priceToCoordinate(p)})
+    candle.applyOptions({autoscaleInfoProvider:original=>{const info=original();if(!info?.priceRange||!geometryRef.current.length)return info;const prices=geometryRef.current.flatMap(s=>[s.option.stopLossPrice,s.option.takeProfitPrice]);return {...info,priceRange:{minValue:Math.min(info.priceRange.minValue,...prices),maxValue:Math.max(info.priceRange.maxValue,...prices)}}}})
     const click = (event: MouseEventParams) => {
       const active = interaction.current
       if(active.historyPicking){
@@ -107,7 +116,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     frame=requestAnimationFrame(syncHandle)
     const observer = new ResizeObserver(() => chart.resize(node.clientWidth, node.clientHeight))
     observer.observe(node)
-    return () => { cancelAnimationFrame(frame); registerMidpoint(timeframe,null); drag.current=null; observer.disconnect(); chart.unsubscribeClick(click); candleRef.current = null; lines.current = []; chart.remove() }
+    return () => { cancelAnimationFrame(frame); registerMidpoint(timeframe,null); drag.current=null; observer.disconnect(); chart.unsubscribeClick(click); coordinateReader.current=null; candleRef.current = null; lines.current = []; chart.remove() }
   }, [data,timeframe,view,profile])
   useEffect(() => {
     const candle = candleRef.current
@@ -161,8 +170,10 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
       }
     }
   }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,profile,assessment,showReferences,draftPrice])
+  useEffect(()=>{const candle=candleRef.current;if(candle)candle.priceScale().applyOptions({autoScale:true})},[setups,data,timeframe,view,profile])
   return <div className="relative min-h-0 flex-1">
     <div ref={host} className={armedLevel || historyPicking ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
+    {!armedLevel&&!historyPicking&&setups?.length&&hypothesis.entryPrice!==null&&onReview?<TradeOptionOverlay setups={setups} entry={hypothesis.entryPrice} coordinates={coordinates} onReview={onReview}/>:null}
     {armedLevel==='entryPrice'&&draftPrice!==undefined&&handleY!==null&&<button type="button" aria-label={timeframe+' drag entry price'} title="Drag entry price"
       className="absolute left-1 right-16 z-10 h-8 -translate-y-1/2 touch-none cursor-ns-resize bg-transparent focus-visible:outline-2 focus-visible:outline-ring"
       style={{top:handleY}}

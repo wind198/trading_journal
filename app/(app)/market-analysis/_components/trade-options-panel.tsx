@@ -17,10 +17,10 @@ const messages:Record<TradeOptions['status'],string>={
   options_available:'Structural alternatives, not ranked recommendations.',
 }
 
-export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOptions;data:WorkspaceAnalysis;entry:number|null;onSelect:(option:TradeOption)=>void}){
- const [selectedId,setSelectedId]=useState<string|null>(null)
- const [group,setGroup]=useState<'passed'|'failed'>(result.options.length?'passed':'failed')
- const [showAll,setShowAll]=useState(false)
+export function TradeOptionsPanel({result,data,entry,onSelect,initialId}:{initialId?:string|null;result:TradeOptions;data:WorkspaceAnalysis;entry:number|null;onSelect:(option:TradeOption)=>void}){
+ const [selectedId,setSelectedId]=useState<string|null>(initialId??null)
+ const [group,setGroup]=useState<'passed'|'failed'>(result.failedOptions.some(o=>o.id===initialId)?'failed':result.options.length?'passed':'failed')
+ const [showAll,setShowAll]=useState(!!initialId)
  const failed=orderFailedOptions(result.failedOptions)
  const candidates=group==='passed'?result.options:showAll?failed:failed.slice(0,3)
  const selected=candidates.find(o=>o.id===selectedId)??candidates[0]
@@ -28,7 +28,7 @@ export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOpti
  const global=result.entryReview.warnings.filter(w=>w.dimension==='entry'||w.dimension==='data')
  const warnings=selected?.review.warnings??[]
  return <section className="min-w-0 space-y-2 border-b pb-3">
-  <div className="px-3 pt-3"><h2 className="text-sm font-semibold">Alternative setups</h2><p className="text-xs text-muted-foreground">{messages[result.status]}</p><p className="mt-1 text-xs text-muted-foreground">{result.options.length+result.failedOptions.length} / {result.search.target} setups · {result.search.elapsedMs} ms · {result.search.stopReason.replaceAll('_',' ').toLowerCase()}</p><details className="mt-1 text-xs"><summary>Search coverage</summary><p>{result.search.similarSkipped} near-duplicate candidates skipped · {Math.round(result.search.minRelativeDifference*100)}% minimum SL or TP difference</p>{result.search.stages.map(s=><p key={s.stage}>{s.stage.replaceAll('_',' ')} · {s.found>=0?'+':''}{s.found} net retained · {s.evaluated} evaluated</p>)}</details></div>
+  <div className="px-3 pt-3"><h2 className="text-sm font-semibold">Alternative setups</h2><p className="text-xs text-muted-foreground">{messages[result.status]}</p><p className="mt-1 text-xs text-muted-foreground">{result.options.length+result.failedOptions.length} / {result.search.target} setups · {result.search.elapsedMs} ms · {result.search.stopReason.replaceAll('_',' ').toLowerCase()}</p><details className="mt-1 text-xs"><summary>Search coverage</summary><p>{result.search.uniqueGeometries} unique geometries before full review</p>{result.search.seeds.map(s=><p key={s.seed}>{s.seed.replaceAll('_',' ')} · {s.eligible} eligible · {s.remaining} shortlisted remaining</p>)}<p>{result.search.similarSkipped} near-duplicate candidates skipped · {Math.round(result.search.minRelativeDifference*100)}% minimum SL or TP difference</p>{result.search.stages.map(s=><p key={s.stage}>{s.stage.replaceAll('_',' ')} · {s.found} unique geometries · {s.evaluated} evaluated</p>)}</details></div>
   <div className="flex gap-1 px-3" role="group" aria-label="Setup outcome">
    <Button size="sm" className="flex-1" variant={group==='passed'?'default':'outline'} aria-pressed={group==='passed'} disabled={!result.options.length} onClick={()=>{setGroup('passed');setSelectedId(null)}}>Passed · {result.options.length}</Button>
    <Button size="sm" className="flex-1" variant={group==='failed'?'default':'outline'} aria-pressed={group==='failed'} onClick={()=>{setGroup('failed');setSelectedId(null)}}>Failed · {failed.length}</Button>
@@ -36,10 +36,10 @@ export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOpti
   {group==='failed'&&!failed.length&&<p className="px-3 text-xs text-muted-foreground">No complete structural setup to plot. The entry/data evidence below explains why references were withheld. No prices are invented.</p>}
   {group==='failed'&&result.unchartable>0&&<p className="px-3 text-xs text-muted-foreground">{result.unchartable} attempted combinations had invalid price geometry and cannot be drawn as complete setups.</p>}
   {candidates.length>0&&<div role="group" aria-label="Trade alternatives" className="flex gap-2 overflow-x-auto px-3 pb-1">
-   {candidates.map((o,i)=><button type="button" key={o.id} aria-pressed={selected?.id===o.id} onClick={()=>setSelectedId(o.id)}
+   {candidates.map(o=><button type="button" key={o.id} aria-pressed={selected?.id===o.id} onClick={()=>setSelectedId(o.id)}
     className={'min-w-32 max-w-48 shrink-0 rounded-md border px-2 py-2 text-left text-xs focus-visible:outline-2 focus-visible:outline-ring '+(selected?.id===o.id?'border-primary bg-muted':'bg-card')}>
-    <span className="block font-semibold">{group==='failed'?'Failed':'Option'} {i+1} · 1:{o.grossRewardRisk.toFixed(2)}</span>
-    <span className="block break-words text-muted-foreground">{optionTitle(o)} · {o.searchStage?.replaceAll('_',' ')}</span>
+    <span className="block font-semibold">#{[...result.options,...result.failedOptions].findIndex(p=>p.id===o.id)+1} {group==='failed'?'Failed':'Passed'} · 1:{o.grossRewardRisk.toFixed(2)}</span>
+    <span className="block break-words text-muted-foreground">{optionTitle(o)} · {o.seed?.replaceAll('_',' ')??o.searchStage?.replaceAll('_',' ')}</span>
    </button>)}
   </div>}
   {group==='failed'&&failed.length>3&&<div className="px-3"><Button variant="ghost" size="sm" onClick={()=>{setShowAll(v=>!v);setSelectedId(null)}}>{showAll?'Show fewer':'Show all '+failed.length+' failed setups'}</Button></div>}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo,useRef, useState } from 'react'
 import { Play, X, AlertTriangle, ChartNoAxesCombined, Crosshair, Maximize2, Minimize2, History, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import { localDateTimeInput, m15CloseFromLocalInput } from '@/lib/market-analysi
 import type { SearchProgress, TradeOptions } from '@/lib/trade-evaluation/options'
 import type { SearchMessage,SearchRequest } from '@/lib/trade-evaluation/search.worker'
 import type { TradeReview } from '@/lib/trade-evaluation/evaluator'
+import {plottedSetups} from '@/lib/trade-evaluation/overlay-layout'
 import { TradeOptionsPanel } from './trade-options-panel'
 import { TradeReviewPanel } from './trade-review-panel'
 import type { ScaleId } from '@/lib/market-analysis/scales'
@@ -49,6 +50,9 @@ export function MarketAnalysisWorkspace(){
   const [profiles,setProfiles]=useState<Record<Timeframe,ScaleId>>({M3:'baseline',M15:'baseline'})
   const [view,setView]=useState<AnalysisView>('price')
   const [showReferences,setShowReferences]=useState(false)
+  const [showPassed,setShowPassed]=useState(true)
+  const [showFailed,setShowFailed]=useState(true)
+  const [reviewSetup,setReviewSetup]=useState<string|null>(null)
   const [pending,setPending]=useState(true)
   const [historicalAsOf,setHistoricalAsOf]=useState<string|null>(null)
   const [historyPicking,setHistoryPicking]=useState(false)
@@ -111,7 +115,9 @@ export function MarketAnalysisWorkspace(){
   function cancel(){active.current?.abort();active.current=null;setPending(false)}
   const options=submitted&&hypothesis&&submitted.snapshotId===hypothesis.snapshotId&&submitted.hypothesisId===hypothesis.id?submitted:null
   const review=previewReview??options?.entryReview??null
-  function invalidateReview(){cancelSearch();setSearchError(null);setSubmitted(null);setPreviewReview(null)}
+  const overlays=useMemo(()=>{const all=data&&options?plottedSetups(data,options):[];const visible=all.filter(s=>s.failed?showFailed:showPassed);return {M3:visible.filter(s=>s.timeframe==='M3'),M15:visible.filter(s=>s.timeframe==='M15')}},[data,options,showPassed,showFailed])
+  const reviewFromChart=(id:string)=>{setReviewSetup(id);openSheet('review')}
+  function invalidateReview(){setReviewSetup(null);cancelSearch();setSearchError(null);setSubmitted(null);setPreviewReview(null)}
   function beginPick(){
     if(!data||!hypothesis||pending)return
     setHistoryPicking(false);setHistoryOpen(false)
@@ -138,7 +144,7 @@ export function MarketAnalysisWorkspace(){
     }else if(draft)next=confirmEntry(hypothesis,draft,data.snapshot.pointSize)
     if(next.entryPrice===null)return
     // Evaluation is invoked exclusively by this explicit submission.
-    setHypothesis(next);setSubmitted(null);setPreviewReview(null);setProgress(null);setSearchError(null)
+    setReviewSetup(null);setHypothesis(next);setSubmitted(null);setPreviewReview(null);setProgress(null);setSearchError(null)
     cancelPick();returnFocus.current='review';setSheet('review');setSearching(true)
     try{
       const worker=new Worker(new URL('../../../../lib/trade-evaluation/search.worker.ts',import.meta.url),{type:'module'})
@@ -168,6 +174,7 @@ export function MarketAnalysisWorkspace(){
       <Button className="h-9" size="sm" variant={historyOpen?'secondary':'outline'} disabled={pending} aria-label="Choose historical scan time" onClick={openHistory}><CalendarClock/>History</Button>
       {data&&<Button className="h-9" size="sm" variant={historyPicking?'secondary':'ghost'} aria-pressed={historyPicking} disabled={pending||!data.snapshot.bars.M15.length} onClick={()=>{cancelPick();setHistoryOpen(false);setHistoryPicking(v=>!v);if(expanded==='M3')setExpanded(null)}}><History/>Pick M15</Button>}
       {historicalAsOf&&<Button className="h-9" size="sm" variant="outline" disabled={pending} onClick={()=>void run()}>Latest</Button>}
+      {options&&<><Button className="h-9" size="sm" variant={showPassed?'secondary':'ghost'} aria-pressed={showPassed} onClick={()=>setShowPassed(v=>!v)}>Passed {options.options.length}</Button><Button className="h-9" size="sm" variant={showFailed?'secondary':'ghost'} aria-pressed={showFailed} onClick={()=>setShowFailed(v=>!v)}>Failed {options.failedOptions.length}</Button></>}
       <Button className="h-9" size="sm" variant={showReferences?'secondary':'ghost'} aria-pressed={showReferences} onClick={()=>setShowReferences(v=>!v)}>Refs</Button>
       {views.map(v=><Button className="h-9" key={v.id} size="sm" variant={view===v.id?'secondary':'ghost'} aria-pressed={view===v.id} onClick={()=>setView(v.id)}>{v.label}</Button>)}
     </div>
@@ -194,7 +201,7 @@ export function MarketAnalysisWorkspace(){
             <Button variant="ghost" size="icon-sm" className="size-8" aria-label={(expanded===tf?'Restore both charts':'Expand '+tf)} onClick={()=>setExpanded(expanded===tf?null:tf)}>{expanded===tf?<Minimize2/>:<Maximize2/>}</Button>
           </div>
           <div className="flex shrink-0 gap-2 overflow-x-auto whitespace-nowrap px-2 py-0.5 text-[10px] text-muted-foreground" aria-label={tf+' regime by scale'}>{(['baseline','extended','structural'] as const).map(id=>{const q=id==='baseline'?data.report.classifications[tf]:data.report.scales[tf][id].classification;const quality=id==='baseline'?data.report.classifications[tf].dataQuality:data.report.scales[tf][id].quality;return <span key={id} className={profiles[tf]===id?'font-semibold text-foreground':''}>{id==='baseline'?'1×':id==='extended'?'2×':'4×'} {quality==='usable'?q.regime:quality.replaceAll('_',' ')}</span>})}</div>
-          <AnalysisChart data={data} timeframe={tf} view={view} profile={profiles[tf]} assessment={review?.assessments.find(a=>a.timeframe===tf)} registerMidpoint={registerMidpoint} historyPicking={historyPicking&&tf==='M15'&&!pending} onHistoryPick={chooseHistory} showReferences={showReferences&&!draft&&manual===null} hypothesis={hypothesis} armedLevel={armed&&!pending?'entryPrice':null} draftPrice={draft?.price} onPick={(level,price,timeframe)=>{if(level==='entryPrice')stage(price,timeframe)}}/>
+          <AnalysisChart data={data} timeframe={tf} setups={overlays[tf]} onReview={reviewFromChart} view={view} profile={profiles[tf]} assessment={review?.assessments.find(a=>a.timeframe===tf)} registerMidpoint={registerMidpoint} historyPicking={historyPicking&&tf==='M15'&&!pending} onHistoryPick={chooseHistory} showReferences={showReferences&&!draft&&manual===null} hypothesis={hypothesis} armedLevel={armed&&!pending?'entryPrice':null} draftPrice={draft?.price} onPick={(level,price,timeframe)=>{if(level==='entryPrice')stage(price,timeframe)}}/>
         </section>)}
       </div>
       <footer className="shrink-0 border-t bg-card px-2 pt-1 pb-[max(4px,env(safe-area-inset-bottom))]">
@@ -231,7 +238,7 @@ export function MarketAnalysisWorkspace(){
             {sheet==='review'?<>
               {searching&&<div className="space-y-2 p-3 text-sm" role="status"><p className="font-medium">Searching structural alternatives</p><p className="text-xs text-muted-foreground">{progress?progress.stage.replaceAll('_',' ')+' · '+progress.found+' / '+progress.target+' found':'Starting search…'}</p><progress className="h-2 w-full accent-primary" max={progress?.target??5} value={progress?.found??0}/><p className="text-xs">{progress?.passed??0} passed · {progress?.failed??0} failed · {progress?.evaluated??0} evaluated · {progress?.elapsedMs??0} ms</p><Button variant="outline" size="sm" onClick={cancelSearch}>Cancel search</Button></div>}
               {searchError&&<p role="alert" className="p-3 text-sm text-destructive">{searchError}</p>}
-              {options&&<TradeOptionsPanel key={options.snapshotId+':'+options.hypothesisId+':'+options.revision} result={options} data={data} entry={hypothesis.entryPrice} onSelect={o=>{
+              {options&&<TradeOptionsPanel key={options.snapshotId+':'+options.hypothesisId+':'+options.revision+':'+reviewSetup} initialId={reviewSetup} result={options} data={data} entry={hypothesis.entryPrice} onSelect={o=>{
                 if(!options.options.some(p=>p===o))return
                 if(hypothesis.id!==options.hypothesisId||hypothesis.revision!==options.revision||hypothesis.snapshotId!==options.snapshotId)return
                 // Preview uses the already evaluated option; do not run evaluation again.
