@@ -1,15 +1,21 @@
 import type { WorkspaceAnalysis } from '../market-analysis/workspace'
 import type { TradeHypothesis } from './contracts'
 import type { StructuralReference, StrategyAssessment } from './strategies'
-import { evaluateTrade, type TradeReview } from './evaluator'
-import { SEARCH_STAGES,searchAssessments,type SearchStage } from './search-anchors'
+import { evaluateTrade,prepareTradeEvaluation, type TradeReview } from './evaluator'
+import { SEARCH_STAGES,searchAssessments,type SearchStage,type AnchorCache } from './search-anchors'
+import { distinctGeometry } from './candidate-diversity'
+export { distinctGeometry } from './candidate-diversity'
+import { seedCandidates,selectFinal,type SeedCandidate,type SeedId } from './candidate-search'
 import { evaluateHardPolicy } from './policy'
 import policy from '../../ai/trading_knowledge/config/option-policy.json' with { type: 'json' }
 
 export interface OptionPair {
   id: string
   searchStage?:SearchStage
+  seed?:SeedId
+  origins?:string[]
   stopBufferAtr?:number
+  targetBufferPoints?:number
   stopLossPrice: number
   takeProfitPrice: number
   stopReference: StructuralReference
@@ -32,7 +38,7 @@ function snap(value:number,point:number,up:boolean){
   const units=value/point
   return Number(((up?Math.ceil(units-1e-7):Math.floor(units+1e-7))*point).toPrecision(15))
 }
-export function pairReferences(h:TradeHypothesis,point:number,assessments:readonly StrategyAssessment[],primary:NonNullable<TradeReview['context']>['primary'],bufferAtr=policy.stopBufferAtr,expanded=false){
+export function pairReferences(h:TradeHypothesis,point:number,assessments:readonly StrategyAssessment[],primary:NonNullable<TradeReview['context']>['primary'],bufferAtr=policy.stopBufferAtr,expanded=false,targetBufferPoints=policy.targetBufferPoints){
   const pairs:OptionPair[]=[],failedPairs:OptionPair[]=[]
   let rejected=0,attempted=0
   if(h.entryPrice===null||!Number.isFinite(h.entryPrice)||h.entryPrice<=0||!Number.isFinite(point)||point<=0)return {pairs,failedPairs,rejected,attempted}
@@ -46,18 +52,18 @@ export function pairReferences(h:TradeHypothesis,point:number,assessments:readon
     const atr=a.metrics.atr
     if(atr===null||!Number.isFinite(atr)||atr<=0)continue
     const refs=a.references.filter(r=>r.timeframe===a.timeframe&&Number.isFinite(r.price)&&r.price>0&&r.evidenceIds.length>0)
-    const stops=refs.filter(r=>(structuralStop.has(r.source)||(expanded&&r.source==='confirmed pivot'))&&r.kind==='stop'&&(primary==='range'?rangeBoundary(r.source)||(expanded&&r.source==='active zone outer edge'):!rangeBoundary(r.source)))
-    const targets=refs.filter(r=>structuralTarget.has(r.source)&&r.kind==='target'&&(primary==='range'?rangeBoundary(r.source)||(expanded&&r.source==='active zone near edge'):!rangeBoundary(r.source)&&(r.source!=='equilibrium'||primary==='countertrend')))
+    const stops=refs.filter(r=>(structuralStop.has(r.source)||(expanded&&r.source==='confirmed pivot'))&&r.kind==='stop'&&(primary==='range'?rangeBoundary(r.source)||(expanded&&(r.source==='active zone outer edge'||r.source==='confirmed pivot')):!rangeBoundary(r.source)))
+    const targets=refs.filter(r=>structuralTarget.has(r.source)&&r.kind==='target'&&(primary==='range'?rangeBoundary(r.source)||(expanded&&(r.source==='active zone near edge'||r.source==='confirmed pivot')):!rangeBoundary(r.source)&&(r.source!=='equilibrium'||primary==='countertrend')))
     // In a validated range, never reach beyond its opposite boundary. Other
     // strategies may cross an obstacle, but the full review must disclose it.
     for(const s of stops)for(const t of targets){
       // Never mix inner stop and outer target to manufacture reward/risk.
-      if(primary==='range'&&(rangeBoundary(s.source)!==rangeBoundary(t.source)||(s.rangeId??'outer')!==(t.rangeId??'outer')))continue
+      if(primary==='range'&&(rangeBoundary(s.source)!==rangeBoundary(t.source)||(s.rangeId??'outer')!==(t.rangeId??'outer')||(s.source==='confirmed pivot')!==(t.source==='confirmed pivot')))continue
       if((s.scale??'baseline')!==(t.scale??'baseline'))continue
       attempted++
       const buffer=Math.max(point,atr*bufferAtr)
       const sl=snap(s.price+(long?-buffer:buffer),point,!long)
-      const tp=snap(t.price+(long?-1:1)*policy.targetBufferPoints*point,point,!long)
+      const tp=snap(t.price+(long?-1:1)*targetBufferPoints*point,point,!long)
       const hard=evaluateHardPolicy({...h,stopLossPrice:sl,takeProfitPrice:tp},point)
       const g=hard.geometry
       if(g.mode!=='complete'||g.riskPoints===null||g.rewardPoints===null||g.grossRewardRisk===null){rejected++;continue}
@@ -76,68 +82,90 @@ export function pairReferences(h:TradeHypothesis,point:number,assessments:readon
 }
 export type SearchStop='TARGET_REACHED'|'RUNTIME_LIMIT'|'EVALUATION_LIMIT'|'SEARCH_EXHAUSTED'|'DATA_INSUFFICIENT'
 export interface SearchProgress{stage:SearchStage;found:number;passed:number;failed:number;evaluated:number;elapsedMs:number;target:number}
-export function distinctGeometry(a:OptionPair,b:OptionPair,point:number){
- return Math.max(Math.abs(a.stopLossPrice-b.stopLossPrice),Math.abs(a.takeProfitPrice-b.takeProfitPrice))/point>=policy.minDifferencePoints-1e-7
-}
 export function generateTradeOptions(data:WorkspaceAnalysis,h:TradeHypothesis,onProgress?:(p:SearchProgress)=>void,clock=()=>performance.now()){
  const start=clock(),base={...h,stopLossPrice:null,takeProfitPrice:null}
- const entryReview=evaluateTrade(data,base)
- const options:TradeOption[]=[],failedOptions:FailedOption[]=[]
- const retained:OptionPair[]=[],attemptedIds=new Set<string>()
- let attempted=0,rejected=0,unchartable=0,evaluated=0
- let stopReason:SearchStop='SEARCH_EXHAUSTED'
- let status:OptionStatus='entry_required'
+ const prepared=h.entryPrice===null?undefined:prepareTradeEvaluation(data,base)
+ const entryReview=evaluateTrade(data,base,prepared)
+ const passed:TradeOption[]=[],failed:FailedOption[]=[]
+ let attempted=0,rejected=0,unchartable=0,evaluated=0,similarSkipped=0
+ let stopReason:SearchStop='SEARCH_EXHAUSTED',status:OptionStatus='entry_required'
  const stages:{stage:SearchStage;found:number;evaluated:number}[]=[]
  const context=entryReview.context
  const blocked=!context||['context_unknown','transition_uncertain'].includes(context.kind)||entryReview.warnings.some(w=>w.severity==='unassessed'||w.severity==='block')
- const progress=(stage:SearchStage)=>onProgress?.({stage,found:retained.length,passed:options.length,failed:failedOptions.length,evaluated,elapsedMs:Math.round(clock()-start),target:policy.targetTotal})
- const budget=():SearchStop|null=>retained.length>=policy.targetTotal?'TARGET_REACHED':clock()-start>=policy.runtimeMs?'RUNTIME_LIMIT':evaluated>=policy.maxEvaluations?'EVALUATION_LIMIT':null
+ const pool=new Map<string,SeedCandidate>()
+ const expired=()=>clock()-start>=policy.runtimeMs
+ // Reserve half the budget for actual review. Check between each bounded
+ // assessment/variant rather than enumerating all history pools in one call.
+ const discoveryExpired=()=>clock()-start>=policy.runtimeMs*0.5
+ const progress=(stage:SearchStage)=>{
+  const selected=selectFinal(passed,failed)
+  onProgress?.({stage,found:selected.options.length+selected.failedOptions.length,passed:selected.options.length,failed:selected.failedOptions.length,evaluated,elapsedMs:Math.round(clock()-start),target:policy.targetTotal})
+ }
  if(h.entryPrice!==null&&context){
-  const pools:StrategyAssessment[][]=[]
-  outer:for(const stage of SEARCH_STAGES){
-   const before=retained.length,evBefore=evaluated
-   const limit=budget();if(limit){stopReason=limit;break}
+  const pools:StrategyAssessment[][]=[],anchorCache:AnchorCache=new Map()
+  discovery:for(const stage of SEARCH_STAGES){
+   if(discoveryExpired())break
+   const before=pool.size
    progress(stage)
-   const assessments=stage==='buffer_sensitivity'?pools.flat():searchAssessments(data,base,entryReview,stage,context.primary)
+   const assessments=stage==='buffer_sensitivity'?pools.flat():searchAssessments(data,base,entryReview,stage,context.primary,anchorCache)
    if(stage!=='buffer_sensitivity')pools.push(assessments)
-   const buffers=stage==='buffer_sensitivity'?policy.stopBufferVariants:[policy.stopBufferAtr]
-   for(const buffer of buffers){
-    const result=pairReferences(base,data.snapshot.pointSize,assessments,context.primary,buffer,stage!=='baseline')
-    attempted+=result.attempted
-    unchartable+=result.rejected-result.failedPairs.length
-    // Interleave hard-pass and hard-fail candidates rather than consuming the
-    // whole budget on one outcome. Prefer distinct anchor pairs before buffers.
-    const candidates:OptionPair[]=[]
-    for(let i=0;i<Math.max(result.pairs.length,result.failedPairs.length);i++){
-     if(result.pairs[i])candidates.push(result.pairs[i])
-     if(result.failedPairs[i])candidates.push(result.failedPairs[i])
-    }
-    for(const raw of candidates){
-     const limit=budget()
-     if(limit){stopReason=limit;stages.push({stage,found:retained.length-before,evaluated:evaluated-evBefore});break outer}
-     if(attemptedIds.has(raw.id))continue
-     attemptedIds.add(raw.id)
-     if(retained.some(p=>!distinctGeometry(p,raw,data.snapshot.pointSize)))continue
-     const pair={...raw,searchStage:stage,stopBufferAtr:buffer}
-     const review=evaluateTrade(data,{...base,stopLossPrice:pair.stopLossPrice,takeProfitPrice:pair.takeProfitPrice})
-     evaluated++
-     const failureState:FailedOption['failureState']|null=review.state==='BLOCKED'?'failed_hard_policy':
-      review.state==='INFEASIBLE'?'failed_structure':
-      review.warnings.some(w=>w.severity==='unassessed')?'failed_data_quality':
-      blocked||review.state==='INCOMPLETE'?'failed_context':null
-     retained.push(pair)
-     if(failureState){rejected++;failedOptions.push({...pair,review,failureState})}
-     else options.push({...pair,review})
-     progress(stage)
+   const variants=stage==='buffer_sensitivity'?
+    [...policy.stopBufferVariants.map(b=>[b,policy.targetBufferPoints] as const),...policy.targetBufferVariantsPoints.map(t=>[policy.stopBufferAtr,t] as const)]:[[policy.stopBufferAtr,policy.targetBufferPoints] as const]
+   for(const [buffer,targetBuffer] of variants)for(const assessment of assessments){
+    if(discoveryExpired()){stages.push({stage,found:pool.size-before,evaluated:0});break discovery}
+    const r=pairReferences(base,data.snapshot.pointSize,[assessment],context.primary,buffer,stage!=='baseline',targetBuffer)
+    attempted+=r.attempted;unchartable+=r.rejected-r.failedPairs.length
+    for(const [list,hardPass] of [[r.pairs,true],[r.failedPairs,false]] as const)for(const raw of list){
+     const origin=stage+':'+assessment.timeframe+':'+(assessment.metrics.searchLookback??'default')
+     const existing=pool.get(raw.id)
+     if(existing){if(!existing.origins?.includes(origin))existing.origins?.push(origin);continue}
+     pool.set(raw.id,{...raw,searchStage:stage,stopBufferAtr:buffer,targetBufferPoints:targetBuffer,hardPass,seed:'primary_structure',origins:[origin]})
     }
    }
-   stages.push({stage,found:retained.length-before,evaluated:evaluated-evBefore})
-   const limitAfter=budget();if(limitAfter){stopReason=limitAfter;break}
+   stages.push({stage,found:pool.size-before,evaluated:0})
   }
+  const queues=seedCandidates([...pool.values()])
+  const visited=new Set<string>()
+  let rounds=0
+  // First round covers every eligible seed before checking target count.
+  // Later rounds explore alternatives; final selection is global.
+  while(queues.some(q=>q.queue.length)){
+   for(const q of queues){
+    if(expired()){stopReason='RUNTIME_LIMIT';break}
+    if(evaluated>=policy.maxEvaluations){stopReason='EVALUATION_LIMIT';break}
+    let raw=q.queue.shift()
+    while(raw&&visited.has(raw.id))raw=q.queue.shift()
+    if(!raw)continue
+    visited.add(raw.id)
+    const review=evaluateTrade(data,{...base,stopLossPrice:raw.stopLossPrice,takeProfitPrice:raw.takeProfitPrice},prepared)
+    evaluated++
+    const failureState:FailedOption['failureState']|null=review.state==='BLOCKED'?'failed_hard_policy':
+     review.state==='INFEASIBLE'?'failed_structure':
+     review.warnings.some(w=>w.severity==='unassessed')?'failed_data_quality':
+     blocked||review.state==='INCOMPLETE'?'failed_context':null
+    if(failureState){rejected++;failed.push({...raw,review,failureState})}
+    else passed.push({...raw,review})
+    const stage=stages.find(s=>s.stage===raw!.searchStage)
+    if(stage)stage.evaluated++
+   }
+   rounds++
+   progress('buffer_sensitivity')
+   if(stopReason==='RUNTIME_LIMIT'||stopReason==='EVALUATION_LIMIT')break
+   const selected=selectFinal(passed,failed)
+   // Explore at least two rounds whenever queues permit, even if the first
+   // round already filled the display quota.
+   if(rounds>=2&&selected.options.length+selected.failedOptions.length>=policy.targetTotal&&(selected.options.length>=policy.preferredPassed||blocked)){stopReason='TARGET_REACHED';break}
+  }
+  const selected=selectFinal(passed,failed)
+  const {options,failedOptions}=selected
+  similarSkipped=[...passed,...failed].filter(c=>![...options,...failedOptions].some(s=>s.id===c.id)&&[...options,...failedOptions].some(s=>!distinctGeometry(s,c))).length
   status=options.length?'options_available':blocked?'context_unresolved':attempted?'no_feasible_option':'no_structural_pair'
-  if(!retained.length&&blocked&&stopReason==='SEARCH_EXHAUSTED')stopReason='DATA_INSUFFICIENT'
- }else if(h.entryPrice!==null){status='context_unresolved';stopReason='DATA_INSUFFICIENT'}
- return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected:rejected+unchartable,unchartable,options,failedOptions,entryReview,
-  search:{target:policy.targetTotal,evaluated,elapsedMs:Math.round(clock()-start),stopReason,stages}}
+  if(!options.length&&!failedOptions.length&&blocked&&stopReason==='SEARCH_EXHAUSTED')stopReason='DATA_INSUFFICIENT'
+  return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected:rejected+unchartable,unchartable,options,failedOptions,entryReview,
+   search:{target:policy.targetTotal,evaluated,similarSkipped,minRelativeDifference:policy.minRelativeDifference,elapsedMs:Math.round(clock()-start),stopReason,stages,seeds:queues.map(q=>({seed:q.seed,eligible:q.eligible,remaining:q.queue.length})),uniqueGeometries:pool.size}}
+ }
+ if(h.entryPrice!==null){status='context_unresolved';stopReason='DATA_INSUFFICIENT'}
+ return {snapshotId:data.snapshot.id,hypothesisId:h.id,revision:h.revision,policyVersion:policy.version,status,attempted,rejected,unchartable,options:passed,failedOptions:failed,entryReview,
+  search:{target:policy.targetTotal,evaluated,similarSkipped,minRelativeDifference:policy.minRelativeDifference,elapsedMs:Math.round(clock()-start),stopReason,stages,seeds:[],uniqueGeometries:0}}
 }
 export type TradeOptions=ReturnType<typeof generateTradeOptions>

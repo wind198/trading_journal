@@ -17,10 +17,10 @@ export interface CorrectionReference {
   recoveryAtr: number
   recovered: boolean
 }
-export function inspectActiveStructure(input: readonly Candle[], atr: number | null, direction: 'long'|'short',lookback=policy.lookback) {
+export function inspectActiveStructure(input: readonly Candle[], atr: number | null, direction: 'long'|'short',lookback=policy.lookback,preparedPivots?:readonly ConfirmedPivot[]) {
   const bars=input.slice(-lookback)
   if(atr===null||!Number.isFinite(atr)||atr<=0||bars.length<policy.pivotLeft+policy.pivotRight+1)return null
-  const pivots=confirmedPivots(bars,policy.pivotLeft,policy.pivotRight)
+  const pivots=preparedPivots??confirmedPivots(bars,policy.pivotLeft,policy.pivotRight)
   const tolerance=atr*policy.zoneToleranceAtr,buffer=atr*policy.breakBufferAtr
   const zones:ActiveZone[]=[]
   for(const side of ['support','resistance'] as const){

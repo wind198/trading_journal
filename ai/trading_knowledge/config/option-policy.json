@@ -1,16 +1,43 @@
 {
-  "version": "0.2.0",
+  "version": "0.5.0",
   "status": "experimental",
   "maxOptions": 5,
   "stopBufferAtr": 0.15,
   "targetBufferPoints": 1,
   "targetTotal": 5,
-  "maxEvaluations": 100,
-  "runtimeMs": 2000,
-  "minDifferencePoints": 5,
+  "maxEvaluations": 200,
+  "runtimeMs": 4000,
   "stopBufferVariants": [
     0.25,
-    0.5
+    0.5,
+    0.75,
+    1
   ],
-  "maxAnchorsPerSide": 8
+  "maxAnchorsPerSide": 24,
+  "minRelativeDifference": 0.2,
+  "targetBufferVariantsPoints": [
+    3,
+    5,
+    10
+  ],
+  "rangeSearchWindows": [
+    50,
+    75,
+    100,
+    150,
+    200,
+    300,
+    400,
+    600
+  ],
+  "anchorSearchWindows": [
+    100,
+    200,
+    400,
+    600
+  ],
+  "preferredPassed": 2,
+  "searchStrategy": "multi_seed_round_robin",
+  "selectionStrategy": "farthest_first",
+  "maxGeometryPerSeed": 24
 }

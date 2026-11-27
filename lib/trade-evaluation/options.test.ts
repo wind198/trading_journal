@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createHypothesis } from './hypothesis'
+import { geometryDistance,farthest } from './candidate-diversity'
 import { pairReferences, generateTradeOptions, distinctGeometry } from './options'
 import type { StructuralReference, StrategyAssessment } from './strategies'
 import { buildWorkspaceAnalysis } from '../market-analysis/workspace'
@@ -68,14 +69,37 @@ test('nested range pairs do not mix inner and outer boundaries',()=>{
 })
 
 
-test('near duplicate geometry is excluded but a meaningful stop or target change is retained',()=>{
+test('at least 20 percent difference in either distance, symmetric and inclusive',()=>{
  const r=pairReferences(h(),point,[assess([ref('stop',1.1996,'active zone outer edge'),ref('target',1.2008,'active zone near edge')])],'continuation')
- const a=r.pairs[0]
- assert.equal(distinctGeometry(a,{...a,stopLossPrice:a.stopLossPrice-4*point},point),false)
- assert.equal(distinctGeometry(a,{...a,takeProfitPrice:a.takeProfitPrice+5*point},point),true)
+ const a={...r.pairs[0],riskPoints:50,rewardPoints:100}
+ const variant=(riskPoints:number,rewardPoints:number)=>({...a,riskPoints,rewardPoints})
+ for(const b of [variant(59,119),variant(50,100),variant(49,99)]){
+  assert.equal(distinctGeometry(a,b),false)
+  assert.equal(distinctGeometry(b,a),false)
+ }
+ for(const b of [variant(60,100),variant(50,120),variant(40,100),variant(50,80)]){
+  assert.equal(distinctGeometry(a,b),true)
+  assert.equal(distinctGeometry(b,a),true)
+ }
+})
+test('relative diversity compares every retained geometry, not just the last one',()=>{
+ const r=pairReferences(h(),point,[assess([ref('stop',1.1996,'active zone outer edge'),ref('target',1.2008,'active zone near edge')])],'continuation')
+ const a={...r.pairs[0],riskPoints:50,rewardPoints:100}
+ const retained=[a,{...a,riskPoints:100,rewardPoints:200}]
+ const candidate={...a,riskPoints:55,rewardPoints:110}
+ assert.equal(distinctGeometry(retained[1],candidate),true)
+ assert.equal(retained.every(p=>distinctGeometry(p,candidate)),false)
 })
 test('expanded confirmed stop anchors are opt-in, not baseline behavior',()=>{
  const a=assess([ref('stop',1.1996,'confirmed pivot'),ref('target',1.2008,'confirmed pivot')])
  assert.equal(pairReferences(h(),point,[a],'continuation').pairs.length,0)
  assert.equal(pairReferences(h(),point,[a],'continuation',0.15,true).pairs.length,1)
+})
+
+test('farthest selection favors a genuinely different geometry',()=>{
+ const r=pairReferences(h(),point,[assess([ref('stop',1.1996,'active zone outer edge'),ref('target',1.2008,'active zone near edge')])],'continuation')
+ const a={...r.pairs[0],riskPoints:50,rewardPoints:100}
+ const near={...a,riskPoints:60,rewardPoints:100},far={...a,riskPoints:120,rewardPoints:260}
+ assert.ok(geometryDistance(a,far)>geometryDistance(a,near))
+ assert.equal(farthest([near,far],[a]),far)
 })
