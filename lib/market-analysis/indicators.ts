@@ -10,7 +10,7 @@ export type FoundationConfig = {
 function period(n: number) {
   if (!Number.isSafeInteger(n) || n < 1 || n > 10000) throw new RangeError('invalid period')
 }
-const mean = (xs: readonly number[]) => xs.reduce((a,b)=>a+b,0)/xs.length
+const mean = (xs: readonly number[]) => xs[0] + xs.reduce((a,b)=>a+(b-xs[0]),0)/xs.length
 export function ratio(a: number | null, b: number | null): number | null {
   if (a === null || b === null || b === 0) return null
   const v = a/b

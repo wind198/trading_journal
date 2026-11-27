@@ -1,4 +1,4 @@
-import config from '../../ai/trading_knowledge/config/indicators.json'
+import config from '../../ai/trading_knowledge/config/indicators.json' with { type: 'json' }
 import type { MarketSnapshot } from './contracts'
 import { calculateFoundation } from './indicators'
 import { validateSnapshot } from './snapshot'

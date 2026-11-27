@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import type { Candle, MarketSnapshot } from './contracts'
 import { atr, bollinger, dmi, efficiencyRatio, ichimokuSeries, percentile, regression, wilder } from './indicators'
 import { validateSnapshot } from './snapshot'
+import { analyzeFoundation } from './foundation'
 
 function bars(values: number[], step=180): Candle[] {
   return values.map((close,i)=>({closeTime:new Date((i+1)*step*1000).toISOString(),open:close,high:close+1,low:close-1,close,volume:null}))
@@ -46,3 +47,21 @@ test('snapshot rejects future or duplicate bars and reports gaps',()=>{
   assert.ok(validateSnapshot({...s,bars:{M3:[data[0],data[2]],M15:[]}}).some(x=>x.includes('cadence gaps')))
 })
 test('invalid periods rejected',()=>assert.throws(()=>atr(bars([10]),0)))
+
+test('foundation uses committed configuration independently per timeframe',()=>{
+  const m3=bars(Array.from({length:90},(_,i)=>100+i))
+  const m15=bars(Array.from({length:18},(_,i)=>100-i),900)
+  const result=analyzeFoundation({id:'fixture',symbol:'EURUSD',asOf:m3[89].closeTime,source:'fixture',pointSize:0.00001,volumeKind:'unknown',bars:{M3:m3,M15:m15}})
+  assert.equal(result.configVersion,'0.1.0')
+  assert.equal(result.status,'uncalibrated')
+  assert.equal(result.timeframes.M3.ichimoku.alignedB[76],null)
+  assert.notEqual(result.timeframes.M3.ichimoku.alignedB[77],null)
+  assert.equal(result.timeframes.M15.ichimoku.alignedB[17],null)
+  assert.equal(result.timeframes.M3.atr.length,90)
+  assert.equal(result.timeframes.M15.atr.length,18)
+})
+test('flat fractional closes have undefined dispersion ratios',()=>{
+  const data=bars([10.1,10.1,10.1])
+  assert.equal(bollinger(data,3,2).percentB[2],null)
+  assert.equal(regression(data,3).rSquared[2],null)
+})
