@@ -164,7 +164,7 @@ export function ChartPane({
     [closedBars, showForce],
   )
   const forceScores = useMemo(
-    () => showForce && pane.id === '3m' ? calculateForceScores(closedBars) : [],
+    () => showForce && pane.id === '3m' || pane.id === '15m' ? calculateForceScores(closedBars) : [],
     [closedBars, pane.id, showForce],
   )
   const engulfingEvents = useMemo(
