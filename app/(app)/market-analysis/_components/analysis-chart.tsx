@@ -42,7 +42,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     const chart = createChart(node, {
       width: node.clientWidth, height: node.clientHeight,
       layout: { background: { type: ColorType.Solid, color: color('--card') }, textColor: color('--foreground') },
-      grid: { vertLines: { color: color('--border') }, horzLines: { color: color('--border') } },
+      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       timeScale: { timeVisible: true, secondsVisible: false },
     })
     const times = bars.map(b => Date.parse(b.closeTime) / 1000 as UTCTimestamp)

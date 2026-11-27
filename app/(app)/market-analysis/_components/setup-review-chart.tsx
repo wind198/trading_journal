@@ -17,7 +17,7 @@ export function SetupReviewChart({data,entry,option,failed=false}:{data:Workspac
   const css=getComputedStyle(node),color=(token:string)=>css.getPropertyValue(token).trim()
   const chart=createChart(node,{width:node.clientWidth,height:node.clientHeight,
    layout:{background:{type:ColorType.Solid,color:color('--card')},textColor:color('--foreground')},
-   grid:{vertLines:{color:color('--border')},horzLines:{color:color('--border')}},
+   grid: { vertLines: { visible: false }, horzLines: { visible: false } },
    timeScale:{timeVisible:true,secondsVisible:false,rightOffset:3},handleScroll:false,handleScale:false})
   const fmt={type:'price' as const,precision:5,minMove:data.snapshot.pointSize}
   const candle=chart.addSeries(CandlestickSeries,{upColor:color('--success'),downColor:color('--destructive'),borderVisible:false,wickUpColor:color('--success'),wickDownColor:color('--destructive'),priceFormat:fmt})
