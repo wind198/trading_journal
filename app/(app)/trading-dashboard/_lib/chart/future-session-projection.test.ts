@@ -13,7 +13,7 @@ test('M3 projects the observed 180-second or legacy 300-second cadence',()=>{
 })
 test('M15 remains 900 seconds; sparse M3 history falls back to configured cadence',()=>{
   assert.equal(projectionIntervalSec(candles(900),'15m'),900)
-  assert.equal(projectionIntervalSec(candles(900).slice(0,1),'3m'),300)
+  assert.equal(projectionIntervalSec(candles(900).slice(0,1),'3m'),180)
 })
 test('rendered whitespace and coordinate bars share exact timestamps',()=>{
   const bars=candles(180),last=bars.at(-1)!.time

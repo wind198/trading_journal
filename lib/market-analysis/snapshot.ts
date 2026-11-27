@@ -1,6 +1,8 @@
 import type { MarketSnapshot, Timeframe } from './contracts'
 
-export const TIMEFRAME_SECONDS: Readonly<Record<Timeframe,number>> = {M3:180,M15:900}
+import { CANDLE_TIMEFRAMES } from '../ticks/candles'
+
+export const TIMEFRAME_SECONDS: Readonly<Record<Timeframe,number>> = {M3:CANDLE_TIMEFRAMES['3m'],M15:CANDLE_TIMEFRAMES['15m']}
 export function validateSnapshot(snapshot: MarketSnapshot): string[] {
   const asOf=Date.parse(snapshot.asOf)
   if(!Number.isFinite(asOf)||snapshot.symbol!=='EURUSD'||!Number.isFinite(snapshot.pointSize)||snapshot.pointSize<=0)throw new Error('invalid snapshot metadata')
