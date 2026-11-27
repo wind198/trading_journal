@@ -5,6 +5,8 @@ import { observePhase } from '../market-analysis/phase'
 import { resolveTradeContext, type HierarchicalContext } from './hierarchical-context'
 import { inspectActiveStructure } from '../market-analysis/active-structure'
 import { enrichStructure } from './structure-review'
+import { inspectChoppyRanges } from '../market-analysis/choppy'
+import { enrichChoppy } from './choppy-review'
 import { makeContext } from './context'
 import { evaluateStrategy, type StrategyAssessment } from './strategies'
 
@@ -29,7 +31,7 @@ export function evaluateTrade(data:WorkspaceAnalysis,h:TradeHypothesis){
       // Local contrary movement within broader continuation is assessed as a correction,
       // not a standalone countertrend thesis. Keep the local regime visible.
       const correction=context.kind==='potential_correction_entry'&&tf==='M3'&&c.strategy==='countertrend'
-      const assessment=enrichStructure(c,evaluateStrategy(c,correction?'correction_entry':undefined),inspectActiveStructure(data.snapshot.bars[tf],c.atr,h.direction))
+      const assessment=enrichChoppy(c,enrichStructure(c,evaluateStrategy(c,correction?'correction_entry':undefined),inspectActiveStructure(data.snapshot.bars[tf],c.atr,h.direction)),c.strategy==='range'?inspectChoppyRanges(data.snapshot.bars[tf],c.atr,c.range):null)
       assessments.push(assessment);warnings.push(...assessment.warnings)
       if(c.strategy==='countertrend'&&tf==='M15')warnings.push({code:'ENTRY_TIMEFRAME_CONFLICT',dimension:'entry',severity:'warning',message:'Trade direction opposes the experimental M15 trend classification.',timeframe:tf,evidenceIds:c.evidenceIds})
     }

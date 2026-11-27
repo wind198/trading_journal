@@ -52,3 +52,14 @@ test('provisional range boundaries support conditional pairs without relaxing ha
  const narrow=[refs[0],ref('target',1.2002,'provisional range boundary')]
  assert.equal(pairReferences(h(),point,[assess(narrow,'range')],'range').pairs.length,0)
 })
+
+test('nested range pairs do not mix inner and outer boundaries',()=>{
+ const refs:StructuralReference[]=[
+ {...ref('stop',1.1996,'provisional range boundary'),rangeId:'inner'},
+ {...ref('target',1.2008,'provisional range boundary'),rangeId:'inner'},
+ {...ref('stop',1.199,'validated range boundary'),rangeId:'outer'},
+ {...ref('target',1.202,'validated range boundary'),rangeId:'outer'}]
+ const result=pairReferences(h(),point,[assess(refs,'range')],'range')
+ assert.equal(result.pairs.length,2)
+ assert.ok(result.pairs.every(p=>p.stopReference.rangeId===p.targetReference.rangeId))
+})
