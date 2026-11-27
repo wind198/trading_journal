@@ -179,7 +179,7 @@ export function MarketAnalysisWorkspace(){
           </div>
           <div className="min-h-0 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
             {sheet==='review'?<>
-              {options&&<TradeOptionsPanel result={options} onSelect={o=>{
+              {options&&<TradeOptionsPanel key={options.snapshotId+':'+options.hypothesisId+':'+options.revision} result={options} data={data} entry={hypothesis.entryPrice} onSelect={o=>{
                 if(hypothesis.id!==options.hypothesisId||hypothesis.revision!==options.revision||hypothesis.snapshotId!==options.snapshotId)return
                 // Preview uses the already evaluated option; do not run evaluation again.
                 setHypothesis({...hypothesis,stopLossPrice:o.stopLossPrice,takeProfitPrice:o.takeProfitPrice})
