@@ -1,15 +1,26 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { CandlestickSeries, LineSeries, createChart, ColorType, type UTCTimestamp } from 'lightweight-charts'
+import { CandlestickSeries, LineSeries, createChart, ColorType, type UTCTimestamp, type ISeriesApi, type IPriceLine, type MouseEventParams } from 'lightweight-charts'
 import type { WorkspaceAnalysis } from '@/lib/market-analysis/workspace'
 import type { Timeframe } from '@/lib/market-analysis/contracts'
+
+import type { TradeHypothesis, TradeLevel } from '@/lib/trade-evaluation/contracts'
+import { normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 
 export type AnalysisView = 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
 const priceFormat = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 
-export function AnalysisChart({ data, timeframe, view }: { data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView }) {
+export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick }: {
+  data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView
+  hypothesis: TradeHypothesis; armedLevel: TradeLevel | null
+  onPick: (level: TradeLevel, price: number, timeframe: Timeframe) => void
+}) {
   const host = useRef<HTMLDivElement>(null)
+  const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const lines = useRef<IPriceLine[]>([])
+  const interaction = useRef({ armedLevel, onPick })
+  useEffect(() => { interaction.current = { armedLevel, onPick } }, [armedLevel, onPick])
   useEffect(() => {
     const node = host.current
     const bars = data.snapshot.bars[timeframe]
@@ -27,6 +38,16 @@ export function AnalysisChart({ data, timeframe, view }: { data: WorkspaceAnalys
       upColor: color('--success'), downColor: color('--destructive'), borderVisible: false,
       wickUpColor: color('--success'), wickDownColor: color('--destructive'), priceFormat,
     })
+    candleRef.current = candle
+    const click = (event: MouseEventParams) => {
+      const active = interaction.current
+      if (!active.armedLevel || !event.point || event.paneIndex !== 0 || event.time === undefined) return
+      const raw = candle.coordinateToPrice(event.point.y)
+      if (raw === null) return
+      const price = normalizePrice(raw, data.snapshot.pointSize)
+      if (price !== null) active.onPick(active.armedLevel, price, timeframe)
+    }
+    chart.subscribeClick(click)
     candle.setData(bars.map((b,i) => ({ time: times[i], open:b.open, high:b.high, low:b.low, close:b.close })))
     const f = data.indicators[timeframe]
     const add = (values: readonly (number|null)[], token: string, title: string, pane = 0) => {
@@ -55,10 +76,28 @@ export function AnalysisChart({ data, timeframe, view }: { data: WorkspaceAnalys
     chart.timeScale().fitContent()
     const observer = new ResizeObserver(() => chart.resize(node.clientWidth, node.clientHeight))
     observer.observe(node)
-    return () => { observer.disconnect(); chart.remove() }
+    return () => { observer.disconnect(); chart.unsubscribeClick(click); candleRef.current = null; lines.current = []; chart.remove() }
   }, [data,timeframe,view])
+  useEffect(() => {
+    const candle = candleRef.current
+    const node = host.current
+    if (!candle || !node) return
+    for (const line of lines.current) candle.removePriceLine(line)
+    lines.current = []
+    const css = getComputedStyle(node)
+    const levels = [
+      [hypothesis.entryPrice, 'Entry', '--primary'],
+      [hypothesis.stopLossPrice, 'SL', '--destructive'],
+      [hypothesis.takeProfitPrice, 'TP', '--success'],
+    ] as const
+    for (const [price,title,token] of levels) {
+      if (price === null) continue
+      lines.current.push(candle.createPriceLine({ price, title, color: css.getPropertyValue(token).trim(),
+        lineWidth: 2, axisLabelVisible: true, lineVisible: true }))
+    }
+  }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view])
   return <div className="relative min-h-0 flex-1">
-    <div ref={host} className="absolute inset-0" role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
+    <div ref={host} className={armedLevel ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
     {!data.snapshot.bars[timeframe].length && <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">No completed bars</div>}
   </div>
 }
