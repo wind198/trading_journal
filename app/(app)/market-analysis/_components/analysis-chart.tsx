@@ -9,13 +9,13 @@ import type { TradeHypothesis, TradeLevel } from '@/lib/trade-evaluation/contrac
 import type { StrategyAssessment } from '@/lib/trade-evaluation/strategies'
 import { normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 
-export type AnalysisView = 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
+export type AnalysisView = 'price' | 'overview' | 'trend' | 'range' | 'momentum' | 'transition'
 const priceFormat = { type: 'price' as const, precision: 5, minMove: 0.00001 }
 
-export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences }: {
+export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, onPick, assessment, showReferences, draftPrice }: {
   data: WorkspaceAnalysis; timeframe: Timeframe; view: AnalysisView
   hypothesis: TradeHypothesis; armedLevel: TradeLevel | null
-  assessment?: StrategyAssessment; showReferences: boolean
+  assessment?: StrategyAssessment; showReferences: boolean; draftPrice?: number
   onPick: (level: TradeLevel, price: number, timeframe: Timeframe) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
@@ -71,7 +71,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     } else if (view === 'transition') {
       add(f.bollinger.bandwidth,'--chart-1','Bandwidth',1)
       add(f.atr,'--chart-3','ATR',2)
-    } else {
+    } else if (view === 'overview') {
       add(f.dmi.adx,'--chart-1','ADX',1)
       add(f.efficiencyRatio,'--chart-3','Efficiency',2)
     }
@@ -88,9 +88,9 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
     lines.current = []
     const css = getComputedStyle(node)
     const levels = [
-      [hypothesis.entryPrice, 'Entry', '--primary'],
-      [hypothesis.stopLossPrice, 'SL', '--destructive'],
-      [hypothesis.takeProfitPrice, 'TP', '--success'],
+      [draftPrice??hypothesis.entryPrice, draftPrice===undefined?'Entry':'Draft entry', '--primary'],
+      [draftPrice===undefined?hypothesis.stopLossPrice:null, 'SL', '--destructive'],
+      [draftPrice===undefined?hypothesis.takeProfitPrice:null, 'TP', '--success'],
     ] as const
     for (const [price,title,token] of levels) {
       if (price === null) continue
@@ -110,7 +110,7 @@ export function AnalysisChart({ data, timeframe, view, hypothesis, armedLevel, o
         addReference(z.lower,'Obstacle lower');addReference(z.upper,'Obstacle upper')
       }
     }
-  }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,assessment,showReferences])
+  }, [hypothesis.entryPrice,hypothesis.stopLossPrice,hypothesis.takeProfitPrice,data,timeframe,view,assessment,showReferences,draftPrice])
   return <div className="relative min-h-0 flex-1">
     <div ref={host} className={armedLevel ? 'absolute inset-0 cursor-crosshair' : 'absolute inset-0'} role="img" aria-label={timeframe+' completed candle chart, '+view+' indicators, UTC close timestamps'} />
     {!data.snapshot.bars[timeframe].length && <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">No completed bars</div>}

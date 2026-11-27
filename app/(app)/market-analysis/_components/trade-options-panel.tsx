@@ -23,8 +23,8 @@ export function TradeOptionsPanel({result,onSelect}:{result:TradeOptions;onSelec
        <div><dt>TP</dt><dd>{o.takeProfitPrice.toFixed(5)}</dd><dd>{o.rewardPoints} pts</dd></div>
        <div><dt>Gross R:R</dt><dd>1:{o.grossRewardRisk.toFixed(2)}</dd></div>
      </dl>
-     {o.review.warnings.map((w,i)=><p key={w.code+':'+i} className="border-l pl-2">{w.timeframe??'Policy'} · {w.message}</p>)}
-     <Button variant="outline" size="sm" className="w-full" onClick={()=>onSelect(o)}>Preview SL / TP on charts</Button>
+     {o.review.warnings.filter(w=>w.dimension!=='entry'&&w.dimension!=='data').map((w,i)=><p key={w.code+':'+i} className="border-l pl-2">{w.timeframe??'Policy'} · {w.message}</p>)}
+     <Button variant="outline" size="sm" className="h-10 w-full" onClick={()=>onSelect(o)}>Preview SL / TP on charts</Button>
    </article>)}
    <p className="text-xs text-muted-foreground">Experimental references and buffers. Costs and monetary exposure unassessed. Preview does not submit orders or approve a trade.</p>
  </section>
