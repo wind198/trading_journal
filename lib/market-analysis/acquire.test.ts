@@ -17,3 +17,11 @@ test('one as-of cutoff for both timeframes',()=>{
 test('invalid provider cadence rejected instead of relabeling',()=>{
   assert.throws(()=>snapshotFromProvider('fixture',1000000,{M3:[bar(300)],M15:[]}))
 })
+
+test('historical cutoff excludes future candles independently in both panes',()=>{
+ const s=snapshotFromProvider('history',900000,{M3:[bar(540),bar(720),bar(900)],M15:[bar(0),bar(900)]})
+ assert.equal(s.asOf,new Date(900000).toISOString())
+ assert.equal(s.bars.M3.length,2);assert.equal(s.bars.M15.length,1)
+ assert.equal(s.bars.M3.at(-1)?.closeTime,s.asOf)
+ assert.equal(s.bars.M15.at(-1)?.closeTime,s.asOf)
+})
