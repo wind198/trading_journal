@@ -49,6 +49,8 @@ function assertOhlc(bars: LightweightCandle[], label: string) {
   for (let i = 0; i < bars.length; i++) {
     const bar = bars[i]
     assert.equal(bar.time, Math.floor(bar.time))
+    const timeframe = label.split(' ')[0] as CandleTimeframe
+    assert.equal(bar.time % CANDLE_TIMEFRAMES[timeframe], 0, `${label} bucket must align to configured timeframe`)
     assert.ok(bar.time < 1e11, `${label} time must be Unix seconds`)
     assert.ok(bar.high >= bar.open && bar.high >= bar.close && bar.high >= bar.low)
     assert.ok(bar.low <= bar.open && bar.low <= bar.close && bar.low > 0)
