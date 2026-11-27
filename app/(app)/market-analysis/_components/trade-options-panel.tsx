@@ -32,6 +32,13 @@ export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOpti
   </div>}
   {selected&&entry!==null&&<>
    <SetupReviewChart data={data} entry={entry} option={selected}/>
+   {selected.review.assessments.filter(a=>a.forceState).map(a=><div key={a.timeframe} className="space-y-1 px-3 py-1 text-xs">
+    <p className="font-medium">{a.timeframe} · Force: {a.forceState!.replaceAll('_',' ')}</p>
+    {[5,10,20].map(n=>{const bull=a.metrics['bullForce'+n],bear=a.metrics['bearForce'+n],sum=(bull??0)+(bear??0);return <div key={n} className="flex items-center gap-2">
+      <span className="w-12 shrink-0 text-muted-foreground">{n} bars</span>
+      {bull!=null&&bear!=null&&sum>0?<><div className="flex h-2 flex-1 overflow-hidden rounded-sm bg-muted" aria-label={'Bull '+bull.toFixed(1)+' bear '+bear.toFixed(1)}><div className="bg-success" style={{width:100*bull/sum+'%'}}/><div className="bg-destructive" style={{width:100*bear/sum+'%'}}/></div><span className="font-mono">B {bull.toFixed(0)} / S {bear.toFixed(0)}</span></>:<span className="text-muted-foreground">{bull===0&&bear===0?'No measured force':'Unavailable'}</span>}
+    </div>})}
+   </div>)}
    <div className="space-y-1 px-3 text-xs">
     <p><strong>Stop anchor:</strong> {referenceLabel(selected.stopReference)} · {selected.stopReference.price.toFixed(5)}</p>
     <p><strong>Target anchor:</strong> {referenceLabel(selected.targetReference)} · {selected.targetReference.price.toFixed(5)}</p>

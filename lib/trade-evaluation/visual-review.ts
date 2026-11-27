@@ -27,13 +27,15 @@ export function setupAnnotations(o:OptionPair,entry:number,warnings:readonly Rev
   CONTINUATION_UNCONFIRMED:'Recovery unconfirmed',CORRECTION_ADVERSE_MOMENTUM:'Opposing momentum',RANGE_ADVERSE_PRESSURE:'Opposing pressure',
   ENTRY_RANGE_LOCATION:'Unfavorable range entry',ENTRY_TIMEFRAME_CONFLICT:'Opposes M15 trend',PROVISIONAL_RANGE_BOUNDARY:'Provisional boundaries',
   RANGE_BOUNDARY_PENETRATION:'Boundary penetration',STRUCTURAL_TRANSITION_UNCONFIRMED:'Breakout unconfirmed',
-  CORRECTION_RECOVERY_UNCONFIRMED:'Recovery unconfirmed',ENTRY_OVEREXTENDED:'Extended entry'
+  CORRECTION_RECOVERY_UNCONFIRMED:'Recovery unconfirmed',ENTRY_OVEREXTENDED:'Extended entry',
+  FORCE_COVERAGE_LIMITED:'Force evidence incomplete',FORCE_ACTIVE_EQUILIBRIUM:'Active force balance',FORCE_PASSIVE_EQUILIBRIUM:'Weak force balance',
+  FORCE_ADVERSE_PERSISTENCE:'Persistent opposing force',FORCE_ADVERSE_ACCELERATION:'Opposing force growing',FORCE_BOUNDARY_PRESSURE:'Boundary under pressure',FORCE_ABSORPTION_CANDIDATE:'Possible absorption'
  }
  const callouts=(['entry','stop','target'] as const).map(dimension=>{
    const matching=warnings.filter(w=>w.dimension===dimension)
    const local=matching.filter(w=>!w.timeframe||w.timeframe===o.stopReference.timeframe)
-   const w=local[0]??matching[0]
-   return w?{dimension,price:dimension==='entry'?entry:dimension==='stop'?o.stopLossPrice:o.takeProfitPrice,label:(w.timeframe?w.timeframe+' · ':'')+(short[w.code]??w.code.toLowerCase().replaceAll('_',' ')),count:matching.length}:null
+   const w=local.find(w=>w.code.startsWith('FORCE_')&&w.anchorPrice!==undefined)??local.find(w=>w.code.startsWith('FORCE_'))??local[0]??matching[0]
+   return w?{dimension,price:w.timeframe===o.stopReference.timeframe&&w.anchorPrice!==undefined?w.anchorPrice:dimension==='entry'?entry:dimension==='stop'?o.stopLossPrice:o.takeProfitPrice,label:(w.timeframe?w.timeframe+' · ':'')+(short[w.code]??w.code.toLowerCase().replaceAll('_',' ')),count:matching.length}:null
  }).filter(x=>x!==null)
  return {levels:levels.filter((l,i)=>levels.findIndex(x=>x.price===l.price)===i).slice(0,4),callouts}
 }

@@ -23,6 +23,7 @@ export interface StrategyAssessment {
   warnings: ReviewWarning[]
   limitations: string[]
   feasibleWithinReferences: boolean | null
+  forceState?: string
   choppy?: ChoppyRanges
   structure?: ActiveStructure & { obstacles: ActiveZone[] }
 }
