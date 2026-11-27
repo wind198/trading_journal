@@ -73,6 +73,7 @@ export function MarketAnalysisWorkspace() {
   function cancel() {
     active.current?.abort();active.current=null;setPending(false)
   }
+  const tradePanel = data && hypothesis ? (<TradeHypothesisPanel hypothesis={hypothesis} pointSize={data.snapshot.pointSize} armedLevel={armedLevel} onArm={setArmedLevel} onPrice={(level,value)=>setHypothesis(h=>h?setTradeLevel(h,level,value,data.snapshot.pointSize):h)} onDirection={direction=>setHypothesis(h=>h?setTradeDirection(h,direction):h)} onClear={()=>{setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction));setArmedLevel(null)}}/>) : null
   return <div className="flex min-h-full min-w-0 flex-col">
     <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-2">
       <div className="min-w-0"><h1 className="text-sm font-semibold">Market analysis · EURUSD</h1><p className="text-xs text-muted-foreground">On-demand numerical evidence · experimental</p></div>
@@ -91,9 +92,10 @@ export function MarketAnalysisWorkspace() {
     {error && <div role="alert" className="flex gap-2 border-b px-3 py-2 text-sm text-destructive"><AlertTriangle className="size-4 shrink-0"/>{error}{data?' Previous snapshot retained.':''}</div>}
     {!data || !hypothesis ? <div className="grid min-h-64 flex-1 place-items-center p-6 text-center text-muted-foreground">
       <div><ChartNoAxesCombined className="mx-auto mb-3 size-8"/><p className="text-sm">No analysis available</p><p className="mt-1 text-xs">No automatic scans or trading recommendations.</p></div>
-    </div> : <div className="grid min-w-0 flex-1 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="border-b bg-card xl:col-span-2 xl:hidden"><TradeHypothesisPanel hypothesis={hypothesis} pointSize={data.snapshot.pointSize} armedLevel={armedLevel} onArm={setArmedLevel} onPrice={(level,value)=>setHypothesis(h=>h?setTradeLevel(h,level,value,data.snapshot.pointSize):h)} onDirection={direction=>setHypothesis(h=>h?setTradeDirection(h,direction):h)} onClear={()=>{setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction));setArmedLevel(null)}}/></div>
-      <div className="grid min-w-0 gap-px bg-border md:grid-cols-2 xl:grid-cols-1">
+    </div> : <div className="grid min-w-0 flex-1 xl:grid-cols-[minmax(0,1fr)_320px] xl:grid-rows-[auto_1fr]">
+      <aside className="min-w-0 border-b bg-card xl:col-start-2 xl:row-start-1 xl:border-l">{tradePanel}</aside>
+      
+      <div className="grid min-w-0 gap-px bg-border md:grid-cols-2 xl:col-start-1 xl:row-span-2 xl:row-start-1 xl:grid-cols-1">
         {(['M15','M3'] as const).map(tf=><section key={tf} className="flex h-[42vh] min-h-60 min-w-0 flex-col bg-card">
           <div className="flex flex-wrap items-center justify-between gap-1 border-b px-3 py-1.5 text-xs">
             <span className="font-medium">{tf} · {data.report.regimes[tf]}</span>
@@ -103,8 +105,8 @@ export function MarketAnalysisWorkspace() {
           <AnalysisChart data={data} timeframe={tf} view={view} hypothesis={hypothesis} armedLevel={armedLevel} onPick={(level,price,timeframe)=>{setHypothesis(h=>h?setTradeLevel(h,level,price,data.snapshot.pointSize,timeframe):h);setArmedLevel(null)}}/>
         </section>)}
       </div>
-      <aside className="min-w-0 border-t bg-card xl:border-l xl:border-t-0">
-        <div className="hidden xl:block"><TradeHypothesisPanel hypothesis={hypothesis} pointSize={data.snapshot.pointSize} armedLevel={armedLevel} onArm={setArmedLevel} onPrice={(level,value)=>setHypothesis(h=>h?setTradeLevel(h,level,value,data.snapshot.pointSize):h)} onDirection={direction=>setHypothesis(h=>h?setTradeDirection(h,direction):h)} onClear={()=>{setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction));setArmedLevel(null)}}/></div>
+      <aside className="min-w-0 border-t bg-card xl:col-start-2 xl:row-start-2 xl:border-l xl:border-t-0">
+        
         <div className="border-b p-3"><h2 className="text-sm font-semibold">Evidence inspector</h2><p className="text-xs text-muted-foreground">Policy {data.report.policy.version} · indicator config {data.report.configVersion}</p></div>
         {data.report.results.map(r=><EvidenceInspector key={r.timeframe+':'+r.toolId} result={r}/>)}
         <div className="space-y-1 p-3 text-xs text-muted-foreground"><h2 className="font-medium text-foreground">Limitations</h2>{data.report.limitations.map((l,i)=><p key={i}>{l}</p>)}<p>AI risk review is not integrated. No warning does not mean safe to trade.</p></div>
