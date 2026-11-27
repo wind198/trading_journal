@@ -17,7 +17,7 @@ test('stable linear trends classify symmetrically',()=>{
   }
 })
 test('confirmed repeated range boundaries exclude current breakout',()=>{
-  const data=bars(Array.from({length:61},(_,i)=>1.2+Math.sin(i*Math.PI/5)*0.002))
+  const data=bars(Array.from({length:61},(_,i)=>1.2+Math.cos(i*Math.PI/5)*0.002))
   const r=inspectRange(data,0.001,p)!
   assert.ok(r.validated)
   const altered=[...data.slice(0,-1),{...data.at(-1)!,open:1.22,high:1.23,low:1.21,close:1.22}]

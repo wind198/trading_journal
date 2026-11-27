@@ -1,5 +1,6 @@
 import type { AnalysisResult, EvidenceReference, MarketSnapshot, NumericalFeature, Timeframe } from './contracts'
 import { analyzeFoundation } from './foundation'
+import config from '../../ai/trading_knowledge/config/indicators.json' with { type: 'json' }
 import { runNumericalTools } from './tools'
 import { classifyRegime, compareRegimes, EXPERIMENTAL_REGIME_POLICY, selectedTools } from './regimes'
 
@@ -31,6 +32,16 @@ export function scanMarket(snapshot: MarketSnapshot) {
         status: Object.values(features).some(f => f.value === null) ? 'insufficient_data' : 'ok',
         features, evidence, limitations: [...foundation.limitations, ...limitations] })
     }
+    emit('classify_market_regime', {
+      adx: [c.metrics.adx, 'score', config.adxDmi.period],
+      efficiency: [c.metrics.efficiency, 'ratio', config.efficiencyRatio.period],
+      slopeAtr: [c.metrics.slopeAtr, 'ATR/bar', config.regression.periods[0]],
+      rSquared: [c.metrics.rSquared, 'ratio', config.regression.periods[0]],
+      diSpread: [c.metrics.diSpread, 'score', config.adxDmi.period],
+      bandwidthGrowth: [c.metrics.bandwidthGrowth, 'ratio', p.windows.transition],
+      atrGrowth: [c.metrics.atrGrowth, 'ratio', p.windows.transition],
+    }, [c.reason, 'Experimental policy ' + p.version])
+    if (c.regime === 'unknown') results[results.length - 1] = { ...results[results.length - 1], status: 'insufficient_data' }
     if (selected.includes('analyze_range_structure')) {
       const r = c.range
       emit('analyze_range_structure', {
@@ -56,7 +67,7 @@ export function scanMarket(snapshot: MarketSnapshot) {
       calculationId: 'analyze_timeframe_alignment', calculationVersion: '1', configVersion: foundation.configVersion }] : []
   })
   results.push({ toolId: 'analyze_timeframe_alignment', version: '1', timeframe: 'multi', asOf: snapshot.asOf,
-    status: alignment === 'unknown' ? 'insufficient_data' : 'ok',
+    status: alignment === 'unknown' || alignment === 'transition' ? 'insufficient_data' : 'ok',
     features: { agreement: { value: alignment === 'aligned' ? 1 : alignment === 'opposed' ? -1 : alignment === 'mixed' ? 0 : null,
       unit: 'direction agreement', lookbackBars: 0, evidenceIds: alignmentEvidence.map(e => e.id) } },
     evidence: alignmentEvidence, limitations: ['Timeframe disagreement does not establish reversal; transition has no directional agreement score.'] })
