@@ -28,7 +28,7 @@ export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOpti
  const global=result.entryReview.warnings.filter(w=>w.dimension==='entry'||w.dimension==='data')
  const warnings=selected?.review.warnings??[]
  return <section className="min-w-0 space-y-2 border-b pb-3">
-  <div className="px-3 pt-3"><h2 className="text-sm font-semibold">Alternative setups</h2><p className="text-xs text-muted-foreground">{messages[result.status]}</p></div>
+  <div className="px-3 pt-3"><h2 className="text-sm font-semibold">Alternative setups</h2><p className="text-xs text-muted-foreground">{messages[result.status]}</p><p className="mt-1 text-xs text-muted-foreground">{result.options.length+result.failedOptions.length} / {result.search.target} setups · {result.search.elapsedMs} ms · {result.search.stopReason.replaceAll('_',' ').toLowerCase()}</p><details className="mt-1 text-xs"><summary>Search coverage</summary>{result.search.stages.map(s=><p key={s.stage}>{s.stage.replaceAll('_',' ')} · {s.found} found · {s.evaluated} evaluated</p>)}</details></div>
   <div className="flex gap-1 px-3" role="group" aria-label="Setup outcome">
    <Button size="sm" className="flex-1" variant={group==='passed'?'default':'outline'} aria-pressed={group==='passed'} disabled={!result.options.length} onClick={()=>{setGroup('passed');setSelectedId(null)}}>Passed · {result.options.length}</Button>
    <Button size="sm" className="flex-1" variant={group==='failed'?'default':'outline'} aria-pressed={group==='failed'} onClick={()=>{setGroup('failed');setSelectedId(null)}}>Failed · {failed.length}</Button>
@@ -39,7 +39,7 @@ export function TradeOptionsPanel({result,data,entry,onSelect}:{result:TradeOpti
    {candidates.map((o,i)=><button type="button" key={o.id} aria-pressed={selected?.id===o.id} onClick={()=>setSelectedId(o.id)}
     className={'min-w-32 max-w-48 shrink-0 rounded-md border px-2 py-2 text-left text-xs focus-visible:outline-2 focus-visible:outline-ring '+(selected?.id===o.id?'border-primary bg-muted':'bg-card')}>
     <span className="block font-semibold">{group==='failed'?'Failed':'Option'} {i+1} · 1:{o.grossRewardRisk.toFixed(2)}</span>
-    <span className="block break-words text-muted-foreground">{optionTitle(o)}</span>
+    <span className="block break-words text-muted-foreground">{optionTitle(o)} · {o.searchStage?.replaceAll('_',' ')}</span>
    </button>)}
   </div>}
   {group==='failed'&&failed.length>3&&<div className="px-3"><Button variant="ghost" size="sm" onClick={()=>{setShowAll(v=>!v);setSelectedId(null)}}>{showAll?'Show fewer':'Show all '+failed.length+' failed setups'}</Button></div>}

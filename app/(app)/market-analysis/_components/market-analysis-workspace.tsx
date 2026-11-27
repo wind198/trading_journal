@@ -11,7 +11,8 @@ import type { AnalysisResult, Timeframe } from '@/lib/market-analysis/contracts'
 import { createHypothesis, normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 import { confirmEntry, changeEntryDirection, type EntryDraft } from '@/lib/trade-evaluation/entry-selection'
 import { localDateTimeInput, m15CloseFromLocalInput } from '@/lib/market-analysis/scan-cutoff'
-import { generateTradeOptions, type TradeOptions } from '@/lib/trade-evaluation/options'
+import type { SearchProgress, TradeOptions } from '@/lib/trade-evaluation/options'
+import type { SearchMessage,SearchRequest } from '@/lib/trade-evaluation/search.worker'
 import type { TradeReview } from '@/lib/trade-evaluation/evaluator'
 import { TradeOptionsPanel } from './trade-options-panel'
 import { TradeReviewPanel } from './trade-review-panel'
@@ -68,6 +69,12 @@ export function MarketAnalysisWorkspace(){
     else delete midpointReaders.current[tf]
   },[])
   const active=useRef<AbortController|null>(null)
+  const searchWorker=useRef<Worker|null>(null)
+  const [searching,setSearching]=useState(false)
+  const [progress,setProgress]=useState<SearchProgress|null>(null)
+  const [searchError,setSearchError]=useState<string|null>(null)
+  const cancelSearch=useCallback(()=>{searchWorker.current?.terminate();searchWorker.current=null;setSearching(false);setProgress(null)},[])
+  useEffect(()=>()=>{searchWorker.current?.terminate();searchWorker.current=null},[])
   const reviewButton=useRef<HTMLButtonElement>(null)
   const evidenceButton=useRef<HTMLButtonElement>(null)
   const returnFocus=useRef<'review'|'evidence'>('review')
@@ -79,6 +86,7 @@ export function MarketAnalysisWorkspace(){
   const cancelPick=useCallback(()=>{setArmed(false);setDraft(null);setManual(null);setManualError(false)},[])
   const run=useCallback(async(asOf:string|null=null)=>{
     if(active.current)return
+    cancelSearch();setSearchError(null)
     const controller=new AbortController()
     active.current=controller;setPending(true);setError(null);cancelPick();setHistoryPicking(false);setHistoryOpen(false);setSheet(null)
     try{
@@ -91,7 +99,7 @@ export function MarketAnalysisWorkspace(){
       }
     }catch(e){if(!controller.signal.aborted)setError(e instanceof Error?e.message:'Market scan failed.')}
     finally{if(active.current===controller){active.current=null;setPending(false)}}
-  },[cancelPick])
+  },[cancelPick,cancelSearch])
   // Reset the controller on cleanup so React Strict Mode's second setup can scan.
   useEffect(()=>{void run();return()=>{const controller=active.current;active.current=null;controller?.abort()}},[run])
   function chooseHistory(closeTime:string){if(!pending)void run(closeTime)}
@@ -103,7 +111,7 @@ export function MarketAnalysisWorkspace(){
   function cancel(){active.current?.abort();active.current=null;setPending(false)}
   const options=submitted&&hypothesis&&submitted.snapshotId===hypothesis.snapshotId&&submitted.hypothesisId===hypothesis.id?submitted:null
   const review=previewReview??options?.entryReview??null
-  function invalidateReview(){setSubmitted(null);setPreviewReview(null)}
+  function invalidateReview(){cancelSearch();setSearchError(null);setSubmitted(null);setPreviewReview(null)}
   function beginPick(){
     if(!data||!hypothesis||pending)return
     setHistoryPicking(false);setHistoryOpen(false)
@@ -121,7 +129,7 @@ export function MarketAnalysisWorkspace(){
     setManual(null);setManualError(false)
   }
   function submit(){
-    if(!data||!hypothesis||pending)return
+    if(!data||!hypothesis||pending||searchWorker.current)return
     let next=hypothesis
     if(manual!==null){
       const price=normalizePrice(Number(manual),data.snapshot.pointSize)
@@ -130,9 +138,22 @@ export function MarketAnalysisWorkspace(){
     }else if(draft)next=confirmEntry(hypothesis,draft,data.snapshot.pointSize)
     if(next.entryPrice===null)return
     // Evaluation is invoked exclusively by this explicit submission.
-    const result=generateTradeOptions(data,next)
-    setHypothesis(next);setSubmitted(result);setPreviewReview(null)
-    cancelPick();returnFocus.current='review';setSheet('review')
+    setHypothesis(next);setSubmitted(null);setPreviewReview(null);setProgress(null);setSearchError(null)
+    cancelPick();returnFocus.current='review';setSheet('review');setSearching(true)
+    try{
+      const worker=new Worker(new URL('../../../../lib/trade-evaluation/search.worker.ts',import.meta.url),{type:'module'})
+      searchWorker.current=worker
+      const finish=()=>{worker.terminate();if(searchWorker.current===worker){searchWorker.current=null;setSearching(false)}}
+      worker.onmessage=(event:MessageEvent<SearchMessage>)=>{
+        if(searchWorker.current!==worker)return
+        const m=event.data
+        if(m.type==='progress')setProgress(m.progress)
+        else if(m.type==='result'){setSubmitted(m.result);finish()}
+        else {setSearchError(m.message);finish()}
+      }
+      worker.onerror=()=>{if(searchWorker.current===worker){setSearchError('Structural search worker failed. Retry.');finish()}}
+      worker.postMessage({data,hypothesis:next} satisfies SearchRequest)
+    }catch{cancelSearch();setSearchError('Unable to start structural search. Retry.')}
   }
   function openSheet(which:'review'|'evidence'){cancelPick();returnFocus.current=which;setSheet(which)}
   const ready=!!data&&!!hypothesis
@@ -192,22 +213,24 @@ export function MarketAnalysisWorkspace(){
           <Button className="h-8" variant="ghost" size="sm" onClick={cancelPick}>Cancel</Button>
         </div>}
         <div className="mt-1 flex gap-1">
-          <Button ref={reviewButton} className="h-9 min-w-0 flex-1" disabled={pending||historyPicking||(!draft&&manual===null&&hypothesis.entryPrice===null)} onClick={submit}>Submit</Button>
+          <Button ref={reviewButton} className="h-9 min-w-0 flex-1" disabled={pending||searching||historyPicking||(!draft&&manual===null&&hypothesis.entryPrice===null)} onClick={submit}>{searching?'Searching…':'Submit'}</Button>
           {options&&<Button className="h-9" variant="outline" onClick={()=>openSheet('review')}>Review</Button>}
           <Button ref={evidenceButton} className="h-9" variant="outline" disabled={pending} onClick={()=>openSheet('evidence')}>Evidence</Button>
           <Button className="h-9" variant="ghost" size="sm" onClick={()=>{cancelPick();invalidateReview();setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction))}}>Clear</Button>
         </div>
         {hypothesis.stopLossPrice!==null&&hypothesis.takeProfitPrice!==null&&!draft&&<p className="truncate py-1 font-mono text-[11px] text-muted-foreground">Preview · SL {hypothesis.stopLossPrice.toFixed(5)} · TP {hypothesis.takeProfitPrice.toFixed(5)}</p>}
       </footer>
-      <Dialog open={sheet!==null} onOpenChange={open=>{if(!open)setSheet(null)}}>
+      <Dialog open={sheet!==null} onOpenChange={open=>{if(!open){cancelSearch();setSheet(null)}}}>
         <DialogContent showCloseButton={false} className="top-auto bottom-0 left-0 flex max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-xl p-0 sm:max-w-none lg:top-1/2 lg:bottom-auto lg:left-1/2 lg:max-w-2xl lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-xl"
           onCloseAutoFocus={e=>{e.preventDefault();(returnFocus.current==='review'?reviewButton:evidenceButton).current?.focus()}}>
           <div className="flex shrink-0 items-center justify-between gap-2 border-b p-3">
             <div><DialogTitle>{sheet==='review'?'Trade review':'Numerical evidence'}</DialogTitle><DialogDescription className="mt-1 text-xs">{hypothesis.direction.toUpperCase()} · {hypothesis.entryPrice?.toFixed(5)??'No entry'} · {historicalAsOf?'historical':'latest'} snapshot · {data.snapshot.asOf.slice(0,16).replace('T',' ')} UTC</DialogDescription></div>
-            <Button variant="ghost" className="size-9" size="icon" aria-label="Close review sheet" onClick={()=>setSheet(null)}><X/></Button>
+            <Button variant="ghost" className="size-9" size="icon" aria-label="Close review sheet" onClick={()=>{cancelSearch();setSheet(null)}}><X/></Button>
           </div>
           <div className="min-h-0 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
             {sheet==='review'?<>
+              {searching&&<div className="space-y-2 p-3 text-sm" role="status"><p className="font-medium">Searching structural alternatives</p><p className="text-xs text-muted-foreground">{progress?progress.stage.replaceAll('_',' ')+' · '+progress.found+' / '+progress.target+' found':'Starting search…'}</p><progress className="h-2 w-full accent-primary" max={progress?.target??5} value={progress?.found??0}/><p className="text-xs">{progress?.passed??0} passed · {progress?.failed??0} failed · {progress?.evaluated??0} evaluated · {progress?.elapsedMs??0} ms</p><Button variant="outline" size="sm" onClick={cancelSearch}>Cancel search</Button></div>}
+              {searchError&&<p role="alert" className="p-3 text-sm text-destructive">{searchError}</p>}
               {options&&<TradeOptionsPanel key={options.snapshotId+':'+options.hypothesisId+':'+options.revision} result={options} data={data} entry={hypothesis.entryPrice} onSelect={o=>{
                 if(!options.options.some(p=>p===o))return
                 if(hypothesis.id!==options.hypothesisId||hypothesis.revision!==options.revision||hypothesis.snapshotId!==options.snapshotId)return

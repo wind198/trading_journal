@@ -7,7 +7,7 @@ export function referenceLabel(r:StructuralReference){
  return r.source==='correction root candidate'?'Correction root (candidate)':r.source
 }
 export function optionTitle(o:OptionPair){
- return o.stopReference.timeframe+' · '+referenceLabel(o.stopReference)
+ return o.stopReference.timeframe+' · '+(o.stopReference.scale==='extended'?'2× · ':o.stopReference.scale==='structural'?'4× · ':'')+referenceLabel(o.stopReference)
 }
 export function setupAnnotations(o:OptionPair,entry:number,warnings:readonly ReviewWarning[],assessment?:StrategyAssessment){
  const levels=[

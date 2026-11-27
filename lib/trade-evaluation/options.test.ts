@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createHypothesis } from './hypothesis'
-import { pairReferences, generateTradeOptions } from './options'
+import { pairReferences, generateTradeOptions, distinctGeometry } from './options'
 import type { StructuralReference, StrategyAssessment } from './strategies'
 import { buildWorkspaceAnalysis } from '../market-analysis/workspace'
 const point=0.00001
@@ -67,3 +67,15 @@ test('nested range pairs do not mix inner and outer boundaries',()=>{
  assert.ok(result.pairs.every(p=>p.stopReference.rangeId===p.targetReference.rangeId))
 })
 
+
+test('near duplicate geometry is excluded but a meaningful stop or target change is retained',()=>{
+ const r=pairReferences(h(),point,[assess([ref('stop',1.1996,'active zone outer edge'),ref('target',1.2008,'active zone near edge')])],'continuation')
+ const a=r.pairs[0]
+ assert.equal(distinctGeometry(a,{...a,stopLossPrice:a.stopLossPrice-4*point},point),false)
+ assert.equal(distinctGeometry(a,{...a,takeProfitPrice:a.takeProfitPrice+5*point},point),true)
+})
+test('expanded confirmed stop anchors are opt-in, not baseline behavior',()=>{
+ const a=assess([ref('stop',1.1996,'confirmed pivot'),ref('target',1.2008,'confirmed pivot')])
+ assert.equal(pairReferences(h(),point,[a],'continuation').pairs.length,0)
+ assert.equal(pairReferences(h(),point,[a],'continuation',0.15,true).pairs.length,1)
+})
