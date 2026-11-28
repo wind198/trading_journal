@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo,useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo,useRef, useState,type SetStateAction } from 'react'
 import { Play, X, AlertTriangle, ChartNoAxesCombined, Crosshair, Maximize2, Minimize2, History, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,13 +11,13 @@ import type { AnalysisResult, Timeframe } from '@/lib/market-analysis/contracts'
 import { createHypothesis, normalizePrice } from '@/lib/trade-evaluation/hypothesis'
 import { confirmEntry, changeEntryDirection, type EntryDraft } from '@/lib/trade-evaluation/entry-selection'
 import { localDateTimeInput, m15CloseFromLocalInput } from '@/lib/market-analysis/scan-cutoff'
-import type { SearchProgress, TradeOptions } from '@/lib/trade-evaluation/options'
+import type { SearchProgress } from '@/lib/trade-evaluation/options'
 import type { SearchMessage,SearchRequest } from '@/lib/trade-evaluation/search.worker'
-import type { TradeReview } from '@/lib/trade-evaluation/evaluator'
 import {plottedSetups} from '@/lib/trade-evaluation/overlay-layout'
 import { TradeOptionsPanel } from './trade-options-panel'
 import { TradeReviewPanel } from './trade-review-panel'
 import type { ScaleId } from '@/lib/market-analysis/scales'
+import {useAnalysisSession,type AnalysisSession} from '../../_components/providers/analysis-session-provider'
 import { AnalysisChart, type AnalysisView } from './analysis-chart'
 
 const views: {id:AnalysisView;label:string}[]=[{id:'price',label:'Price'},{id:'overview',label:'Overview'},{id:'trend',label:'Trend'},{id:'range',label:'Range'},{id:'transition',label:'Transition'},{id:'momentum',label:'Momentum'}]
@@ -45,28 +45,29 @@ function EvidenceInspector({ result }: { result: AnalysisResult }) {
 
 
 export function MarketAnalysisWorkspace(){
-  const [data,setData]=useState<WorkspaceAnalysis|null>(null)
-  const [hypothesis,setHypothesis]=useState<TradeHypothesis|null>(null)
-  const [profiles,setProfiles]=useState<Record<Timeframe,ScaleId>>({M3:'baseline',M15:'baseline'})
-  const [view,setView]=useState<AnalysisView>('price')
-  const [showReferences,setShowReferences]=useState(false)
-  const [showPassed,setShowPassed]=useState(true)
-  const [showFailed,setShowFailed]=useState(true)
+  const {session,setSession}=useAnalysisSession()
+  const {data,hypothesis,submitted,previewReview,historicalAsOf,profiles,view,showReferences,showPassed,showFailed,expanded}=session
+  const setField=useCallback(<K extends keyof AnalysisSession>(key:K,value:SetStateAction<AnalysisSession[K]>)=>{
+    setSession(old=>({...old,[key]:typeof value==='function'?(value as (previous:AnalysisSession[K])=>AnalysisSession[K])(old[key]):value}))
+  },[setSession])
+  const setProfiles=(v:SetStateAction<AnalysisSession['profiles']>)=>setField('profiles',v)
+  const setView=(v:AnalysisView)=>setField('view',v)
+  const setShowReferences=(v:SetStateAction<boolean>)=>setField('showReferences',v)
+  const setShowPassed=(v:SetStateAction<boolean>)=>setField('showPassed',v)
+  const setShowFailed=(v:SetStateAction<boolean>)=>setField('showFailed',v)
+  const setExpanded=(v:Timeframe|null)=>setField('expanded',v)
   const [reviewSetup,setReviewSetup]=useState<string|null>(null)
-  const [pending,setPending]=useState(true)
-  const [historicalAsOf,setHistoricalAsOf]=useState<string|null>(null)
+  const [pending,setPending]=useState(!data)
+  const [directionDraft,setDirectionDraft]=useState<TradeHypothesis['direction']|null>(null)
   const [historyPicking,setHistoryPicking]=useState(false)
   const [historyInput,setHistoryInput]=useState('')
   const [historyOpen,setHistoryOpen]=useState(false)
   const [error,setError]=useState<string|null>(null)
   const [armed,setArmed]=useState(false)
   const [draft,setDraft]=useState<EntryDraft|null>(null)
-  const [expanded,setExpanded]=useState<Timeframe|null>(null)
   const [sheet,setSheet]=useState<'review'|'evidence'|null>(null)
   const [manual,setManual]=useState<string|null>(null)
   const [manualError,setManualError]=useState(false)
-  const [submitted,setSubmitted]=useState<TradeOptions|null>(null)
-  const [previewReview,setPreviewReview]=useState<TradeReview|null>(null)
   const midpointReaders=useRef<Partial<Record<Timeframe,()=>number|null>>>({})
   const registerMidpoint=useCallback((tf:Timeframe,reader:(()=>number|null)|null)=>{
     if(reader)midpointReaders.current[tf]=reader
@@ -98,26 +99,26 @@ export function MarketAnalysisWorkspace(){
       if(!response.ok)throw new Error(response.status===401?'Session expired. Sign in again.':'Market scan failed. Retry.')
       const next=await response.json() as WorkspaceAnalysis
       if(!controller.signal.aborted){
-        setData(next);setHistoricalAsOf(asOf);setSubmitted(null);setPreviewReview(null)
-        setHypothesis(old=>createHypothesis(crypto.randomUUID(),next.snapshot.id,old?.direction??'long'))
+        setSession(old=>({...old,data:next,historicalAsOf:asOf,submitted:null,previewReview:null,hypothesis:createHypothesis(crypto.randomUUID(),next.snapshot.id,old.hypothesis?.direction??'long')}))
+        setDirectionDraft(null)
       }
     }catch(e){if(!controller.signal.aborted)setError(e instanceof Error?e.message:'Market scan failed.')}
     finally{if(active.current===controller){active.current=null;setPending(false)}}
-  },[cancelPick,cancelSearch])
+  },[cancelPick,cancelSearch,setSession])
   // Reset the controller on cleanup so React Strict Mode's second setup can scan.
-  useEffect(()=>{void run();return()=>{const controller=active.current;active.current=null;controller?.abort()}},[run])
-  function chooseHistory(closeTime:string){if(!pending)void run(closeTime)}
+  const hasInitialSnapshot=useRef(!!data)
+  useEffect(()=>{if(!hasInitialSnapshot.current)void run();return()=>{const controller=active.current;active.current=null;controller?.abort()}},[run])
+  function chooseHistory(closeTime:string){if(pending)return;if(closeTime===historicalAsOf){setHistoryPicking(false);setHistoryOpen(false);return}void run(closeTime)}
   function openHistory(){
     cancelPick();setHistoryPicking(false)
     setHistoryInput(localDateTimeInput(Date.parse(historicalAsOf??data?.snapshot.asOf??new Date().toISOString())))
     setHistoryOpen(v=>!v)
   }
   function cancel(){active.current?.abort();active.current=null;setPending(false)}
-  const options=submitted&&hypothesis&&submitted.snapshotId===hypothesis.snapshotId&&submitted.hypothesisId===hypothesis.id?submitted:null
+  const options=submitted&&hypothesis&&submitted.snapshotId===hypothesis.snapshotId&&submitted.hypothesisId===hypothesis.id&&submitted.revision===hypothesis.revision?submitted:null
   const review=previewReview??options?.entryReview??null
   const overlays=useMemo(()=>{const all=data&&options?plottedSetups(data,options):[];const visible=all.filter(s=>s.failed?showFailed:showPassed);return {M3:visible.filter(s=>s.timeframe==='M3'),M15:visible.filter(s=>s.timeframe==='M15')}},[data,options,showPassed,showFailed])
   const reviewFromChart=(id:string)=>{setReviewSetup(id);openSheet('review')}
-  function invalidateReview(){setReviewSetup(null);cancelSearch();setSearchError(null);setSubmitted(null);setPreviewReview(null)}
   function beginPick(){
     if(!data||!hypothesis||pending)return
     setHistoryPicking(false);setHistoryOpen(false)
@@ -130,21 +131,22 @@ export function MarketAnalysisWorkspace(){
     if(!data||!hypothesis||pending)return
     const snapped=normalizePrice(price,data.snapshot.pointSize)
     if(snapped===null)return
-    invalidateReview()
     setDraft({price:snapped,timeframe,snapshotId:hypothesis.snapshotId,hypothesisId:hypothesis.id,revision:hypothesis.revision})
     setManual(null);setManualError(false)
   }
   function submit(){
-    if(!data||!hypothesis||pending||searchWorker.current)return
+    if(!data||!hypothesis||pending||historyPicking||searchWorker.current)return
     let next=hypothesis
     if(manual!==null){
       const price=normalizePrice(Number(manual),data.snapshot.pointSize)
       if(price===null){setManualError(true);return}
       next=confirmEntry(hypothesis,{price,timeframe:draft?.timeframe??hypothesis.entryTimeframe,snapshotId:hypothesis.snapshotId,hypothesisId:hypothesis.id,revision:hypothesis.revision},data.snapshot.pointSize)
     }else if(draft)next=confirmEntry(hypothesis,draft,data.snapshot.pointSize)
+    if(directionDraft)next=changeEntryDirection(next,directionDraft)
     if(next.entryPrice===null)return
+    if(options&&next.entryPrice===hypothesis.entryPrice&&next.direction===hypothesis.direction){cancelPick();setDirectionDraft(null);openSheet('review');return}
     // Evaluation is invoked exclusively by this explicit submission.
-    setReviewSetup(null);setHypothesis(next);setSubmitted(null);setPreviewReview(null);setProgress(null);setSearchError(null)
+    setReviewSetup(null);setSession(old=>({...old,hypothesis:next,submitted:null,previewReview:null}));setDirectionDraft(null);setProgress(null);setSearchError(null)
     cancelPick();returnFocus.current='review';setSheet('review');setSearching(true)
     try{
       const worker=new Worker(new URL('../../../../lib/trade-evaluation/search.worker.ts',import.meta.url),{type:'module'})
@@ -154,7 +156,7 @@ export function MarketAnalysisWorkspace(){
         if(searchWorker.current!==worker)return
         const m=event.data
         if(m.type==='progress')setProgress(m.progress)
-        else if(m.type==='result'){setSubmitted(m.result);finish()}
+        else if(m.type==='result'){setSession(old=>old.hypothesis?.id===m.result.hypothesisId&&old.hypothesis.revision===m.result.revision&&old.data?.snapshot.id===m.result.snapshotId?{...old,submitted:m.result}:old);finish()}
         else {setSearchError(m.message);finish()}
       }
       worker.onerror=()=>{if(searchWorker.current===worker){setSearchError('Structural search worker failed. Retry.');finish()}}
@@ -167,7 +169,7 @@ export function MarketAnalysisWorkspace(){
     <header className="flex shrink-0 items-center justify-between gap-1 border-b bg-card px-2 py-1">
       <h1 className="truncate text-sm font-semibold">EURUSD · Analysis</h1>
       <div className="flex shrink-0 gap-1">
-        {pending?<Button className="h-9" size="sm" variant="outline" onClick={cancel}><X/>Cancel</Button>:<Button className="h-9" size="sm" onClick={()=>void run(historicalAsOf)}><Play/>{data?'Refresh':'Scan'}</Button>}
+        {pending?<Button className="h-9" size="sm" variant="outline" onClick={cancel}><X/>Cancel</Button>:<Button className="h-9" size="sm" onClick={()=>void run(historicalAsOf)} disabled={!!options} title={options?'Change history point to replace the frozen snapshot':'Scan market data'}><Play/>{data?'Refresh':'Scan'}</Button>}
       </div>
     </header>
     <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-card px-2 py-1" role="group" aria-label="Chart indicators">
@@ -186,7 +188,7 @@ export function MarketAnalysisWorkspace(){
     </form>}
     {historyPicking&&<div className="flex shrink-0 items-center justify-between gap-1 border-b px-2 text-xs"><span>Tap an M15 candle to scan at its close.</span><Button size="sm" variant="ghost" onClick={()=>setHistoryPicking(false)}>Cancel</Button></div>}
     <div aria-live="polite" className="shrink-0 truncate border-b px-2 py-1 text-[11px] text-muted-foreground" title={data?.snapshot.asOf}>
-      {pending?'Scanning…'+(data?' previous snapshot shown':''):data?(historicalAsOf?'Historical · ':'Latest snapshot · ')+data.snapshot.asOf.replace('T',' ').slice(0,19)+' UTC':'No snapshot. Retry scan.'}
+      {pending?'Scanning…'+(data?' previous snapshot shown':''):data?(historicalAsOf?'Historical · ':'Frozen snapshot · ')+data.snapshot.asOf.replace('T',' ').slice(0,19)+' UTC':'No snapshot. Retry scan.'}
     </div>
     {error&&<div role="alert" className="flex shrink-0 gap-1 border-b p-2 text-xs text-destructive"><AlertTriangle className="size-4 shrink-0"/>{error}{data?' Previous snapshot retained.':''}</div>}
     {!ready?<div className="grid min-h-0 flex-1 place-items-center p-4 text-center text-muted-foreground"><div><ChartNoAxesCombined className="mx-auto mb-2 size-8"/><p className="text-sm">{pending?'Scanning completed candles…':'Scan completed candles to choose an entry.'}</p></div></div>:null}
@@ -209,21 +211,21 @@ export function MarketAnalysisWorkspace(){
           <div className="min-w-0 flex-1">
             <Input aria-label="Entry price" inputMode="decimal" className="h-9 font-mono text-sm" placeholder="Entry price" aria-invalid={manualError}
               value={manual??(draft?.price??hypothesis.entryPrice)?.toFixed(5)??''}
-              onChange={e=>{invalidateReview();setManual(e.target.value);setDraft(null);setManualError(false);setArmed(false)}}
+              onChange={e=>{setManual(e.target.value);setDraft(null);setManualError(false);setArmed(false)}}
               onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();submit()}}}/>
           </div>
           <Button className="h-9 px-2" variant={armed?'secondary':'outline'} aria-pressed={armed} aria-label="Pick entry on chart" disabled={pending} onClick={()=>{if(armed)cancelPick();else beginPick()}}><Crosshair/></Button>
-          {(['long','short'] as const).map(d=><Button key={d} className="h-9 px-2" size="sm" variant={hypothesis.direction===d?'default':'outline'} aria-pressed={hypothesis.direction===d} disabled={pending} onClick={()=>{invalidateReview();setHypothesis(h=>h?changeEntryDirection(h,d):h);if(draft)setDraft({...draft,revision:hypothesis.revision+(hypothesis.direction===d?0:1)})}}>{d==='long'?'Long':'Short'}</Button>)}
+          {(['long','short'] as const).map(d=><Button key={d} className="h-9 px-2" size="sm" variant={(directionDraft??hypothesis.direction)===d?'default':'outline'} aria-pressed={(directionDraft??hypothesis.direction)===d} disabled={pending} onClick={()=>setDirectionDraft(d===hypothesis.direction?null:d)}>{d==='long'?'Long':'Short'}</Button>)}
         </div>
-        {(armed||draft||manual!==null||manualError)&&<div className="mt-1 flex items-center gap-1">
+        {(armed||draft||manual!==null||manualError||directionDraft!==null)&&<div className="mt-1 flex items-center gap-1">
           <p className="min-w-0 flex-1 text-xs text-muted-foreground">{manualError?'Invalid price or no visible candles.':armed?'Drag the entry line or tap a new price.':'Edit entry, then submit.'}</p>
-          <Button className="h-8" variant="ghost" size="sm" onClick={cancelPick}>Cancel</Button>
+          <Button className="h-8" variant="ghost" size="sm" onClick={()=>{cancelPick();setDirectionDraft(null)}}>Cancel</Button>
         </div>}
         <div className="mt-1 flex gap-1">
           <Button ref={reviewButton} className="h-9 min-w-0 flex-1" disabled={pending||searching||historyPicking||(!draft&&manual===null&&hypothesis.entryPrice===null)} onClick={submit}>{searching?'Searching…':'Submit'}</Button>
           {options&&<Button className="h-9" variant="outline" onClick={()=>openSheet('review')}>Review</Button>}
           <Button ref={evidenceButton} className="h-9" variant="outline" disabled={pending} onClick={()=>openSheet('evidence')}>Evidence</Button>
-          <Button className="h-9" variant="ghost" size="sm" onClick={()=>{cancelPick();invalidateReview();setHypothesis(createHypothesis(crypto.randomUUID(),data.snapshot.id,hypothesis.direction))}}>Clear</Button>
+          <Button className="h-9" variant="ghost" size="sm" onClick={()=>{cancelPick();setDirectionDraft(null);setManual('')}}>Clear input</Button>
         </div>
         {hypothesis.stopLossPrice!==null&&hypothesis.takeProfitPrice!==null&&!draft&&<p className="truncate py-1 font-mono text-[11px] text-muted-foreground">Preview · SL {hypothesis.stopLossPrice.toFixed(5)} · TP {hypothesis.takeProfitPrice.toFixed(5)}</p>}
       </footer>
@@ -242,8 +244,7 @@ export function MarketAnalysisWorkspace(){
                 if(!options.options.some(p=>p===o))return
                 if(hypothesis.id!==options.hypothesisId||hypothesis.revision!==options.revision||hypothesis.snapshotId!==options.snapshotId)return
                 // Preview uses the already evaluated option; do not run evaluation again.
-                setHypothesis({...hypothesis,stopLossPrice:o.stopLossPrice,takeProfitPrice:o.takeProfitPrice})
-                setPreviewReview(o.review);setSheet(null)
+                setSession(old=>({...old,hypothesis:{...hypothesis,stopLossPrice:o.stopLossPrice,takeProfitPrice:o.takeProfitPrice},previewReview:o.review}));setSheet(null)
               }}/>}
               {review&&<details><summary className="cursor-pointer p-3 text-sm font-medium">Detailed assessment</summary><TradeReviewPanel review={review}/></details>}
             </>:<>
